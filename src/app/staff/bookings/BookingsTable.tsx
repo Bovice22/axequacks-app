@@ -36,6 +36,11 @@ type ReservationRow = {
   end_ts: string;
 };
 
+type EventRequestRow = {
+  id: string;
+  party_size: number | null;
+};
+
 function fmtNY(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString("en-US", {
@@ -290,6 +295,7 @@ export default function BookingsTable() {
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [resources, setResources] = useState<ResourceRow[]>([]);
   const [reservations, setReservations] = useState<ReservationRow[]>([]);
+  const [eventRequests, setEventRequests] = useState<EventRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -331,6 +337,7 @@ export default function BookingsTable() {
     setRows(json.bookings || []);
     setResources(json.resources || []);
     setReservations(json.reservations || []);
+    setEventRequests(json.eventRequests || []);
     setLoading(false);
   }
 
@@ -736,6 +743,31 @@ export default function BookingsTable() {
     });
     return colorMap;
   }, [reservationsForDay, bookingById]);
+
+  const eventRequestSizeById = useMemo(() => {
+    const map = new Map<string, number>();
+    (eventRequests || []).forEach((row) => {
+      if (row?.id && Number.isFinite(row.party_size as number)) {
+        map.set(row.id, Number(row.party_size));
+      }
+    });
+    return map;
+  }, [eventRequests]);
+
+  const eventRequestIdFromNotes = (notes?: string | null) => {
+    if (!notes) return null;
+    const match = notes.match(/Event Request:\s*([a-f0-9-]+)/i);
+    return match ? match[1] : null;
+  };
+
+  const displayPartySize = (booking?: BookingRow | null) => {
+    if (!booking) return booking?.party_size ?? "—";
+    const eventId = eventRequestIdFromNotes(booking.notes);
+    if (eventId && eventRequestSizeById.has(eventId)) {
+      return eventRequestSizeById.get(eventId);
+    }
+    return booking.party_size ?? "—";
+  };
 
   if (loading) return <div className="text-sm text-zinc-600">Loading bookings…</div>;
 
@@ -1149,7 +1181,7 @@ export default function BookingsTable() {
                           <div>{activityLabel(booking?.activity) || "Booking"}</div>
                           <div className="text-[10px] text-zinc-300">{resourceLabel}</div>
                           <div className="text-[10px] text-zinc-200">
-                            {booking?.customer_name || "Walk-in"} · {booking?.party_size ?? "—"} ppl
+                            {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
                           </div>
                           <div className="text-[10px] text-zinc-200">
                             {paymentLabel(booking?.status, booking?.paid)}
@@ -1238,7 +1270,7 @@ export default function BookingsTable() {
                   <td className="py-2 text-center">{fmtNY(r.end_ts)}</td>
                   <td className="py-2 text-center">{activityLabel(r.activity)}</td>
                   <td className="py-2 text-center">{comboOrderLabel(r.combo_order)}</td>
-                  <td className="py-2 text-center">{r.party_size}</td>
+                  <td className="py-2 text-center">{displayPartySize(r)}</td>
                   <td className="py-2 text-center">
                     {(r.status ?? "CONFIRMED") === "CANCELLED" ? "CANCELLED" : r.paid ? "PAID" : "UNPAID"}
                   </td>

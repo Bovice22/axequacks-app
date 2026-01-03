@@ -91,8 +91,29 @@ export async function GET(req: Request) {
       }
     }
 
+    const eventRequestIds = (data ?? [])
+      .map((row) => {
+        const note = String((row as any)?.notes || "");
+        const match = note.match(/Event Request:\s*([a-f0-9-]+)/i);
+        return match ? match[1] : null;
+      })
+      .filter((id): id is string => !!id);
+
+    let eventRequests: { id: string; party_size: number | null }[] = [];
+    if (eventRequestIds.length > 0) {
+      const { data: er, error: erErr } = await sb
+        .from("event_requests")
+        .select("id,party_size")
+        .in("id", eventRequestIds);
+      if (erErr) {
+        console.error("event requests lookup error:", erErr);
+      } else {
+        eventRequests = er ?? [];
+      }
+    }
+
     return NextResponse.json(
-      { bookings: data ?? [], resources: resources ?? [], reservations },
+      { bookings: data ?? [], resources: resources ?? [], reservations, eventRequests },
       { status: 200 }
     );
   } catch (err: any) {
