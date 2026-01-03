@@ -65,17 +65,17 @@ export const PRICING = {
 export type ComboDurations = { axeMinutes: number; duckpinMinutes: number };
 
 export function comboDuckpinLaneCents(minutes: number): number {
-  if (minutes === 30) return 3000; // $30 per lane
-  if (minutes === 60) return 4000; // $40 per lane
-  if (minutes === 120) return 7500; // $75 per lane
-  return Math.round(40 * (minutes / 60) * 100);
+  if (minutes === 30) return 30; // $30 per lane
+  if (minutes === 60) return 40; // $40 per lane
+  if (minutes === 120) return 75; // $75 per lane
+  return Math.round(40 * (minutes / 60));
 }
 
 export function comboAxePersonCents(minutes: number): number {
-  if (minutes === 30) return 2000; // $20 per person
-  if (minutes === 60) return 2000; // $20 per person
-  if (minutes === 120) return 4000; // $40 per person
-  return Math.round(20 * (minutes / 60) * 100);
+  if (minutes === 30) return 15; // $15 per person
+  if (minutes === 60) return 20; // $20 per person
+  if (minutes === 120) return 35; // $35 per person
+  return Math.round(20 * (minutes / 60));
 }
 
 export function totalCents(
