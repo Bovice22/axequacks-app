@@ -808,6 +808,11 @@ export default function BookPage() {
         return;
       }
 
+      if (!("paymentIntent" in processResult) || !processResult.paymentIntent) {
+        setTerminalError("Payment completed, but no payment intent returned.");
+        return;
+      }
+
       const paymentIntentId = processResult.paymentIntent?.id;
       if (!paymentIntentId) {
         setTerminalError("Payment completed, but no payment intent returned.");
