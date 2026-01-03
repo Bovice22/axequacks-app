@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
 import { neededResources, PRICING, totalCents } from "@/lib/bookingLogic";
 
@@ -311,7 +312,7 @@ function MonthCalendar(props: {
 }
 
 // ---------- Main page ----------
-export default function BookPage() {
+function BookPageContent() {
   const searchParams = useSearchParams();
   const isStaffMode = searchParams.get("mode") === "staff";
   const checkoutSessionId = searchParams.get("session_id");
@@ -1577,5 +1578,23 @@ export default function BookPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function BookPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-50">
+          <div className="mx-auto max-w-5xl px-4 py-12">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="text-sm font-semibold text-zinc-600">Loading booking…</div>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <BookPageContent />
+    </Suspense>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function WaiverPage() {
+function WaiverContent() {
   const params = useSearchParams();
   const token = params.get("token") || "";
   const returnPath = params.get("return") || "";
@@ -157,5 +157,23 @@ export default function WaiverPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WaiverPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-50">
+          <div className="mx-auto max-w-xl px-4 py-12">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="text-sm text-zinc-600">Loading waiver…</div>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <WaiverContent />
+    </Suspense>
   );
 }

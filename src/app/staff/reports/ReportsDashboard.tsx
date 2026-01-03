@@ -220,8 +220,8 @@ export default function ReportsDashboard() {
     }
     lines.push("");
     lines.push(`Revenue by ${viewMode},Amount`);
-    for (const [key, cents] of revenueByPeriod) {
-      lines.push(`${key},${formatMoney(cents)}`);
+    for (const row of revenueByPeriod) {
+      lines.push(`${row.label},${formatMoney(row.total)}`);
     }
 
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });

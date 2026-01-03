@@ -147,7 +147,7 @@ export default function PosScreen() {
       }
 
       const connectResult = await terminalRef.current.connectReader(reader);
-      if (connectResult.error) {
+      if ("error" in connectResult && connectResult.error) {
         setTerminalError(connectResult.error.message || "Failed to connect reader.");
         return;
       }
@@ -166,14 +166,24 @@ export default function PosScreen() {
       }
 
       const collectResult = await terminalRef.current.collectPaymentMethod(intentJson.client_secret);
-      if (collectResult.error) {
+      if ("error" in collectResult && collectResult.error) {
         setTerminalError(collectResult.error.message || "Payment collection failed.");
         return;
       }
 
+      if (!("paymentIntent" in collectResult) || !collectResult.paymentIntent) {
+        setTerminalError("Payment collection failed.");
+        return;
+      }
+
       const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
-      if (processResult.error) {
+      if ("error" in processResult && processResult.error) {
         setTerminalError(processResult.error.message || "Payment failed.");
+        return;
+      }
+
+      if (!("paymentIntent" in processResult) || !processResult.paymentIntent) {
+        setTerminalError("Payment completed, but no payment intent returned.");
         return;
       }
 
