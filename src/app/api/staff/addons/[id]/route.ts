@@ -2,20 +2,27 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+async function getRouteId(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  const urlId = (() => {
+    try {
+      const path = new URL(req.url).pathname;
+      return path.split("/").pop() || "";
+    } catch {
+      return "";
+    }
+  })();
+  return (resolvedParams?.id || urlId || "").trim();
+}
+
+export async function PATCH(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const urlId = (() => {
-      try {
-        const path = new URL(req.url).pathname;
-        return path.split("/").pop() || "";
-      } catch {
-        return "";
-      }
-    })();
-    const id = (params.id || urlId || "").trim();
+    const id = await getRouteId(req, context);
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
@@ -51,20 +58,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const urlId = (() => {
-      try {
-        const path = new URL(req.url).pathname;
-        return path.split("/").pop() || "";
-      } catch {
-        return "";
-      }
-    })();
-    const id = (params.id || urlId || "").trim();
+    const id = await getRouteId(req, context);
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const sb = supabaseServer();
