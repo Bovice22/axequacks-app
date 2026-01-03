@@ -2,12 +2,25 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+async function getRouteId(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  if (resolvedParams?.id) return String(resolvedParams.id).trim();
+  try {
+    const path = new URL(req.url).pathname;
+    return path.split("/").pop() || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function PATCH(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const id = params.id;
+    const id = await getRouteId(req, context);
     const body = await req.json().catch(() => ({}));
     const codeFallback =
       body?.code != null

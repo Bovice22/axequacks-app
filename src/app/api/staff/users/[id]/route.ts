@@ -3,14 +3,27 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { pinToPassword } from "@/lib/pinAuth";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+async function getRouteId(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  if (resolvedParams?.id) return String(resolvedParams.id).trim();
+  try {
+    const path = new URL(req.url).pathname;
+    return path.split("/").pop() || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function PATCH(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const id = params.id;
+    const id = await getRouteId(req, context);
 
     const body = await req.json().catch(() => ({}));
     const fullName = body?.fullName != null ? String(body.fullName).trim() : undefined;
@@ -112,14 +125,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let id = params.id;
+    let id = await getRouteId(req, context);
     if (!id) {
       try {
         const url = new URL(req.url);

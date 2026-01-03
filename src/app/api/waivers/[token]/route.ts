@@ -30,8 +30,11 @@ const WAIVER_TEXT = [
   "I HAVE READ THIS RELEASE AND UNDERSTAND AND AGREE TO ITS TERMS ON MY OWN BEHALF AND THAT OF MY HEIRS, SUCCESSORS, AND ASSIGNS, AND THAT VOLUNTARILY GIVING UP SUBSTANTIAL LEGAL RIGHTS, INCLUDING THE RIGHT TO SUE THE COMPANY",
 ].join("\n\n");
 
-function resolveToken(req: Request, context: { params: { token: string } }) {
-  const fromParams = String(context?.params?.token || "").trim();
+type RouteContext = { params: Promise<{ token: string }> | { token: string } };
+
+async function resolveToken(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  const fromParams = String(resolvedParams?.token || "").trim();
   if (fromParams) return fromParams;
   try {
     const url = new URL(req.url);
@@ -44,9 +47,9 @@ function resolveToken(req: Request, context: { params: { token: string } }) {
   }
 }
 
-export async function GET(req: Request, context: { params: { token: string } }) {
+export async function GET(req: Request, context: RouteContext) {
   try {
-    const token = resolveToken(req, context);
+    const token = await resolveToken(req, context);
     if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
 
     const sb = supabaseServer();
@@ -92,9 +95,9 @@ export async function GET(req: Request, context: { params: { token: string } }) 
   }
 }
 
-export async function POST(req: Request, context: { params: { token: string } }) {
+export async function POST(req: Request, context: RouteContext) {
   try {
-    const token = resolveToken(req, context);
+    const token = await resolveToken(req, context);
     if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));

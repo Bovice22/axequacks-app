@@ -10,6 +10,19 @@ const ACTIVITY_DB = {
   "Combo Package": "COMBO",
 } as const;
 
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+async function getRouteId(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  if (resolvedParams?.id) return String(resolvedParams.id).trim();
+  try {
+    const path = new URL(req.url).pathname;
+    return path.split("/").pop() || "";
+  } catch {
+    return "";
+  }
+}
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -63,17 +76,14 @@ async function logBookingEvent(sb: ReturnType<typeof getSupabaseAdmin>, payload:
   }
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const id =
-      params?.id ||
-      new URL(req.url).searchParams.get("id") ||
-      "";
+    const id = (await getRouteId(req, context)) || new URL(req.url).searchParams.get("id") || "";
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const sb = getSupabaseAdmin();
@@ -95,7 +105,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) {
@@ -104,7 +114,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const body = await req.json().catch(() => ({}));
     const id =
-      params?.id ||
+      (await getRouteId(req, context)) ||
       String(body?.id || "") ||
       new URL(req.url).searchParams.get("id") ||
       "";
@@ -400,7 +410,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) {
@@ -409,12 +419,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
     const body = await req.json().catch(() => ({}));
     const url = new URL(req.url);
-    const pathId = url.pathname.split("/").filter(Boolean).pop() || "";
     const id =
-      params?.id ||
+      (await getRouteId(req, context)) ||
       String(body?.id || "") ||
       url.searchParams.get("id") ||
-      pathId ||
       "";
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 

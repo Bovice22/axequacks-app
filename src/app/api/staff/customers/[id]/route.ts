@@ -2,12 +2,25 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-export async function GET(req: Request, context: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+async function getRouteId(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  if (resolvedParams?.id) return String(resolvedParams.id).trim();
+  try {
+    const path = new URL(req.url).pathname;
+    return path.split("/").pop() || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function GET(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const customerIdRaw = context.params.id;
+    const customerIdRaw = await getRouteId(req, context);
     const url = new URL(req.url);
     const emailParam = url.searchParams.get("email") || "";
     const customerId =
@@ -93,12 +106,12 @@ export async function GET(req: Request, context: { params: { id: string } }) {
   }
 }
 
-export async function PATCH(req: Request, context: { params: { id: string } }) {
+export async function PATCH(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const id = String(context.params.id || "").trim();
+    const id = await getRouteId(req, context);
     if (!id) return NextResponse.json({ error: "Missing customer id" }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
@@ -127,12 +140,12 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
   }
 }
 
-export async function DELETE(_req: Request, context: { params: { id: string } }) {
+export async function DELETE(_req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    let id = String(context.params.id || "").trim();
+    let id = await getRouteId(_req, context);
     if (!id) {
       try {
         const url = new URL(_req.url);
