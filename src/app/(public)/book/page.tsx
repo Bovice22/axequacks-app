@@ -763,7 +763,7 @@ export default function BookPage() {
       }
 
       const connectResult = await terminalRef.current.connectReader(reader);
-      if (connectResult.error) {
+      if ("error" in connectResult && connectResult.error) {
         setTerminalError(connectResult.error.message || "Failed to connect reader.");
         return;
       }
