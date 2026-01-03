@@ -62,7 +62,7 @@ function buildWaiverUrl(token: string) {
   return `${base}/waiver?token=${encodeURIComponent(token)}`;
 }
 
-async function fetchBookingResources(bookingId: string) {
+async function fetchBookingResources(bookingId: string): Promise<string[]> {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from("resource_reservations")
@@ -76,7 +76,7 @@ async function fetchBookingResources(bookingId: string) {
 
   return (data ?? [])
     .map((row: any) => row?.resources?.name as string | undefined)
-    .filter((name: string | undefined) => !!name);
+    .filter((name): name is string => !!name);
 }
 
 async function fetchWaiverUrlForBooking(bookingId: string) {
