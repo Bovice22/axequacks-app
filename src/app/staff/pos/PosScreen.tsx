@@ -39,6 +39,10 @@ export default function PosScreen() {
     terminalReadyRef.current = true;
 
     loadStripeTerminal().then((StripeTerminal) => {
+      if (!StripeTerminal) {
+        setTerminalError("Stripe Terminal failed to load. Please refresh.");
+        return;
+      }
       terminalRef.current = StripeTerminal.create({
         onFetchConnectionToken: async () => {
           const res = await fetch("/api/stripe/terminal/connection_token", { method: "POST" });
