@@ -74,7 +74,7 @@ export default function StaffUsersAdmin() {
     }
   }
 
-  async function updateUser(id: string, patch: Partial<StaffUser> & { pin?: string }) {
+  async function updateUser(id: string, patch: Partial<StaffUser> & { pin?: string; staffId?: string }) {
     if (!id) {
       setActionError("Missing staff user id");
       return;
