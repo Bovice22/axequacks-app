@@ -797,8 +797,13 @@ export default function BookPage() {
         return;
       }
 
+      if (!("paymentIntent" in collectResult) || !collectResult.paymentIntent) {
+        setTerminalError("Payment collection failed.");
+        return;
+      }
+
       const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
-      if (processResult.error) {
+      if ("error" in processResult && processResult.error) {
         setTerminalError(processResult.error.message || "Payment failed.");
         return;
       }
