@@ -15,9 +15,9 @@ export const MAX_PARTY_SIZES: Record<Activity, number> = {
 
 export const DURATIONS_MINUTES: Record<Activity, number[]> = {
   "Axe Throwing": [30, 60, 120],
-  "Duckpin Bowling": [60, 120],
-  // Combo is fixed at 2 hours (120)
-  "Combo Package": [120],
+  "Duckpin Bowling": [30, 60, 120],
+  // Combo uses per-activity durations (axe + duckpin)
+  "Combo Package": [60, 120, 180, 240],
 };
 
 // --- RESOURCE THRESHOLDS (SOURCE OF TRUTH) ---
@@ -62,7 +62,28 @@ export const PRICING = {
   DUCKPIN_LANE_PER_HOUR_CENTS: 8000, // $80 per lane per hour
 };
 
-export function totalCents(activity: Activity, partySize: number, durationMinutes: number): number {
+export type ComboDurations = { axeMinutes: number; duckpinMinutes: number };
+
+export function comboDuckpinLaneCents(minutes: number): number {
+  if (minutes === 30) return 3000; // $30 per lane
+  if (minutes === 60) return 4000; // $40 per lane
+  if (minutes === 120) return 7500; // $75 per lane
+  return Math.round(40 * (minutes / 60) * 100);
+}
+
+export function comboAxePersonCents(minutes: number): number {
+  if (minutes === 30) return 2000; // $20 per person
+  if (minutes === 60) return 2000; // $20 per person
+  if (minutes === 120) return 4000; // $40 per person
+  return Math.round(20 * (minutes / 60) * 100);
+}
+
+export function totalCents(
+  activity: Activity,
+  partySize: number,
+  durationMinutes: number,
+  comboDurations?: ComboDurations
+): number {
   // Adjust here if your model changes.
   // From your UI examples:
   // Axe: $25 per person per hour
@@ -80,10 +101,12 @@ export function totalCents(activity: Activity, partySize: number, durationMinute
     return Math.round(lanes * 40 * hours * 100);
   }
 
-  // Combo Package: 1 hour Duckpin @ $40/lane + 1 hour Axe @ $20/person
+  // Combo Package: Duckpin @ $40/lane/hour + Axe @ $20/person/hour
   const lanes = duckpinLanesForParty(partySize);
-  const duckpinPortion = lanes * 40 * 1;
-  const axePortion = partySize * 20 * 1;
+  const duckpinMinutes = comboDurations?.duckpinMinutes ?? 60;
+  const axeMinutes = comboDurations?.axeMinutes ?? 60;
+  const duckpinPortion = lanes * comboDuckpinLaneCents(duckpinMinutes);
+  const axePortion = partySize * comboAxePersonCents(axeMinutes);
   return Math.round((duckpinPortion + axePortion) * 100);
 }
 

@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
-import { neededResources, PRICING, totalCents } from "@/lib/bookingLogic";
+import { comboAxePersonCents, comboDuckpinLaneCents, neededResources, PRICING, totalCents } from "@/lib/bookingLogic";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 
@@ -181,7 +181,12 @@ function maxParty(activity: Activity | "") {
   return 24;
 }
 
-function calculatePrice(activity: Activity, duration: number, partySize: number) {
+function calculatePrice(
+  activity: Activity,
+  duration: number,
+  partySize: number,
+  comboDurations?: { axeMinutes: number; duckpinMinutes: number }
+) {
   const breakdown: string[] = [];
   const hours = duration / 60;
   const durationLabel = duration === 60 ? "1-Hour" : duration === 120 ? "2-Hours" : "30 Minutes";
@@ -200,14 +205,15 @@ function calculatePrice(activity: Activity, duration: number, partySize: number)
     return { cents: totalCents(activity, partySize, duration), breakdown };
   }
 
-  // Combo Package (forced 2 hours)
+  // Combo Package (per-activity durations)
+  const comboAxeMinutes = comboDurations?.axeMinutes ?? 60;
+  const comboDuckpinMinutes = comboDurations?.duckpinMinutes ?? 60;
   const lanes = resources.DUCKPIN;
-  const duckpinPortionCents = Math.round(40 * 1 * 100);
-  const axePerPerson = (PRICING.AXE_PER_PERSON_CENTS / 100).toFixed(2);
-  const axePortionCents = PRICING.AXE_PER_PERSON_CENTS;
-  breakdown.push(`${lanes} lane(s) × ${formatMoney(duckpinPortionCents)} (Duckpin portion)`);
-  breakdown.push(`${partySize} × $${axePerPerson} (Axe portion)`);
-  return { cents: totalCents(activity, partySize, duration), breakdown };
+  const duckpinPortionCents = comboDuckpinLaneCents(comboDuckpinMinutes);
+  const axePerPersonCents = comboAxePersonCents(comboAxeMinutes);
+  breakdown.push(`${lanes} lane(s) × ${formatMoney(duckpinPortionCents)} (${labelDuration(comboDuckpinMinutes)})`);
+  breakdown.push(`${partySize} × ${formatMoney(axePerPersonCents)} (${labelDuration(comboAxeMinutes)})`);
+  return { cents: totalCents(activity, partySize, duration, comboDurations), breakdown };
 }
 
 // ---------- Calendar component ----------
@@ -319,6 +325,8 @@ function BookPageContent() {
 
   const [activity, setActivity] = useState<Activity | "">("");
   const [duration, setDuration] = useState<number | null>(null);
+  const [comboAxeDuration, setComboAxeDuration] = useState<number | null>(null);
+  const [comboDuckpinDuration, setComboDuckpinDuration] = useState<number | null>(null);
   const [partySize, setPartySize] = useState(2);
   const [comboSlot1, setComboSlot1] = useState<"Axe Throwing" | "Duckpin Bowling">("Duckpin Bowling");
   const [dateKey, setDateKey] = useState(""); // yyyy-mm-dd
@@ -406,13 +414,22 @@ function BookPageContent() {
 
   const comboFirst = comboSlot1 === "Duckpin Bowling" ? "DUCKPIN" : "AXE";
   const comboSlot2 = comboSlot1 === "Duckpin Bowling" ? "Axe Throwing" : "Duckpin Bowling";
+  const comboTotalDuration = useMemo(() => {
+    if (!comboAxeDuration || !comboDuckpinDuration) return null;
+    return comboAxeDuration + comboDuckpinDuration;
+  }, [comboAxeDuration, comboDuckpinDuration]);
+  const effectiveDuration = activity === "Combo Package" ? comboTotalDuration : duration;
 
   function chooseActivity(a: Activity) {
     setActivity(a);
 
-    // Combo forces 2 hours
-    if (a === "Combo Package") setDuration(120);
-    else setDuration(null);
+    if (a === "Combo Package") {
+      setDuration(null);
+      setComboAxeDuration(null);
+      setComboDuckpinDuration(null);
+    } else {
+      setDuration(null);
+    }
 
     // Clamp party size
     setPartySize((p) => Math.min(p, maxParty(a)));
@@ -428,14 +445,17 @@ function BookPageContent() {
   const closed = isClosedDateKey(dateKey);
 
   const slots = useMemo(() => {
-    if (!duration || !dateKey) return [];
-    return buildTimeSlotsForDate(dateKey, duration);
-  }, [duration, dateKey]);
+    if (!effectiveDuration || !dateKey) return [];
+    return buildTimeSlotsForDate(dateKey, effectiveDuration);
+  }, [effectiveDuration, dateKey]);
 
   const pricing = useMemo(() => {
-    if (!activity || !duration) return null;
-    return calculatePrice(activity, duration, partySize);
-  }, [activity, duration, partySize]);
+    if (!activity || !effectiveDuration) return null;
+    return calculatePrice(activity, effectiveDuration, partySize, {
+      axeMinutes: comboAxeDuration ?? 0,
+      duckpinMinutes: comboDuckpinDuration ?? 0,
+    });
+  }, [activity, effectiveDuration, partySize, comboAxeDuration, comboDuckpinDuration]);
 
   const totalCents = pricing?.cents ?? 0;
   const discountedTotalCents = promoApplied?.totalCents ?? totalCents;
@@ -496,12 +516,15 @@ function BookPageContent() {
   }, [activity, partySize]);
 
   const selectedTimeRange = useMemo(() => {
-    if (!time || !duration) return "—";
-    return slotRangeLabel(time, duration);
-  }, [time, duration]);
+    if (!time || !effectiveDuration) return "—";
+    return slotRangeLabel(time, effectiveDuration);
+  }, [time, effectiveDuration]);
 
   const startMin = useMemo(() => (time ? parseLabelToMinutes(time) : null), [time]);
-  const endMin = useMemo(() => (startMin != null && duration ? startMin + duration : null), [startMin, duration]);
+  const endMin = useMemo(
+    () => (startMin != null && effectiveDuration ? startMin + effectiveDuration : null),
+    [startMin, effectiveDuration]
+  );
   const selectedTimePast = useMemo(() => {
     if (!dateKey || !time) return false;
     if (dateKey !== todayDateKeyNY()) return false;
@@ -522,6 +545,8 @@ function BookPageContent() {
     partySize: number;
     dateKey: string;
     durationMinutes: number;
+    comboAxeMinutes?: number;
+    comboDuckpinMinutes?: number;
     openStartMin: number;
     openEndMin: number;
     slotIntervalMin: number;
@@ -580,7 +605,7 @@ function BookPageContent() {
 
   // Auto refresh availability when selections change (debounced)
   useEffect(() => {
-    if (!activity || !duration || !dateKey || closed) {
+    if (!activity || !effectiveDuration || !dateKey || closed) {
       availabilityAbortRef.current?.abort();
       setAvailabilityLoading(false);
       setBlockedStartMins([]);
@@ -605,7 +630,9 @@ function BookPageContent() {
         activity,
         partySize,
         dateKey,
-        durationMinutes: duration,
+        durationMinutes: effectiveDuration,
+        comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
+        comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
         openStartMin: openWindow.openMin,
         openEndMin: openWindow.closeMin,
         slotIntervalMin: step,
@@ -617,7 +644,7 @@ function BookPageContent() {
       if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity, duration, partySize, dateKey, closed, comboFirst]);
+  }, [activity, effectiveDuration, partySize, dateKey, closed, comboFirst, comboAxeDuration, comboDuckpinDuration]);
 
   // Disable confirm if selected time is blocked
   const selectedTimeBlocked = useMemo(() => {
@@ -628,7 +655,7 @@ function BookPageContent() {
 
   const canConfirm =
     !!activity &&
-    !!duration &&
+    !!effectiveDuration &&
     !!dateKey &&
     !!time &&
     !closed &&
@@ -640,7 +667,7 @@ function BookPageContent() {
     !submitting;
 
   async function createCheckoutSession(opts: { successPath: string; cancelPath: string; uiMode: "customer" | "staff" }) {
-    if (!activity || !duration || !dateKey || !time || closed) return;
+    if (!activity || !effectiveDuration || !dateKey || !time || closed) return;
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
 
@@ -654,13 +681,15 @@ function BookPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           activity,
-          durationMinutes: duration,
+          durationMinutes: effectiveDuration,
           partySize,
           dateKey,
           startMin,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
+          comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
+          comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
           comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
           successPath: opts.successPath,
           cancelPath: opts.cancelPath,
@@ -691,7 +720,7 @@ function BookPageContent() {
     setSubmitError("");
     setSubmitSuccess("");
 
-    if (!activity || !duration || !dateKey || !time || closed) return;
+    if (!activity || !effectiveDuration || !dateKey || !time || closed) return;
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
 
@@ -706,6 +735,8 @@ function BookPageContent() {
   function resetBookingState() {
     setActivity("");
     setDuration(null);
+    setComboAxeDuration(null);
+    setComboDuckpinDuration(null);
     setPartySize(2);
     setComboSlot1("Duckpin Bowling");
     setDateKey("");
@@ -745,7 +776,7 @@ function BookPageContent() {
       setTerminalError("Stripe Terminal not initialized.");
       return;
     }
-    if (!activity || !duration || !dateKey || !time || closed) return;
+    if (!activity || !effectiveDuration || !dateKey || !time || closed) return;
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
     if (!selectedReaderId) {
@@ -774,13 +805,15 @@ function BookPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           activity,
-          durationMinutes: duration,
+          durationMinutes: effectiveDuration,
           partySize,
           dateKey,
           startMin,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
+          comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
+          comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
           comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
           promoCode: promoApplied?.code || "",
         }),
@@ -834,7 +867,7 @@ function BookPageContent() {
       const comboOrder = activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined;
       setConfirmation({
         activity,
-        duration,
+        duration: effectiveDuration,
         dateKey,
         timeLabel: selectedTimeRange,
         partySize,
@@ -971,8 +1004,46 @@ function BookPageContent() {
               </div>
 
               {activity === "Combo Package" ? (
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-                  Combo Package is automatically <span className="font-extrabold">2-Hours</span>.
+                <div className="grid gap-4 md:grid-cols-2">
+                  {[
+                    { label: "Axe Throwing", value: comboAxeDuration, setValue: setComboAxeDuration },
+                    { label: "Duckpin Bowling", value: comboDuckpinDuration, setValue: setComboDuckpinDuration },
+                  ].map((group) => (
+                    <div key={group.label} className="rounded-2xl border border-zinc-200 bg-white p-3">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-extrabold text-white"
+                      >
+                        {group.label}
+                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {[30, 60, 120].map((d) => {
+                          const selected = group.value === d;
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => {
+                                group.setValue(d);
+                                setTime("");
+                                setSubmitError("");
+                                setSubmitSuccess("");
+                              }}
+                              className={cx(
+                                "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                                selected
+                                  ? "border-zinc-900 bg-zinc-900 text-white"
+                                  : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
+                              )}
+                            >
+                              {labelDuration(d)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -1152,7 +1223,7 @@ function BookPageContent() {
                 )}
               </div>
 
-              {!duration ? (
+              {!effectiveDuration ? (
                 <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
                   Select an activity and duration to see time slots.
                 </div>
@@ -1198,14 +1269,14 @@ function BookPageContent() {
                             : "Available"
                         }
                       >
-                        {slotRangeLabel(startLabel, duration)}
+                        {slotRangeLabel(startLabel, effectiveDuration)}
                       </button>
                     );
                   })}
                 </div>
               )}
 
-              {!closed && duration && dateKey && (
+              {!closed && effectiveDuration && dateKey && (
                 <div className="mt-2 text-xs text-zinc-500">
                   Times that are unavailable will be greyed out automatically.
                 </div>
@@ -1226,8 +1297,17 @@ function BookPageContent() {
 
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-zinc-600">Duration</span>
-                  <span className="font-extrabold text-zinc-900">{labelDuration(duration)}</span>
+                  <span className="font-extrabold text-zinc-900">
+                    {effectiveDuration ? labelDuration(effectiveDuration) : "—"}
+                  </span>
                 </div>
+
+                {activity === "Combo Package" && (
+                  <div className="text-xs text-zinc-600">
+                    Axe: <span className="font-semibold">{labelDuration(comboAxeDuration)}</span> • Duckpin:{" "}
+                    <span className="font-semibold">{labelDuration(comboDuckpinDuration)}</span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-zinc-600">Date</span>
@@ -1236,7 +1316,9 @@ function BookPageContent() {
 
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-zinc-600">Time</span>
-                  <span className="font-extrabold text-zinc-900">{time && duration ? selectedTimeRange : "—"}</span>
+                  <span className="font-extrabold text-zinc-900">
+                    {time && effectiveDuration ? selectedTimeRange : "—"}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between">
