@@ -792,7 +792,7 @@ export default function BookPage() {
       }
 
       const collectResult = await terminalRef.current.collectPaymentMethod(intentJson.client_secret);
-      if (collectResult.error) {
+      if ("error" in collectResult && collectResult.error) {
         setTerminalError(collectResult.error.message || "Payment collection failed.");
         return;
       }
