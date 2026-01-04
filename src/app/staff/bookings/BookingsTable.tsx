@@ -761,7 +761,7 @@ export default function BookingsTable() {
   };
 
   const displayPartySize = (booking?: BookingRow | null) => {
-    if (!booking) return booking?.party_size ?? "—";
+    if (!booking) return "—";
     const eventId = eventRequestIdFromNotes(booking.notes);
     if (eventId && eventRequestSizeById.has(eventId)) {
       return eventRequestSizeById.get(eventId);

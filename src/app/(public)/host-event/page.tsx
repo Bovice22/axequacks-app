@@ -389,12 +389,17 @@ export default function HostEventPage() {
                     key={activity}
                     type="button"
                     onClick={() => {
+                      const wasSelected = selectedActivities.includes(activity);
                       setSelectedActivities((prev) =>
-                        prev.includes(activity) ? prev.filter((a) => a !== activity) : [...prev, activity]
+                        wasSelected ? prev.filter((a) => a !== activity) : [...prev, activity]
                       );
-                      setDurationByActivity((prev) =>
-                        prev[activity] ? prev : { ...prev, [activity]: 60 }
-                      );
+                      setDurationByActivity((prev) => {
+                        if (wasSelected) {
+                          const { [activity]: _, ...rest } = prev;
+                          return rest;
+                        }
+                        return prev[activity] ? prev : { ...prev, [activity]: 60 };
+                      });
                       setStartMin(null);
                     }}
                     className={`rounded-2xl border px-4 py-2 text-sm font-extrabold transition ${
@@ -408,40 +413,53 @@ export default function HostEventPage() {
                 );
               })}
             </div>
-
-            {selectedActivities.length > 0 ? (
-              <div className="mt-4 space-y-3">
-                {selectedActivities.map((activity) => (
-                  <div key={activity} className="flex flex-wrap items-center gap-3">
-                    <div className="min-w-[160px] text-sm font-semibold text-zinc-700">{activity}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {DURATIONS.map((d) => {
-                        const selected = durationByActivity[activity] === d;
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => {
-                              setDurationByActivity((prev) => ({ ...prev, [activity]: d }));
-                              setStartMin(null);
-                            }}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                              selected
-                                ? "border-zinc-900 bg-zinc-900 text-white"
-                                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                            }`}
-                          >
-                            {d === 30 ? "30 Minutes" : d === 60 ? "1-Hour" : "2-Hours"}
-                          </button>
-                        );
-                      })}
+            <div className="mt-4 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Duration</div>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                {ACTIVITIES.map((activity) => {
+                  const isSelected = selectedActivities.includes(activity);
+                  return (
+                    <div key={activity} className="rounded-2xl border border-zinc-200 bg-white p-3">
+                      <div className="inline-flex items-center rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white">
+                        {activity}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {DURATIONS.map((d) => {
+                          const selected = durationByActivity[activity] === d;
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              disabled={!isSelected}
+                              onClick={() => {
+                                if (!isSelected) return;
+                                setDurationByActivity((prev) => ({ ...prev, [activity]: d }));
+                                setStartMin(null);
+                              }}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                !isSelected
+                                  ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400"
+                                  : selected
+                                  ? "border-zinc-900 bg-zinc-900 text-white"
+                                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                              }`}
+                            >
+                              {d === 30 ? "30 Minutes" : d === 60 ? "1-Hour" : "2-Hours"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!isSelected ? (
+                        <div className="mt-2 text-[10px] text-zinc-400">Select this activity to choose a duration.</div>
+                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            ) : (
-              <div className="mt-3 text-xs text-zinc-500">Select one or more activities to continue.</div>
-            )}
+              {selectedActivities.length === 0 ? (
+                <div className="mt-3 text-xs text-zinc-500">Select one or more activities to continue.</div>
+              ) : null}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-5">
