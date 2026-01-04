@@ -109,7 +109,10 @@ export async function POST(req: Request) {
 
     if (resErr) {
       console.error("resources query error:", resErr);
-      return NextResponse.json({ error: "Database error (resources)" }, { status: 500 });
+      return NextResponse.json(
+        { error: resErr.message || "Database error (resources)", code: (resErr as any).code },
+        { status: 500 }
+      );
     }
 
     const activeByType: Record<ResourceType, string[]> = { AXE: [], DUCKPIN: [] };
