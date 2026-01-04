@@ -71,7 +71,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             },
           ];
 
-    const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const base =
+      process.env.NEXT_PUBLIC_EVENTS_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "http://localhost:3000";
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
