@@ -5,6 +5,15 @@ import { getStripe } from "@/lib/server/stripe";
 import { sendEventPaymentLinkEmail } from "@/lib/server/mailer";
 import { totalCents } from "@/lib/bookingLogic";
 
+function normalizeBaseUrl(value?: string | null) {
+  const cleaned = String(value || "")
+    .replace(/^=+/, "")
+    .replace(/["']/g, "")
+    .trim()
+    .replace(/\/+$/, "");
+  return /^https?:\/\//.test(cleaned) ? cleaned : "";
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const staff = await getStaffUserFromCookies();
@@ -72,9 +81,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           ];
 
     const base =
-      process.env.NEXT_PUBLIC_EVENTS_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "http://localhost:3000";
+      normalizeBaseUrl(process.env.NEXT_PUBLIC_EVENTS_URL) ||
+      normalizeBaseUrl(process.env.NEXT_PUBLIC_APP_URL) ||
+      "https://events.axequacks.com";
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
