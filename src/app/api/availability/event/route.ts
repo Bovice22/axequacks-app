@@ -99,11 +99,12 @@ export async function POST(req: Request) {
       if (needsAxe > 0) typesToCheck.push("AXE");
       if (needsDuck > 0) typesToCheck.push("DUCKPIN");
     }
+    const resolvedTypes = typesToCheck.length ? typesToCheck : (["AXE", "DUCKPIN"] as ResourceType[]);
 
     const { data: resources, error: resErr } = await supabase
       .from("resources")
       .select("id,type,active")
-      .in("type", typesToCheck)
+      .in("type", resolvedTypes)
       .or("active.eq.true,active.is.null");
 
     if (resErr) {

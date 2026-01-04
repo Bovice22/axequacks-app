@@ -226,11 +226,17 @@ export default function HostEventPage() {
             slotIntervalMin: 30,
           }),
         })
-          .then((res) => res.json())
-          .then((json) => ({
-            activity,
-            blockedStartMins: Array.isArray(json?.blockedStartMins) ? json.blockedStartMins : [],
-          }));
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              const message = json?.error || "Availability check failed.";
+              throw new Error(message);
+            }
+            return {
+              activity,
+              blockedStartMins: Array.isArray(json?.blockedStartMins) ? json.blockedStartMins : [],
+            };
+          });
       })
     )
       .then((results) => {
@@ -241,9 +247,9 @@ export default function HostEventPage() {
         });
         setBlockedByActivity(next);
       })
-      .catch(() => {
+      .catch((err: any) => {
         if (cancelled) return;
-        setAvailabilityError("Unable to check availability.");
+        setAvailabilityError(err?.message || "Unable to check availability.");
         setBlockedByActivity({});
       })
       .finally(() => {
