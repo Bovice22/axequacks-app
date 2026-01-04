@@ -93,7 +93,12 @@ export function totalCents(
   const hours = durationMinutes / 60;
 
   if (activity === "Axe Throwing") {
-    return Math.round(partySize * 25 * hours * 100);
+    const perPerson =
+      durationMinutes === 30 ? 20 :
+      durationMinutes === 60 ? 25 :
+      durationMinutes === 120 ? 45 :
+      25 * hours;
+    return Math.round(partySize * perPerson * 100);
   }
 
   if (activity === "Duckpin Bowling") {
