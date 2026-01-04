@@ -103,7 +103,12 @@ export function totalCents(
 
   if (activity === "Duckpin Bowling") {
     const lanes = duckpinLanesForParty(partySize);
-    return Math.round(lanes * 40 * hours * 100);
+    const perLane =
+      durationMinutes === 30 ? 30 :
+      durationMinutes === 60 ? 40 :
+      durationMinutes === 120 ? 75 :
+      40 * hours;
+    return Math.round(lanes * perLane * 100);
   }
 
   // Combo Package: Duckpin @ $40/lane/hour + Axe @ $20/person/hour

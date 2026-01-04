@@ -193,14 +193,22 @@ function calculatePrice(
   const resources = neededResources(activity, partySize);
 
   if (activity === "Axe Throwing") {
-    const perPersonCents = Math.round(25 * hours * 100);
+    const perPersonCents =
+      duration === 30 ? Math.round(20 * 100) :
+      duration === 60 ? Math.round(25 * 100) :
+      duration === 120 ? Math.round(45 * 100) :
+      Math.round(25 * hours * 100);
     breakdown.push(`${partySize} × ${formatMoney(perPersonCents)} (${durationLabel})`);
     return { cents: totalCents(activity, partySize, duration), breakdown };
   }
 
   if (activity === "Duckpin Bowling") {
     const lanes = resources.DUCKPIN;
-    const perLaneCents = Math.round(40 * hours * 100);
+    const perLaneCents =
+      duration === 30 ? Math.round(30 * 100) :
+      duration === 60 ? Math.round(40 * 100) :
+      duration === 120 ? Math.round(75 * 100) :
+      Math.round(40 * hours * 100);
     breakdown.push(`${lanes} lane(s) × ${formatMoney(perLaneCents)} (${durationLabel})`);
     return { cents: totalCents(activity, partySize, duration), breakdown };
   }
@@ -209,8 +217,8 @@ function calculatePrice(
   const comboAxeMinutes = comboDurations?.axeMinutes ?? 60;
   const comboDuckpinMinutes = comboDurations?.duckpinMinutes ?? 60;
   const lanes = resources.DUCKPIN;
-  const duckpinPortionCents = comboDuckpinLaneCents(comboDuckpinMinutes);
-  const axePerPersonCents = comboAxePersonCents(comboAxeMinutes);
+  const duckpinPortionCents = Math.round(comboDuckpinLaneCents(comboDuckpinMinutes) * 100);
+  const axePerPersonCents = Math.round(comboAxePersonCents(comboAxeMinutes) * 100);
   breakdown.push(`${lanes} lane(s) × ${formatMoney(duckpinPortionCents)} (${labelDuration(comboDuckpinMinutes)})`);
   breakdown.push(`${partySize} × ${formatMoney(axePerPersonCents)} (${labelDuration(comboAxeMinutes)})`);
   return { cents: totalCents(activity, partySize, duration, comboDurations), breakdown };
