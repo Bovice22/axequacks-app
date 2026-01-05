@@ -11,6 +11,8 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
   const dateKey = String(metadata.date_key || "");
   const startMin = Number(metadata.start_min);
   const durationMinutes = Number(metadata.duration_minutes);
+  const comboAxeMinutes = Number(metadata.combo_axe_minutes);
+  const comboDuckpinMinutes = Number(metadata.combo_duckpin_minutes);
   const customerName = String(metadata.customer_name || "");
   const customerEmail = String(metadata.customer_email || "");
   const customerPhone = String(metadata.customer_phone || "");
@@ -30,6 +32,8 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
     dateKey,
     startMin,
     durationMinutes,
+    comboAxeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
+    comboDuckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
     customerName,
     customerEmail,
     customerPhone,
@@ -57,9 +61,23 @@ async function markBookingPaid(bookingId: string) {
   }
 }
 
-function buildWaiverUrl(token: string) {
+async function markBookingPaymentIntent(bookingId: string, paymentIntentId: string) {
+  if (!paymentIntentId) return;
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.from("bookings").update({ payment_intent_id: paymentIntentId }).eq("id", bookingId);
+  if (error) {
+    console.error("booking payment intent update error:", error);
+  }
+}
+
+function buildWaiverUrl(token: string, bookingId?: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return `${base}/waiver?token=${encodeURIComponent(token)}`;
+  const url = new URL("/waiver", base);
+  url.searchParams.set("token", token);
+  if (bookingId) {
+    url.searchParams.set("booking_id", bookingId);
+  }
+  return url.toString();
 }
 
 async function fetchBookingResources(bookingId: string): Promise<string[]> {
@@ -89,7 +107,7 @@ async function fetchWaiverUrlForBooking(bookingId: string) {
   if (error || !data?.token || data?.status === "SIGNED") {
     return "";
   }
-  return buildWaiverUrl(data.token as string);
+  return buildWaiverUrl(data.token as string, bookingId);
 }
 
 export async function POST(req: Request) {
@@ -114,6 +132,7 @@ export async function POST(req: Request) {
       const bookingId = intent.metadata.booking_id as string;
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
+      await markBookingPaymentIntent(bookingId, paymentIntentId);
       const resources = await fetchBookingResources(bookingId);
       let waiverUrl = "";
       if (bookingInput) {
@@ -170,6 +189,7 @@ export async function POST(req: Request) {
 
     const result = await createBookingWithResources(bookingInput);
     await markBookingPaid(result.bookingId);
+    await markBookingPaymentIntent(result.bookingId, paymentIntentId);
     await stripe.paymentIntents.update(paymentIntentId, {
       metadata: {
         ...intent.metadata,

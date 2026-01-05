@@ -8,6 +8,7 @@ function WaiverContent() {
   const token = params.get("token") || "";
   const returnPath = params.get("return") || "";
   const view = params.get("view") === "1";
+  const bookingId = params.get("booking_id") || "";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,7 +27,8 @@ function WaiverContent() {
     }
     (async () => {
       try {
-        const res = await fetch(`/api/waivers/${token}`, { cache: "no-store" });
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : "";
+        const res = await fetch(`/api/waivers/${token}${query}`, { cache: "no-store" });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
           setStatus("error");
@@ -47,12 +49,13 @@ function WaiverContent() {
         setError(err?.message || "Failed to load waiver.");
       }
     })();
-  }, [token]);
+  }, [token, bookingId]);
 
   async function submitWaiver() {
     setError("");
     try {
-      const res = await fetch(`/api/waivers/${token}`, {
+      const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : "";
+      const res = await fetch(`/api/waivers/${token}${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, signature: name }),

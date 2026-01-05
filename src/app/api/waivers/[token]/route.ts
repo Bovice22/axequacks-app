@@ -47,20 +47,123 @@ async function resolveToken(req: Request, context: RouteContext) {
   }
 }
 
+function resolveBookingId(req: Request) {
+  try {
+    const url = new URL(req.url);
+    return String(url.searchParams.get("booking_id") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function ensureRequestFromBooking(sb: any, bookingId: string, token: string) {
+  const { data: existing, error: existingErr } = await sb
+    .from("waiver_requests")
+    .select("id,customer_id,booking_id,status,token")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+
+  if (!existingErr && existing?.id) {
+    if (token && existing.token !== token && existing.status !== "SIGNED") {
+      const { error: updateErr } = await sb.from("waiver_requests").update({ token }).eq("id", existing.id);
+      if (!updateErr) {
+        existing.token = token;
+      }
+    }
+    return existing;
+  }
+
+  const { data: booking, error: bookingErr } = await sb
+    .from("bookings")
+    .select("id,customer_id,customer_name,customer_email,customer_phone")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (bookingErr || !booking?.id) {
+    return null;
+  }
+
+  let customerId = booking.customer_id as string | null;
+  if (!customerId) {
+    const email = String(booking.customer_email || "").trim().toLowerCase();
+    const fullName = String(booking.customer_name || "").trim();
+    const phone = String(booking.customer_phone || "").trim() || null;
+    if (email) {
+      const { data: customerRow, error: customerErr } = await sb
+        .from("customers")
+        .upsert(
+          {
+            email,
+            full_name: fullName || null,
+            phone,
+          },
+          { onConflict: "email" }
+        )
+        .select("id")
+        .single();
+      if (!customerErr && customerRow?.id) {
+        customerId = customerRow.id as string;
+      }
+    }
+  }
+
+  if (!customerId) {
+    return null;
+  }
+
+  const { data: created, error: createErr } = await sb
+    .from("waiver_requests")
+    .insert({
+      customer_id: customerId,
+      booking_id: bookingId,
+      token,
+      status: "PENDING",
+      sent_at: new Date().toISOString(),
+    })
+    .select("id,customer_id,booking_id,status,token")
+    .single();
+
+  if (createErr || !created) {
+    return null;
+  }
+
+  return created;
+}
+
 export async function GET(req: Request, context: RouteContext) {
   try {
     const token = await resolveToken(req, context);
     if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
+    const bookingId = resolveBookingId(req);
 
     const sb = supabaseServer();
-    const { data, error } = await sb
+    const { data: tokenRow, error: tokenErr } = await sb
       .from("waiver_requests")
       .select("id,customer_id,booking_id,status,token,created_at,customers(full_name,email)")
       .eq("token", token)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    let data = tokenRow;
+    if (!data && bookingId) {
+      data = await ensureRequestFromBooking(sb, bookingId, token);
+    }
+
+    if (tokenErr || !data) {
       return NextResponse.json({ error: "Waiver not found" }, { status: 404 });
+    }
+
+    let customerName = (data as any)?.customers?.full_name || "";
+    let customerEmail = (data as any)?.customers?.email || "";
+    if ((!customerName || !customerEmail) && data.customer_id) {
+      const { data: customerRow } = await sb
+        .from("customers")
+        .select("full_name,email")
+        .eq("id", data.customer_id)
+        .maybeSingle();
+      if (customerRow) {
+        customerName = customerName || customerRow.full_name || "";
+        customerEmail = customerEmail || customerRow.email || "";
+      }
     }
 
     let signed: any = null;
@@ -82,8 +185,8 @@ export async function GET(req: Request, context: RouteContext) {
       {
         status: data.status,
         customer: {
-          full_name: (data as any)?.customers?.full_name || "",
-          email: (data as any)?.customers?.email || "",
+          full_name: customerName,
+          email: customerEmail,
         },
         waiverText: WAIVER_TEXT,
         signed,
@@ -99,6 +202,7 @@ export async function POST(req: Request, context: RouteContext) {
   try {
     const token = await resolveToken(req, context);
     if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
+    const bookingId = resolveBookingId(req);
 
     const body = await req.json().catch(() => ({}));
     const signerName = String(body?.name || "").trim();
@@ -110,11 +214,16 @@ export async function POST(req: Request, context: RouteContext) {
     }
 
     const sb = supabaseServer();
-    const { data: request, error: reqErr } = await sb
+    const { data: tokenRequest, error: reqErr } = await sb
       .from("waiver_requests")
       .select("id,customer_id,booking_id,status")
       .eq("token", token)
-      .single();
+      .maybeSingle();
+
+    let request = tokenRequest;
+    if (!request && bookingId) {
+      request = await ensureRequestFromBooking(sb, bookingId, token);
+    }
 
     if (reqErr || !request) {
       return NextResponse.json({ error: "Waiver not found" }, { status: 404 });

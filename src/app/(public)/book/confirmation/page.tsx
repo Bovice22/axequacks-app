@@ -109,10 +109,16 @@ function BookingConfirmationContent() {
             : undefined;
         const resources = Array.isArray(finalizeJson?.resources) ? finalizeJson.resources : [];
 
+        const bookingId = String(finalizeJson?.bookingId || "");
         let waiverUrl = String(finalizeJson?.waiverUrl || "");
-        if (waiverUrl && returnPath) {
+        if (waiverUrl) {
           const url = new URL(waiverUrl);
-          url.searchParams.set("return", returnPath);
+          if (bookingId && !url.searchParams.get("booking_id")) {
+            url.searchParams.set("booking_id", bookingId);
+          }
+          if (returnPath) {
+            url.searchParams.set("return", returnPath);
+          }
           waiverUrl = url.toString();
         }
 
@@ -126,7 +132,7 @@ function BookingConfirmationContent() {
           resourceNames: resources,
           comboOrder,
           waiverUrl,
-          bookingId: String(finalizeJson?.bookingId || ""),
+          bookingId,
           partySize: Number(meta.party_size),
           startMin,
           durationMinutes,

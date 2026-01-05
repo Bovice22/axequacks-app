@@ -13,6 +13,7 @@ export function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   if (isPublicFile(pathname)) return NextResponse.next();
+  if (pathname.startsWith("/waiver")) return NextResponse.next();
 
   if (hostname === BOOK_HOST && !pathname.startsWith("/book")) {
     const url = req.nextUrl.clone();

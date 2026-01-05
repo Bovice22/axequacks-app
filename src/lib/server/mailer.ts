@@ -46,9 +46,14 @@ function prettyDate(dateKey: string) {
   return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 
-function buildWaiverUrl(token: string) {
+function buildWaiverUrl(token: string, bookingId?: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return `${base}/waiver?token=${encodeURIComponent(token)}`;
+  const url = new URL("/waiver", base);
+  url.searchParams.set("token", token);
+  if (bookingId) {
+    url.searchParams.set("booking_id", bookingId);
+  }
+  return url.toString();
 }
 
 const LOGO_CID = "axequacks-logo";
@@ -163,7 +168,7 @@ export async function sendBookingConfirmationEmail(input: EmailBookingInput): Pr
         .eq("booking_id", input.bookingId)
         .maybeSingle();
       if (!error && data?.token && data?.status !== "SIGNED") {
-        waiverUrl = buildWaiverUrl(data.token as string);
+        waiverUrl = buildWaiverUrl(data.token as string, input.bookingId);
       }
     } catch (waiverErr) {
       console.error("waiver lookup error:", waiverErr);
