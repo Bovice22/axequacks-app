@@ -3,7 +3,9 @@ import { PARTY_AREA_OPTIONS } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name)
+);
 
 export async function POST(req: Request) {
   try {
