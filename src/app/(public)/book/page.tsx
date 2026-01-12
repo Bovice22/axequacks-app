@@ -2273,7 +2273,7 @@ function BookPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={submitClosedOverride}
+                    onClick={() => submitClosedOverride()}
                     className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                     disabled={overrideLoading}
                   >
