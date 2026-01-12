@@ -72,10 +72,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid party area duration" }, { status: 400 });
     }
 
-    const baseAmount = totalCents(activity, partySize, durationMinutes, {
-      axeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
-      duckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
-    }) + partyAreaCostCents(normalizedPartyAreaMinutes, normalizedPartyAreas.length);
+    const comboDurations =
+      Number.isFinite(comboAxeMinutes) && Number.isFinite(comboDuckpinMinutes)
+        ? { axeMinutes: comboAxeMinutes, duckpinMinutes: comboDuckpinMinutes }
+        : undefined;
+    const baseAmount =
+      totalCents(activity, partySize, durationMinutes, comboDurations) +
+      partyAreaCostCents(normalizedPartyAreaMinutes, normalizedPartyAreas.length);
 
     let amount = baseAmount;
     let promoMeta: { code: string; amountOff: number; discountType: string; discountValue: number } | null = null;
