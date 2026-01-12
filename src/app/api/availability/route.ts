@@ -6,7 +6,9 @@ type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 type ResourceType = "AXE" | "DUCKPIN";
 type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
 const PARTY_AREA_OPTIONS_SAFE = Array.isArray(PARTY_AREA_OPTIONS) ? PARTY_AREA_OPTIONS : [];
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS_SAFE.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS_SAFE.filter((option) => option.visible).map((option) => option.name)
+);
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
