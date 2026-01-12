@@ -227,11 +227,6 @@ export async function POST(req: Request) {
     const activityDB = mapActivityToDB(activityUI);
     const needs = computeNeeds(activityUI, partySize);
 
-    const startTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, startMin);
-    const endTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, endMin);
-    const partyAreaEndMin = normalizedPartyAreaMinutes ? startMin + normalizedPartyAreaMinutes : endMin;
-    const partyAreaEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, partyAreaEndMin);
-
     const normalizedPartyAreaMinutes =
       partyAreas.length && Number.isFinite(partyAreaMinutes)
         ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
@@ -239,6 +234,11 @@ export async function POST(req: Request) {
     if (partyAreas.length && !normalizedPartyAreaMinutes) {
       return NextResponse.json({ error: "Invalid party area duration" }, { status: 400 });
     }
+
+    const startTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, startMin);
+    const endTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, endMin);
+    const partyAreaEndMin = normalizedPartyAreaMinutes ? startMin + normalizedPartyAreaMinutes : endMin;
+    const partyAreaEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, partyAreaEndMin);
     const totalCentsValue =
       totalCents(activityUI, partySize, durationMinutes, {
         axeMinutes: comboAxeMinutes,
