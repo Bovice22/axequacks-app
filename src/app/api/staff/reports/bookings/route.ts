@@ -13,21 +13,21 @@ export async function GET(req: Request) {
     const endDate = url.searchParams.get("endDate");
 
     const sb = supabaseServer();
-    let query = sb
-      .from("bookings")
-      .select(
-        [
-          "id",
-          "activity",
-          "party_size",
-          "duration_minutes",
-          "total_cents",
-          "start_ts",
-          "status",
-        ].join(",")
-      )
-      .order("start_ts", { ascending: true })
-      .limit(5000);
+    const baseFields = [
+      "id",
+      "activity",
+      "party_size",
+      "duration_minutes",
+      "total_cents",
+      "start_ts",
+      "status",
+      "customer_name",
+      "customer_email",
+    ];
+    const selectWithPayment = [...baseFields, "paid", "payment_intent_id"].join(",");
+    const selectWithPaid = [...baseFields, "paid"].join(",");
+
+    let query = sb.from("bookings").select(selectWithPayment).order("start_ts", { ascending: true }).limit(5000);
 
     if (startDate) {
       const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
@@ -38,13 +38,80 @@ export async function GET(req: Request) {
       query = query.lte("start_ts", endIso);
     }
 
-    const { data, error } = await query;
+    let data: any[] | null = null;
+    let error: any = null;
+    ({ data, error } = await query);
+    const errorMessage = String(error?.message || "").toLowerCase();
+    if (error && errorMessage.includes("payment_intent")) {
+      ({ data, error } = await sb
+        .from("bookings")
+        .select(selectWithPaid)
+        .order("start_ts", { ascending: true })
+        .limit(5000));
+    }
+    if (error && String(error?.message || "").toLowerCase().includes("paid")) {
+      ({ data, error } = await sb
+        .from("bookings")
+        .select(baseFields.join(","))
+        .order("start_ts", { ascending: true })
+        .limit(5000));
+    }
+
     if (error) {
       console.error("reports bookings error:", error);
       return NextResponse.json({ error: "Failed to load bookings report" }, { status: 500 });
     }
 
-    return NextResponse.json({ bookings: data ?? [] }, { status: 200 });
+    let cashQuery = sb
+      .from("pos_cash_sale_items")
+      .select("activity,line_total_cents,created_at,name,quantity")
+      .order("created_at", { ascending: true })
+      .limit(5000);
+
+    if (startDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+      cashQuery = cashQuery.gte("created_at", startIso);
+    }
+    if (endDate) {
+      const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(endDate, 24 * 60 - 1);
+      cashQuery = cashQuery.lte("created_at", endIso);
+    }
+
+    const { data: cashSales, error: cashErr } = await cashQuery;
+    if (cashErr) {
+      console.error("reports cash sales error:", cashErr);
+      return NextResponse.json({ error: "Failed to load cash sales report" }, { status: 500 });
+    }
+
+    let posItemsQuery = sb
+      .from("pos_sale_items")
+      .select("name,quantity,line_total_cents,created_at")
+      .order("created_at", { ascending: true })
+      .limit(5000);
+
+    if (startDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+      posItemsQuery = posItemsQuery.gte("created_at", startIso);
+    }
+    if (endDate) {
+      const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(endDate, 24 * 60 - 1);
+      posItemsQuery = posItemsQuery.lte("created_at", endIso);
+    }
+
+    const { data: posItems, error: posItemsErr } = await posItemsQuery;
+    if (posItemsErr) {
+      console.error("reports pos items error:", posItemsErr);
+      // Allow reports to load even if POS items table isn't available yet.
+      return NextResponse.json(
+        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: [] },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json(
+      { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [] },
+      { status: 200 }
+    );
   } catch (err: any) {
     console.error("reports bookings fatal:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });

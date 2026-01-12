@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/server/stripe";
+import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
@@ -26,6 +26,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const items = normalizeItems(Array.isArray(body?.items) ? body.items : []);
+    const tabId = String(body?.tab_id || "").trim();
     if (!items.length) return NextResponse.json({ error: "Add at least one item" }, { status: 400 });
 
     const ids = items.map((item) => item.id);
@@ -63,20 +64,23 @@ export async function POST(req: Request) {
     const taxCents = Math.round(subtotalCents * TAX_RATE);
     const totalCents = subtotalCents + taxCents;
 
-    const stripe = getStripe();
+    const stripe = getStripeTerminal();
+    const metadata: Record<string, string> = {
+      ui_mode: "staff_pos",
+      pos_items: JSON.stringify(lineItems),
+      pos_subtotal: String(subtotalCents),
+      pos_tax: String(taxCents),
+      pos_total: String(totalCents),
+      pos_staff_id: staff.staff_id,
+    };
+    if (tabId) metadata.tab_id = tabId;
+
     const intent = await stripe.paymentIntents.create({
       amount: totalCents,
       currency: "usd",
       capture_method: "automatic",
       payment_method_types: ["card_present"],
-      metadata: {
-        ui_mode: "staff_pos",
-        pos_items: JSON.stringify(lineItems),
-        pos_subtotal: String(subtotalCents),
-        pos_tax: String(taxCents),
-        pos_total: String(totalCents),
-        pos_staff_id: staff.staff_id,
-      },
+      metadata,
     });
 
     return NextResponse.json(

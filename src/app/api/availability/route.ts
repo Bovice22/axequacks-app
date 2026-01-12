@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 type ResourceType = "AXE" | "DUCKPIN";
 type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
+const PARTY_AREA_OPTIONS_SAFE = Array.isArray(PARTY_AREA_OPTIONS) ? PARTY_AREA_OPTIONS : [];
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS_SAFE.filter((option) => option.visible).map((option) => option.name));
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -38,10 +40,23 @@ export async function POST(req: Request) {
     const partySize = Number(body?.partySize);
     const dateKey = String(body?.dateKey || "");
     const durationMinutes = Number(body?.durationMinutes);
+    const comboAxeMinutes = Number(body?.comboAxeMinutes);
+    const comboDuckpinMinutes = Number(body?.comboDuckpinMinutes);
+    const partyAreaMinutes = Number(body?.partyAreaMinutes);
     const openStartMin = Number(body?.openStartMin);
     const openEndMin = Number(body?.openEndMin);
     const slotIntervalMin = Number(body?.slotIntervalMin);
     const order = (body?.order as ComboOrder | undefined) ?? "DUCKPIN_FIRST";
+    const ignoreBlackouts = Boolean(body?.ignoreBlackouts);
+    const partyAreas = Array.isArray(body?.partyAreas)
+      ? Array.from(
+          new Set(
+            body.partyAreas
+              .map((item: any) => String(item || "").trim())
+              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(name))
+          )
+        )
+      : [];
 
     // Basic validation
     if (!activity || !["Axe Throwing", "Duckpin Bowling", "Combo Package"].includes(activity)) {
@@ -53,13 +68,20 @@ export async function POST(req: Request) {
     if (!Number.isFinite(partySize) || partySize < 1) {
       return NextResponse.json({ error: "Invalid partySize" }, { status: 400 });
     }
-    if (![30, 60, 120].includes(durationMinutes)) {
+    const validDurations = [15, 30, 60, 120];
+    const isCombo = activity === "Combo Package";
+    if (!isCombo && !validDurations.includes(durationMinutes)) {
       return NextResponse.json({ error: "Invalid durationMinutes" }, { status: 400 });
+    }
+    if (isCombo) {
+      if (!validDurations.includes(comboAxeMinutes) || !validDurations.includes(comboDuckpinMinutes)) {
+        return NextResponse.json({ error: "Invalid combo durations" }, { status: 400 });
+      }
     }
     if (!Number.isFinite(openStartMin) || !Number.isFinite(openEndMin) || openEndMin <= openStartMin) {
       return NextResponse.json({ error: "Invalid time window" }, { status: 400 });
     }
-    if (![30, 60].includes(slotIntervalMin)) {
+    if (![15, 30, 60].includes(slotIntervalMin)) {
       return NextResponse.json({ error: "Invalid slotIntervalMin" }, { status: 400 });
     }
     if (!["DUCKPIN_FIRST", "AXE_FIRST"].includes(order)) {
@@ -70,8 +92,15 @@ export async function POST(req: Request) {
     const needsAxe = needs.AXE;
     const needsDuck = needs.DUCKPIN;
 
+    const comboTotalMinutes = isCombo ? comboAxeMinutes + comboDuckpinMinutes : durationMinutes;
+    const partyDurationMinutes =
+      partyAreas.length && Number.isFinite(partyAreaMinutes)
+        ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
+        : 0;
+    const bookingWindowMinutes = Math.max(comboTotalMinutes, partyDurationMinutes);
+
     // If somehow nothing needed, nothing blocked.
-    if (needsAxe <= 0 && needsDuck <= 0) {
+    if (needsAxe <= 0 && needsDuck <= 0 && partyAreas.length === 0) {
       return NextResponse.json({ blockedStartMins: [] }, { status: 200 });
     }
 
@@ -101,20 +130,44 @@ export async function POST(req: Request) {
       if (t === "AXE" || t === "DUCKPIN") activeByType[t].push(r.id);
     }
 
+    let partyResourceIds: string[] = [];
+    const partyIntervalsById = new Map<string, Array<[number, number]>>();
+
+    if (partyAreas.length) {
+      const { data: partyResources, error: partyErr } = await supabase
+        .from("resources")
+        .select("id,name,type,active")
+        .in("name", partyAreas)
+        .eq("type", "PARTY")
+        .or("active.eq.true,active.is.null");
+
+      if (partyErr) {
+        console.error("party resources query error:", partyErr);
+        return NextResponse.json({ error: "Database error (party resources)" }, { status: 500 });
+      }
+
+      partyResourceIds = (partyResources || []).map((r: any) => r.id).filter(Boolean);
+      if (partyResourceIds.length !== partyAreas.length) {
+        return NextResponse.json({ error: "Selected party area is unavailable" }, { status: 400 });
+      }
+    }
+
     // If there aren’t even enough total resources, every slot is blocked
     if ((needsAxe > 0 && activeByType.AXE.length < needsAxe) || (needsDuck > 0 && activeByType.DUCKPIN.length < needsDuck)) {
       const blockedAll: number[] = [];
-      const lastStart = openEndMin - durationMinutes;
+      const lastStart = openEndMin - bookingWindowMinutes;
       for (let t = openStartMin; t <= lastStart; t += slotIntervalMin) blockedAll.push(t);
       return NextResponse.json({ blockedStartMins: blockedAll }, { status: 200 });
     }
 
     // 2a) Load blackout rules for the date/activity
-    const { data: blackouts, error: blackoutErr } = await supabase
-      .from("blackout_rules")
-      .select("start_min,end_min,activity")
-      .eq("date_key", dateKey)
-      .in("activity", [activityDB, "ALL"]);
+    const { data: blackouts, error: blackoutErr } = ignoreBlackouts
+      ? { data: [], error: null }
+      : await supabase
+          .from("blackout_rules")
+          .select("start_min,end_min,activity")
+          .eq("date_key", dateKey)
+          .in("activity", [activityDB, "ALL"]);
 
     if (blackoutErr) {
       console.error("blackout rules query error:", blackoutErr);
@@ -143,6 +196,32 @@ export async function POST(req: Request) {
     // 3) Fetch all reservations overlapping the OPEN window for relevant resource types
     const openStartISO = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, openStartMin);
     const openEndISO = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, openEndMin);
+
+    if (partyResourceIds.length) {
+      const { data: partyReservations, error: partyResvErr } = await supabase
+        .from("resource_reservations")
+        .select("resource_id,start_ts,end_ts, bookings(status)")
+        .gt("end_ts", openStartISO)
+        .lt("start_ts", openEndISO)
+        .in("resource_id", partyResourceIds);
+
+      if (partyResvErr) {
+        console.error("party reservations query error:", partyResvErr);
+        return NextResponse.json({ error: "Database error (party reservations)" }, { status: 500 });
+      }
+
+      for (const row of partyReservations || []) {
+        const status = (row as any)?.bookings?.status as string | null | undefined;
+        if (status === "CANCELLED") continue;
+        const resourceId = row.resource_id as string;
+        const s = new Date(row.start_ts as string).getTime();
+        const e = new Date(row.end_ts as string).getTime();
+        if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+        const list = partyIntervalsById.get(resourceId) || [];
+        list.push([s, e]);
+        partyIntervalsById.set(resourceId, list);
+      }
+    }
 
     // We join resources to get resource type
     const { data: reservations, error: rrErr } = await supabase
@@ -201,13 +280,26 @@ export async function POST(req: Request) {
       return free;
     };
 
+    const partyBlocked = (slotStartISO: string, slotEndISO: string) => {
+      if (!partyResourceIds.length) return false;
+      const slotS = new Date(slotStartISO).getTime();
+      const slotE = new Date(slotEndISO).getTime();
+      for (const resourceId of partyResourceIds) {
+        const intervals = partyIntervalsById.get(resourceId) || [];
+        for (const [s, e] of intervals) {
+          if (overlaps(slotS, slotE, s, e)) return true;
+        }
+      }
+      return false;
+    };
+
     const blockedStartMins: number[] = [];
-    const lastStart = openEndMin - durationMinutes;
+    const lastStart = openEndMin - bookingWindowMinutes;
 
     for (let startMin = openStartMin; startMin <= lastStart; startMin += slotIntervalMin) {
       let blocked = false;
       const slotStartMin = Math.max(openStartMin, startMin - bufferBefore);
-      const slotEndMin = Math.min(openEndMin, startMin + durationMinutes + bufferAfter);
+      const slotEndMin = Math.min(openEndMin, startMin + comboTotalMinutes + bufferAfter);
 
       if ((blackouts || []).length) {
         for (const b of blackouts || []) {
@@ -225,11 +317,13 @@ export async function POST(req: Request) {
       }
 
       if (activity === "Combo Package") {
-        // Combo is always 120 in your UI, but each segment is 60
+        const firstSegDuration = order === "DUCKPIN_FIRST" ? comboDuckpinMinutes : comboAxeMinutes;
+        const secondSegDuration = order === "DUCKPIN_FIRST" ? comboAxeMinutes : comboDuckpinMinutes;
+
         const seg1Start = startMin;
-        const seg1End = startMin + 60;
-        const seg2Start = startMin + 60;
-        const seg2End = startMin + 120;
+        const seg1End = seg1Start + firstSegDuration;
+        const seg2Start = seg1End;
+        const seg2End = seg2Start + secondSegDuration;
 
         // Ensure segments fit (defensive)
         if (seg2End > openEndMin) {
@@ -293,6 +387,19 @@ export async function POST(req: Request) {
           const freeDuck = countFree("DUCKPIN", slotStartISO, slotEndISO);
           if (freeDuck < needsDuck) blocked = true;
         }
+      }
+
+      if (!blocked && partyResourceIds.length) {
+        const partyWindowMinutes = partyDurationMinutes || comboTotalMinutes;
+        const partyStartISO = nyLocalDateKeyPlusMinutesToUTCISOString(
+          dateKey,
+          Math.max(openStartMin, startMin - bufferBefore)
+        );
+        const partyEndISO = nyLocalDateKeyPlusMinutesToUTCISOString(
+          dateKey,
+          Math.min(openEndMin, startMin + partyWindowMinutes + bufferAfter)
+        );
+        if (partyBlocked(partyStartISO, partyEndISO)) blocked = true;
       }
 
       if (blocked) blockedStartMins.push(startMin);

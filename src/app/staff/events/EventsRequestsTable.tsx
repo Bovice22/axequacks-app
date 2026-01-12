@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { loadStripeTerminal, type Reader, type Terminal } from "@stripe/terminal-js";
 
 type EventRequest = {
   id: string;
@@ -15,12 +17,15 @@ type EventRequest = {
   duration_minutes?: number;
   total_cents?: number;
   activities?: Array<{ activity: string; durationMinutes: number }>;
+  party_areas?: string[] | null;
+  party_area_minutes?: number | null;
   booking_ids?: string[] | null;
   payment_link_url?: string | null;
   payment_link_sent_at?: string | null;
   payment_status?: string | null;
   paid_at?: string | null;
   declined_at?: string | null;
+  pay_in_person?: boolean | null;
 };
 
 function todayDateKeyNY(): string {
@@ -86,12 +91,31 @@ export default function EventsRequestsTable() {
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [sendingPaymentId, setSendingPaymentId] = useState<string | null>(null);
+  const [payingRequest, setPayingRequest] = useState<EventRequest | null>(null);
+  const [terminalReaders, setTerminalReaders] = useState<Reader[]>([]);
+  const [selectedReaderId, setSelectedReaderId] = useState("");
+  const [terminalLoading, setTerminalLoading] = useState(false);
+  const [terminalError, setTerminalError] = useState("");
+  const terminalRef = useRef<Terminal | null>(null);
+  const terminalReadyRef = useRef(false);
   const [rescheduleRequest, setRescheduleRequest] = useState<EventRequest | null>(null);
   const [rescheduleDateKey, setRescheduleDateKey] = useState("");
   const [rescheduleStartMin, setRescheduleStartMin] = useState<number | null>(null);
+  const [reschedulePartySize, setReschedulePartySize] = useState<number>(1);
   const [rescheduleBlockedByActivity, setRescheduleBlockedByActivity] = useState<Record<string, number[]>>({});
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [rescheduleError, setRescheduleError] = useState("");
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const node = document.createElement("div");
+    node.setAttribute("data-events-modal-root", "true");
+    document.body.appendChild(node);
+    setPortalRoot(node);
+    return () => {
+      document.body.removeChild(node);
+    };
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -108,6 +132,31 @@ export default function EventsRequestsTable() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (terminalReadyRef.current) return;
+    terminalReadyRef.current = true;
+
+    loadStripeTerminal().then((StripeTerminal) => {
+      if (!StripeTerminal) {
+        setTerminalError("Stripe Terminal failed to load. Please refresh.");
+        return;
+      }
+      terminalRef.current = StripeTerminal.create({
+        onFetchConnectionToken: async () => {
+          const res = await fetch("/api/stripe/terminal/connection_token", { method: "POST" });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.secret) {
+            throw new Error(json?.error || "Failed to fetch connection token.");
+          }
+          return json.secret as string;
+        },
+        onUnexpectedReaderDisconnect: () => {
+          setTerminalError("Reader disconnected. Please reconnect.");
+        },
+      });
+    });
+  }, []);
 
   const sorted = useMemo(() => {
     return [...requests].sort((a, b) => {
@@ -178,10 +227,125 @@ export default function EventsRequestsTable() {
     }
   };
 
+  const loadReaders = async () => {
+    try {
+      const res = await fetch("/api/stripe/terminal/readers");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTerminalError(json?.error || "Failed to load card readers.");
+        return;
+      }
+      setTerminalReaders(json.readers || []);
+      if (!selectedReaderId && json.readers?.length) {
+        setSelectedReaderId(json.readers[0].id);
+      }
+    } catch (e: any) {
+      setTerminalError(e?.message || "Failed to load card readers.");
+    }
+  };
+
+  const openPayNow = (req: EventRequest) => {
+    setPayingRequest(req);
+    setTerminalError("");
+    setTerminalLoading(false);
+    loadReaders();
+  };
+
+  const closePayNow = () => {
+    setPayingRequest(null);
+    setTerminalError("");
+  };
+
+  const handlePayNow = async () => {
+    if (!payingRequest) return;
+    if (!terminalRef.current) {
+      setTerminalError("Stripe Terminal not initialized.");
+      return;
+    }
+    if (!selectedReaderId) {
+      setTerminalError("Select a reader to continue.");
+      return;
+    }
+
+    setTerminalLoading(true);
+    setTerminalError("");
+    try {
+      const reader = terminalReaders.find((r) => r.id === selectedReaderId);
+      if (!reader) {
+        setTerminalError("Reader not found.");
+        return;
+      }
+
+      const connectResult = await terminalRef.current.connectReader(reader);
+      if ("error" in connectResult && connectResult.error) {
+        setTerminalError(connectResult.error.message || "Failed to connect reader.");
+        return;
+      }
+
+      const intentRes = await fetch("/api/stripe/terminal/event_payment_intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_request_id: payingRequest.id }),
+      });
+      const intentJson = await intentRes.json().catch(() => ({}));
+      if (!intentRes.ok || !intentJson?.client_secret) {
+        setTerminalError(intentJson?.error || "Failed to create payment intent.");
+        return;
+      }
+
+      const collectResult = await terminalRef.current.collectPaymentMethod(intentJson.client_secret);
+      if ("error" in collectResult && collectResult.error) {
+        setTerminalError(collectResult.error.message || "Payment collection failed.");
+        return;
+      }
+
+      if (!("paymentIntent" in collectResult) || !collectResult.paymentIntent) {
+        setTerminalError("Payment collection failed.");
+        return;
+      }
+
+      const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
+      if ("error" in processResult && processResult.error) {
+        setTerminalError(processResult.error.message || "Payment failed.");
+        return;
+      }
+
+      if (!("paymentIntent" in processResult) || !processResult.paymentIntent) {
+        setTerminalError("Payment completed, but no payment intent returned.");
+        return;
+      }
+
+      const paymentIntentId = processResult.paymentIntent?.id;
+      if (!paymentIntentId) {
+        setTerminalError("Payment completed, but no payment intent returned.");
+        return;
+      }
+
+      const finalizeRes = await fetch("/api/stripe/terminal/event_finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_intent_id: paymentIntentId }),
+      });
+      const finalizeJson = await finalizeRes.json().catch(() => ({}));
+      if (!finalizeRes.ok) {
+        setTerminalError(finalizeJson?.error || "Payment succeeded but request update failed.");
+        return;
+      }
+
+      closePayNow();
+      load();
+    } catch (err: any) {
+      setTerminalError(err?.message || "Terminal payment failed.");
+    } finally {
+      setTerminalLoading(false);
+    }
+  };
+
   const openReschedule = (req: EventRequest) => {
     setRescheduleRequest(req);
     setRescheduleDateKey(req.date_key || todayDateKeyNY());
-    setRescheduleStartMin(null);
+    setRescheduleStartMin(Number.isFinite(Number(req.start_min)) ? Number(req.start_min) : null);
+    setReschedulePartySize(Math.max(1, Math.min(100, Number(req.party_size || 1))));
     setRescheduleBlockedByActivity({});
     setRescheduleError("");
   };
@@ -190,6 +354,7 @@ export default function EventsRequestsTable() {
     setRescheduleRequest(null);
     setRescheduleDateKey("");
     setRescheduleStartMin(null);
+    setReschedulePartySize(1);
     setRescheduleBlockedByActivity({});
     setRescheduleError("");
   };
@@ -206,6 +371,7 @@ export default function EventsRequestsTable() {
           action: "reschedule",
           dateKey: rescheduleDateKey,
           startMin: rescheduleStartMin,
+          partySize: reschedulePartySize,
         }),
       });
       if (!res.ok) {
@@ -266,7 +432,12 @@ export default function EventsRequestsTable() {
                   typeof req.total_cents === "number" ? `$${(req.total_cents / 100).toFixed(2)}` : "—";
                 const status = String(req.status || "PENDING").replace(/\s+/g, "_").toUpperCase();
                 const paymentStatus = String(req.payment_status || "UNPAID").replace(/\s+/g, "").toUpperCase();
+                const payInPerson = Boolean(req.pay_in_person);
                 const isPaid = paymentStatus === "PAID";
+                const paymentLabel = payInPerson ? "PAY IN PERSON" : paymentStatus;
+                const canSendPaymentLink = status.startsWith("ACCEPT") && !isPaid && !payInPerson;
+                const canReschedule = status.startsWith("ACCEPT") && (isPaid || payInPerson);
+                const canPayNow = status.startsWith("ACCEPT") && payInPerson && !isPaid;
                 return (
                   <tr key={req.id} className="border-t border-zinc-100">
                     <td className="px-2 py-3 text-zinc-500">
@@ -288,6 +459,12 @@ export default function EventsRequestsTable() {
                               {a.activity} · {a.durationMinutes} mins
                             </div>
                           ))}
+                          {Array.isArray(req.party_areas) && req.party_areas.length ? (
+                            <div className="text-[10px] font-semibold text-emerald-700">
+                              Party areas: {req.party_areas.join(", ")}
+                              {req.party_area_minutes ? ` · ${Math.round(req.party_area_minutes / 60)} hr` : ""}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         "—"
@@ -295,12 +472,16 @@ export default function EventsRequestsTable() {
                     </td>
                     <td className="px-2 py-3 font-semibold text-zinc-900">{totalLabel}</td>
                     <td className="px-2 py-3">
-                      <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-                        paymentStatus === "PAID"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-zinc-100 text-zinc-700"
-                      }`}>
-                        {paymentStatus}
+                      <span
+                        className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                          payInPerson
+                            ? "bg-amber-50 text-amber-700"
+                            : paymentStatus === "PAID"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-zinc-100 text-zinc-700"
+                        }`}
+                      >
+                        {paymentLabel}
                       </span>
                     </td>
                     <td className="px-2 py-3">
@@ -346,7 +527,7 @@ export default function EventsRequestsTable() {
                         </div>
                       ) : status.startsWith("ACCEPT") ? (
                         <div className="flex flex-col items-center gap-2">
-                          {!isPaid ? (
+                          {canSendPaymentLink ? (
                             <button
                               type="button"
                               onClick={() => sendPaymentLink(req.id)}
@@ -362,7 +543,21 @@ export default function EventsRequestsTable() {
                               {sendingPaymentId === req.id ? "Sending..." : "Send Payment Link"}
                             </button>
                           ) : null}
-                          {isPaid ? (
+                          {canPayNow ? (
+                            <button
+                              type="button"
+                              onClick={() => openPayNow(req)}
+                              className="w-full rounded-full px-3 py-1 text-[11px] font-semibold text-white hover:opacity-90"
+                              style={{
+                                backgroundColor: "#7c3aed",
+                                color: "#ffffff",
+                                border: "1px solid #6d28d9",
+                              }}
+                            >
+                              Pay Now
+                            </button>
+                          ) : null}
+                          {canReschedule ? (
                             <button
                               type="button"
                               onClick={() => openReschedule(req)}
@@ -395,57 +590,165 @@ export default function EventsRequestsTable() {
         </div>
       )}
 
-      {rescheduleRequest ? (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl">
-            <div className="mb-2 text-sm font-semibold text-zinc-900">Reschedule Event</div>
-            <div className="text-xs text-zinc-500">
-              Select a new date and start time for this event.
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <input
-                type="date"
-                value={rescheduleDateKey}
-                onChange={(e) => {
-                  setRescheduleDateKey(e.target.value);
-                  setRescheduleStartMin(null);
+      {rescheduleRequest && portalRoot
+        ? createPortal(
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0, 0, 0, 0.6)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+                zIndex: 2147483647,
+                pointerEvents: "auto",
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  maxWidth: "520px",
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  border: "1px solid #e5e7eb",
+                  padding: "16px",
+                  boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
                 }}
-                className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
-              />
-
-              {rescheduleError ? <div className="text-xs font-semibold text-red-600">{rescheduleError}</div> : null}
-              <RescheduleTimes
-                request={rescheduleRequest}
-                dateKey={rescheduleDateKey}
-                startMin={rescheduleStartMin}
-                setStartMin={setRescheduleStartMin}
-                blockedByActivity={rescheduleBlockedByActivity}
-                setBlockedByActivity={setRescheduleBlockedByActivity}
-                setError={setRescheduleError}
-              />
-            </div>
-
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeReschedule}
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitReschedule}
-                disabled={rescheduleLoading || rescheduleStartMin == null}
-                className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                <div className="mb-2 text-sm font-semibold text-zinc-900">Reschedule Event</div>
+                <div className="text-xs text-zinc-500">Select a new date and start time for this event.</div>
+
+                <div className="mt-4 space-y-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={reschedulePartySize}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      setReschedulePartySize(Math.max(1, Math.min(100, Number.isFinite(next) ? next : 1)));
+                    }}
+                    className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                    placeholder="Group size"
+                  />
+                  <input
+                    type="date"
+                    value={rescheduleDateKey}
+                    onChange={(e) => {
+                      setRescheduleDateKey(e.target.value);
+                      setRescheduleStartMin(null);
+                    }}
+                    className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                  />
+
+                  {rescheduleError ? (
+                    <div className="text-xs font-semibold text-red-600">{rescheduleError}</div>
+                  ) : null}
+                  <RescheduleTimes
+                    request={rescheduleRequest}
+                    dateKey={rescheduleDateKey}
+                    startMin={rescheduleStartMin}
+                    setStartMin={setRescheduleStartMin}
+                    partySize={reschedulePartySize}
+                    blockedByActivity={rescheduleBlockedByActivity}
+                    setBlockedByActivity={setRescheduleBlockedByActivity}
+                    setError={setRescheduleError}
+                  />
+                </div>
+
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeReschedule}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitReschedule}
+                    disabled={rescheduleLoading || rescheduleStartMin == null}
+                    className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    {rescheduleLoading ? "Saving..." : "Save New Time"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            portalRoot
+          )
+        : null}
+
+      {payingRequest && portalRoot
+        ? createPortal(
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0, 0, 0, 0.6)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+                zIndex: 2147483647,
+                pointerEvents: "auto",
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  maxWidth: "520px",
+                  background: "#ffffff",
+                  borderRadius: "16px",
+                  border: "1px solid #e5e7eb",
+                  padding: "16px",
+                  boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+                }}
               >
-                {rescheduleLoading ? "Saving..." : "Save New Time"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <div className="text-sm font-semibold text-zinc-900">Pay In Person</div>
+                <div className="mt-1 text-xs text-zinc-500">Select a reader, then collect payment.</div>
+
+                <div className="mt-4 grid gap-2">
+                  <label className="text-[11px] font-semibold text-zinc-500">Reader</label>
+                  <select
+                    value={selectedReaderId}
+                    onChange={(e) => setSelectedReaderId(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900"
+                  >
+                    <option value="">Select a reader</option>
+                    {terminalReaders.map((reader) => (
+                      <option key={reader.id} value={reader.id}>
+                        {reader.label || reader.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {terminalError ? <div className="mt-3 text-xs font-semibold text-red-600">{terminalError}</div> : null}
+
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closePayNow}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePayNow}
+                    disabled={terminalLoading}
+                    className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    {terminalLoading ? "Processing..." : "Collect Payment"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            portalRoot
+          )
+        : null}
     </div>
   );
 }
@@ -455,11 +758,12 @@ function RescheduleTimes(props: {
   dateKey: string;
   startMin: number | null;
   setStartMin: (value: number | null) => void;
+  partySize: number;
   blockedByActivity: Record<string, number[]>;
   setBlockedByActivity: (value: Record<string, number[]>) => void;
   setError: (value: string) => void;
 }) {
-  const { request, dateKey, startMin, setStartMin, blockedByActivity, setBlockedByActivity, setError } = props;
+  const { request, dateKey, startMin, setStartMin, partySize, blockedByActivity, setBlockedByActivity, setError } = props;
   const activities = Array.isArray(request.activities) ? request.activities : [];
   const totalDuration = activities.reduce((sum, a) => sum + (Number(a?.durationMinutes) || 0), 0);
   const openWindow = useMemo(() => getOpenWindowForDateKey(dateKey), [dateKey]);
@@ -486,7 +790,7 @@ function RescheduleTimes(props: {
           signal: controller.signal,
           body: JSON.stringify({
             activity,
-            partySize: Number(request.party_size || 1),
+            partySize: Number(partySize || 1),
             dateKey,
             durationMinutes,
             openStartMin: openWindow.openMin,

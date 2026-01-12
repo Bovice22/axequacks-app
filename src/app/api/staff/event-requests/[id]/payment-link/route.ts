@@ -41,6 +41,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (requestRow.status !== "ACCEPTED") {
       return NextResponse.json({ error: "Request must be accepted first" }, { status: 400 });
     }
+    if (requestRow.pay_in_person) {
+      return NextResponse.json({ error: "Request is marked pay-in-person" }, { status: 400 });
+    }
 
     const totalCentsValue = Number(requestRow.total_cents || 0);
     if (!Number.isFinite(totalCentsValue) || totalCentsValue <= 0) {

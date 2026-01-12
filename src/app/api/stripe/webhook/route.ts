@@ -1,9 +1,32 @@
 import { NextResponse } from "next/server";
+import { PARTY_AREA_OPTIONS, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripe } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
+import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
+
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+
+function parsePartyAreas(value?: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const unique = new Set<string>();
+    const names: PartyAreaName[] = [];
+    for (const item of parsed) {
+      const name = String(item || "").trim();
+      if (!name || unique.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
+      unique.add(name);
+      names.push(name as PartyAreaName);
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}
 
 function parseBookingMetadata(metadata: Record<string, string | null | undefined>) {
   const activity = metadata.activity as ActivityUI | undefined;
@@ -11,6 +34,8 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
   const dateKey = String(metadata.date_key || "");
   const startMin = Number(metadata.start_min);
   const durationMinutes = Number(metadata.duration_minutes);
+  const partyAreas = parsePartyAreas(metadata.party_areas);
+  const partyAreaMinutes = Number(metadata.party_area_minutes);
   const customerName = String(metadata.customer_name || "");
   const customerEmail = String(metadata.customer_email || "");
   const customerPhone = String(metadata.customer_phone || "");
@@ -30,6 +55,8 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
     dateKey,
     startMin,
     durationMinutes,
+    partyAreas,
+    partyAreaMinutes: Number.isFinite(partyAreaMinutes) ? partyAreaMinutes : undefined,
     customerName,
     customerEmail,
     customerPhone,
@@ -173,6 +200,14 @@ export async function POST(req: Request) {
         }
         const customerId =
           result.customerId || (await ensureCustomerAndLinkBooking(result.bookingInput, result.bookingId));
+        if (result.intent.metadata?.promo_code) {
+          await recordPromoRedemption({
+            promoCode: String(result.intent.metadata.promo_code || ""),
+            customerEmail: result.bookingInput.customerEmail,
+            customerId,
+            bookingId: result.bookingId,
+          });
+        }
         try {
           await ensureWaiverForBooking({ bookingId: result.bookingId, customerId, bookingInput: result.bookingInput });
         } catch (waiverErr) {
@@ -199,6 +234,14 @@ export async function POST(req: Request) {
       try {
         const customerId =
           result.customerId || (await ensureCustomerAndLinkBooking(result.bookingInput, result.bookingId));
+        if (result.intent.metadata?.promo_code) {
+          await recordPromoRedemption({
+            promoCode: String(result.intent.metadata.promo_code || ""),
+            customerEmail: result.bookingInput.customerEmail,
+            customerId,
+            bookingId: result.bookingId,
+          });
+        }
         const waiverResult = await ensureWaiverForBooking({ bookingId: result.bookingId, customerId, bookingInput: result.bookingInput });
         waiverUrl = waiverResult.waiverUrl || "";
       } catch (waiverErr) {

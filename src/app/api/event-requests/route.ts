@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { PARTY_AREA_OPTIONS } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
 
 export async function POST(req: Request) {
   try {
@@ -15,6 +17,17 @@ export async function POST(req: Request) {
     const durationMinutes = Number(body?.durationMinutes);
     const totalCents = Number(body?.totalCents);
     const activities = Array.isArray(body?.activities) ? body.activities : [];
+    const payInPerson = Boolean(body?.payInPerson);
+    const partyAreas = Array.isArray(body?.partyAreas)
+      ? Array.from(
+          new Set(
+            body.partyAreas
+              .map((item: any) => String(item || "").trim())
+              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(name))
+          )
+        )
+      : [];
+    const partyAreaMinutes = Number(body?.partyAreaMinutes);
 
     if (!customerName || !customerEmail) {
       return NextResponse.json({ error: "Missing contact info" }, { status: 400 });
@@ -53,6 +66,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid activities" }, { status: 400 });
     }
 
+    const normalizedPartyAreaMinutes =
+      partyAreas.length && Number.isFinite(partyAreaMinutes)
+        ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
+        : null;
+    if (partyAreas.length && !normalizedPartyAreaMinutes) {
+      return NextResponse.json({ error: "Invalid party area duration" }, { status: 400 });
+    }
+
     const sb = supabaseServer();
     const { data, error } = await sb
       .from("event_requests")
@@ -61,11 +82,14 @@ export async function POST(req: Request) {
         customer_email: customerEmail,
         customer_phone: customerPhone || null,
         party_size: partySize,
+        party_areas: partyAreas,
+        party_area_minutes: normalizedPartyAreaMinutes,
         date_key: dateKey,
         start_min: startMin,
         duration_minutes: durationMinutes,
         total_cents: totalCents,
         activities: cleanActivities,
+        pay_in_person: payInPerson,
         status: "PENDING",
       })
       .select("id")

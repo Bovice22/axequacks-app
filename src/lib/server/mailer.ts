@@ -502,6 +502,102 @@ export async function sendEventPaymentLinkEmail(
   return { sent: true, id: payload?.id };
 }
 
+export async function sendBookingPaymentLinkEmail(
+  input: BookingEmailInput & { paymentUrl: string }
+): Promise<{ sent: boolean; id?: string; skippedReason?: string }> {
+  const apiKey = process.env.RESEND_API_KEY || "";
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "";
+  const fromName = process.env.RESEND_FROM_NAME || "Axe Quacks";
+  if (!apiKey || !fromEmail) {
+    console.warn("Resend config missing; skipping payment link email.");
+    return { sent: false, skippedReason: "missing_config" };
+  }
+
+  if (!input.customerEmail || !input.customerEmail.includes("@")) {
+    return { sent: false, skippedReason: "invalid_recipient" };
+  }
+
+  const startLabel = formatTimeFromMinutes(input.startMin);
+  const endLabel = formatTimeFromMinutes(input.startMin + input.durationMinutes);
+  const totalLine =
+    typeof input.totalCents === "number"
+      ? `Estimated Total: $${(input.totalCents / 100).toFixed(2)}`
+      : null;
+
+  const lines = [
+    `Name: ${input.customerName || "—"}`,
+    `Activity: ${input.activity}`,
+    `Date: ${prettyDate(input.dateKey)}`,
+    `Time: ${startLabel} – ${endLabel}`,
+    `Group Size: ${input.partySize}`,
+    totalLine,
+  ].filter(Boolean) as string[];
+
+  const text = `Complete payment for your Axe Quacks booking:\n${input.paymentUrl}\n\n${lines.join("\n")}`;
+  const subject = "Your Axe Quacks Booking Payment Link";
+  const logoAttachment = getLogoAttachment();
+  const logoUrl = getLogoUrl();
+  const logoSrc = logoAttachment ? `cid:${LOGO_CID}` : logoUrl;
+
+  const detailRows = lines.map((line) => {
+    const idx = line.indexOf(":");
+    if (idx === -1) return { label: "", value: line };
+    return { label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
+  });
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111; background: #f6f6f6; padding: 14px;">
+      <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 14px; border: 1px solid #e6e6e6;">
+        ${
+          logoSrc
+            ? `<div style="text-align:center; margin-bottom: 12px;"><img src="${logoSrc}" alt="Axe Quacks" style="max-width: 160px; height: auto;" /></div>`
+            : ""
+        }
+        <h2 style="font-size: 18px; margin: 0 0 12px;">Complete your payment</h2>
+        <p style="margin: 0 0 12px;">Use the secure payment link below to finalize your booking.</p>
+        <div style="margin: 12px 0; text-align: center;">
+          <a href="${input.paymentUrl}" style="display: inline-block; padding: 10px 16px; background: #111; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Pay for Booking</a>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          ${detailRows
+            .map(
+              (row) => `
+              <tr>
+                <td style="padding: 6px 0; color: #666; font-size: 13px; width: 40%;">${row.label}</td>
+                <td style="padding: 6px 0; font-size: 13px; font-weight: 600;">${row.value}</td>
+              </tr>`
+            )
+            .join("")}
+        </table>
+      </div>
+    </div>
+  `;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: `${fromName} <${fromEmail}>`,
+      to: [input.customerEmail],
+      subject,
+      text,
+      html,
+      attachments: logoAttachment ? [logoAttachment] : undefined,
+    }),
+  });
+
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = typeof payload?.message === "string" ? payload.message : JSON.stringify(payload || {});
+    throw new Error(`Resend email failed: ${res.status} ${error}`.trim());
+  }
+
+  return { sent: true, id: payload?.id };
+}
+
 export async function sendWaiverRequestEmail(input: {
   customerName: string;
   customerEmail: string;

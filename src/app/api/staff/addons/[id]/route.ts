@@ -31,6 +31,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (body?.description != null) updates.description = String(body.description).trim() || null;
     if (body?.price_cents != null) updates.price_cents = Number(body.price_cents);
     if (body?.image_url != null) updates.image_url = String(body.image_url).trim() || null;
+    if (body?.category != null) updates.category = String(body.category).trim() || null;
     if (body?.active != null) updates.active = !!body.active;
 
     const sb = supabaseServer();
@@ -42,7 +43,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const { data, error } = await sb
       .from("add_ons")
-      .select("id,name,description,price_cents,image_url,active,created_at")
+      .select("id,name,description,price_cents,image_url,category,active,created_at")
       .eq("id", id)
       .single();
 
@@ -67,6 +68,11 @@ export async function DELETE(req: Request, context: RouteContext) {
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const sb = supabaseServer();
+    const { error: tabItemsErr } = await sb.from("booking_tab_items").delete().eq("item_id", id);
+    if (tabItemsErr) {
+      console.error("addon delete booking_tab_items error:", tabItemsErr);
+      return NextResponse.json({ error: tabItemsErr.message || "Failed to delete add-on" }, { status: 500 });
+    }
     const { error } = await sb.from("add_ons").delete().eq("id", id);
     if (error) {
       console.error("addon delete error:", error);

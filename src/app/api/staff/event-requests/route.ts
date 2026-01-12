@@ -35,6 +35,9 @@ export async function GET() {
         const sessionId =
           (row?.payment_session_id as string | undefined) ||
           (derivedSessionId ? derivedSessionId : undefined);
+        if (row?.pay_in_person) {
+          return row;
+        }
         if (status === "ACCEPTED" && paymentStatus !== "PAID" && sessionId) {
           try {
             const session = await stripe.checkout.sessions.retrieve(sessionId);

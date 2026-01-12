@@ -4,7 +4,17 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
-import { comboAxePersonCents, comboDuckpinLaneCents, neededResources, PRICING, totalCents } from "@/lib/bookingLogic";
+import { createPortal } from "react-dom";
+import {
+  PARTY_AREA_OPTIONS,
+  type PartyAreaName,
+  partyAreaCostCents,
+  comboAxePersonCents,
+  comboDuckpinLaneCents,
+  neededResources,
+  PRICING,
+  totalCents,
+} from "@/lib/bookingLogic";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 
@@ -82,6 +92,8 @@ function getOpenWindowForDateKey(dateKey: string): { openMin: number; closeMin: 
   const d = fromDateKey(dateKey);
   const wd = d.getDay();
 
+  // Mon–Wed (admin override window)
+  if (wd === 1 || wd === 2 || wd === 3) return { openMin: 12 * 60, closeMin: 20 * 60 };
   // Thu
   if (wd === 4) return { openMin: 16 * 60, closeMin: 22 * 60 };
   // Fri
@@ -91,22 +103,24 @@ function getOpenWindowForDateKey(dateKey: string): { openMin: number; closeMin: 
   // Sun
   if (wd === 0) return { openMin: 12 * 60, closeMin: 21 * 60 };
 
-  return null; // Mon–Wed closed
+  return null;
 }
 
 function hoursForDateKey(dateKey: string) {
   if (!dateKey) return "Select a date to see hours.";
   const d = fromDateKey(dateKey);
   const wd = d.getDay();
+  if (wd === 1 || wd === 2 || wd === 3) return "Monday–Wednesday: 12:00 PM – 8:00 PM (admin override)";
   if (wd === 4) return "Thursday: 4:00 PM – 10:00 PM";
   if (wd === 5) return "Friday: 4:00 PM – 11:00 PM";
   if (wd === 6) return "Saturday: 12:00 PM – 11:00 PM";
   if (wd === 0) return "Sunday: 12:00 PM – 9:00 PM";
-  return "Closed (Mon–Wed).";
+  return "Closed.";
 }
 
 function labelDuration(minutes: number | null) {
   if (!minutes) return "—";
+  if (minutes === 15) return "10 Axes";
   if (minutes === 30) return "30 Minutes";
   if (minutes === 60) return "1-Hour";
   if (minutes === 120) return "2-Hours";
@@ -141,13 +155,10 @@ function parseLabelToMinutes(label: string) {
  * - Step: 30 mins for all durations (allows half-hour starts)
  * - Ensure slot start + duration does not pass close time
  */
-function buildTimeSlotsForDate(dateKey: string, duration: number) {
-  const openWindow = getOpenWindowForDateKey(dateKey);
+function buildTimeSlotsForWindow(openWindow: { openMin: number; closeMin: number } | null, duration: number) {
   if (!openWindow) return [];
-
   const { openMin, closeMin } = openWindow;
-
-  const step = 30; // allow half-hour starts for 2-hour bookings
+  const step = duration === 15 ? 15 : 30; // allow quarter-hour starts for 10-axe bookings
   const lastStart = closeMin - duration;
 
   const slots: string[] = [];
@@ -155,6 +166,10 @@ function buildTimeSlotsForDate(dateKey: string, duration: number) {
     slots.push(formatTimeFromMinutes(t));
   }
   return slots;
+}
+
+function buildTimeSlotsForDate(dateKey: string, duration: number) {
+  return buildTimeSlotsForWindow(getOpenWindowForDateKey(dateKey), duration);
 }
 
 /**
@@ -185,21 +200,30 @@ function calculatePrice(
   activity: Activity,
   duration: number,
   partySize: number,
-  comboDurations?: { axeMinutes: number; duckpinMinutes: number }
+  comboDurations?: { axeMinutes: number; duckpinMinutes: number },
+  partyAreaMinutes?: number,
+  partyAreaCount?: number
 ) {
   const breakdown: string[] = [];
   const hours = duration / 60;
-  const durationLabel = duration === 60 ? "1-Hour" : duration === 120 ? "2-Hours" : "30 Minutes";
+  const durationLabel = labelDuration(duration);
   const resources = neededResources(activity, partySize);
 
   if (activity === "Axe Throwing") {
     const perPersonCents =
+      duration === 15 ? Math.round(10 * 100) :
       duration === 30 ? Math.round(20 * 100) :
       duration === 60 ? Math.round(25 * 100) :
       duration === 120 ? Math.round(45 * 100) :
       Math.round(25 * hours * 100);
     breakdown.push(`${partySize} × ${formatMoney(perPersonCents)} (${durationLabel})`);
-    return { cents: totalCents(activity, partySize, duration), breakdown };
+    const base = totalCents(activity, partySize, duration);
+    const partyAreaCents = partyAreaCostCents(partyAreaMinutes || 0, partyAreaCount || 0);
+    if (partyAreaCents) {
+      const hours = (partyAreaMinutes || 0) / 60;
+      breakdown.push(`${partyAreaCount} party area(s) × ${hours} hr × ${formatMoney(5000)} = ${formatMoney(partyAreaCents)}`);
+    }
+    return { cents: base + partyAreaCents, breakdown };
   }
 
   if (activity === "Duckpin Bowling") {
@@ -210,7 +234,13 @@ function calculatePrice(
       duration === 120 ? Math.round(75 * 100) :
       Math.round(40 * hours * 100);
     breakdown.push(`${lanes} lane(s) × ${formatMoney(perLaneCents)} (${durationLabel})`);
-    return { cents: totalCents(activity, partySize, duration), breakdown };
+    const base = totalCents(activity, partySize, duration);
+    const partyAreaCents = partyAreaCostCents(partyAreaMinutes || 0, partyAreaCount || 0);
+    if (partyAreaCents) {
+      const hours = (partyAreaMinutes || 0) / 60;
+      breakdown.push(`${partyAreaCount} party area(s) × ${hours} hr × ${formatMoney(5000)} = ${formatMoney(partyAreaCents)}`);
+    }
+    return { cents: base + partyAreaCents, breakdown };
   }
 
   // Combo Package (per-activity durations)
@@ -221,15 +251,23 @@ function calculatePrice(
   const axePerPersonCents = Math.round(comboAxePersonCents(comboAxeMinutes) * 100);
   breakdown.push(`${lanes} lane(s) × ${formatMoney(duckpinPortionCents)} (${labelDuration(comboDuckpinMinutes)})`);
   breakdown.push(`${partySize} × ${formatMoney(axePerPersonCents)} (${labelDuration(comboAxeMinutes)})`);
-  return { cents: totalCents(activity, partySize, duration, comboDurations), breakdown };
+  const base = totalCents(activity, partySize, duration, comboDurations);
+  const partyAreaCents = partyAreaCostCents(partyAreaMinutes || 0, partyAreaCount || 0);
+  if (partyAreaCents) {
+    const hours = (partyAreaMinutes || 0) / 60;
+    breakdown.push(`${partyAreaCount} party area(s) × ${hours} hr × ${formatMoney(5000)} = ${formatMoney(partyAreaCents)}`);
+  }
+  return { cents: base + partyAreaCents, breakdown };
 }
 
 // ---------- Calendar component ----------
 function MonthCalendar(props: {
   selectedDateKey: string;
   onSelectDateKey: (dateKey: string) => void;
+  allowClosed?: boolean;
+  closedOverrideDates?: Set<string>;
 }) {
-  const { selectedDateKey, onSelectDateKey } = props;
+  const { selectedDateKey, onSelectDateKey, allowClosed, closedOverrideDates } = props;
   const [cursor, setCursor] = useState(() => {
     const base = selectedDateKey ? fromDateKey(selectedDateKey) : new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
@@ -295,22 +333,37 @@ function MonthCalendar(props: {
           const closed = CLOSED_WEEKDAYS.has(cell.date.getDay());
           const isPast = dk < todayNY;
           const selected = selectedDateKey === dk;
-          const disabled = closed || isPast;
+          const overridden = closedOverrideDates?.has(dk);
+          const disabled = isPast;
+          const closedDisabled = !allowClosed && closed;
+          const blocked = disabled || closedDisabled;
 
           return (
             <button
               key={dk}
               type="button"
-              disabled={disabled}
-              onClick={() => onSelectDateKey(dk)}
+              aria-disabled={blocked}
+              onClick={() => {
+                if (blocked) return;
+                onSelectDateKey(dk);
+              }}
               className={cx(
                 "h-10 rounded-xl border text-sm font-bold transition",
-                selected && !disabled && "border-zinc-900 bg-zinc-900 text-white",
-                !selected && !disabled && "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50",
-                closed && "cursor-not-allowed border-zinc-100 bg-zinc-100 text-zinc-400 line-through",
+                selected && !blocked && "border-zinc-900 bg-zinc-900 text-white",
+                !selected && !blocked && "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50",
+                closed && !allowClosed && "cursor-not-allowed border-zinc-100 bg-zinc-100 text-zinc-400 line-through",
+                closed && allowClosed && !overridden && "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
                 isPast && "cursor-not-allowed border-zinc-100 bg-zinc-100 text-zinc-400"
               )}
-              title={closed ? "Closed (Mon–Wed)" : isPast ? "Past date" : "Open"}
+              title={
+                closed
+                  ? overridden
+                    ? "Closed-day override applied"
+                    : "Closed (admin override required)"
+                  : isPast
+                  ? "Past date"
+                  : "Open"
+              }
             >
               {cell.date.getDate()}
             </button>
@@ -319,7 +372,8 @@ function MonthCalendar(props: {
       </div>
 
       <div className="mt-3 text-xs text-zinc-500">
-        <span className="font-semibold text-zinc-700">Closed:</span> Mon–Wed (greyed out)
+        <span className="font-semibold text-zinc-700">Closed:</span>{" "}
+        {allowClosed ? "Mon–Wed (admin override required to book)" : "Mon–Wed (not bookable)"}
       </div>
     </div>
   );
@@ -336,12 +390,15 @@ function BookPageContent() {
   const [comboAxeDuration, setComboAxeDuration] = useState<number | null>(null);
   const [comboDuckpinDuration, setComboDuckpinDuration] = useState<number | null>(null);
   const [partySize, setPartySize] = useState(2);
+  const [partyAreas, setPartyAreas] = useState<PartyAreaName[]>([]);
+  const [partyAreaMinutes, setPartyAreaMinutes] = useState<number | null>(null);
   const [comboSlot1, setComboSlot1] = useState<"Axe Throwing" | "Duckpin Bowling">("Duckpin Bowling");
   const [dateKey, setDateKey] = useState(""); // yyyy-mm-dd
   const [time, setTime] = useState(""); // stores START label (ex: "4:00 PM")
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string>("");
@@ -375,13 +432,39 @@ function BookPageContent() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [blockedStartMins, setBlockedStartMins] = useState<number[]>([]);
   const blockedSet = useMemo(() => new Set(blockedStartMins), [blockedStartMins]);
+  const [closedOverrideDates, setClosedOverrideDates] = useState<Set<string>>(() => new Set());
+  const [blackoutOverrideDates, setBlackoutOverrideDates] = useState<Set<string>>(() => new Set());
+  const [overrideTarget, setOverrideTarget] = useState<{ dateKey: string; type: "closed" | "blackout" } | null>(null);
+  const [overrideStaffId, setOverrideStaffId] = useState("");
+  const [overridePin, setOverridePin] = useState("");
+  const [overrideError, setOverrideError] = useState("");
+  const [overrideLoading, setOverrideLoading] = useState(false);
 
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [showTerminalPanel, setShowTerminalPanel] = useState(false);
+  const [autoStartTerminal, setAutoStartTerminal] = useState(false);
   const [terminalReaders, setTerminalReaders] = useState<Reader[]>([]);
   const [terminalLoading, setTerminalLoading] = useState(false);
   const [terminalError, setTerminalError] = useState<string>("");
   const [selectedReaderId, setSelectedReaderId] = useState<string>("");
+  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [cashInput, setCashInput] = useState("0.00");
+  const cashInputRef = useRef<HTMLInputElement | null>(null);
+  const [cashError, setCashError] = useState("");
+
+  useEffect(() => {
+    if (!partyAreas.length) {
+      if (partyAreaMinutes != null) setPartyAreaMinutes(null);
+      return;
+    }
+    if (partyAreaMinutes == null || !Number.isFinite(partyAreaMinutes)) {
+      setPartyAreaMinutes(60);
+      return;
+    }
+    const clamped = Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60));
+    if (clamped !== partyAreaMinutes) setPartyAreaMinutes(clamped);
+  }, [partyAreas, partyAreaMinutes]);
+  const [cashLoading, setCashLoading] = useState(false);
 
   const terminalRef = useRef<Terminal | null>(null);
   const terminalReadyRef = useRef(false);
@@ -389,6 +472,15 @@ function BookPageContent() {
   useEffect(() => {
     setShowConfirmation(!!confirmation);
   }, [confirmation]);
+
+  useEffect(() => {
+    if (!cashModalOpen) return;
+    const timer = window.setTimeout(() => {
+      cashInputRef.current?.focus();
+      cashInputRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [cashModalOpen]);
 
   useEffect(() => {
     if (!isStaffMode || terminalReadyRef.current) return;
@@ -450,24 +542,96 @@ function BookPageContent() {
     setSubmitSuccess("");
   }
 
+  function requestClosedOverride(nextDateKey: string) {
+    setOverrideTarget({ dateKey: nextDateKey, type: "closed" });
+  }
+
+  function requestBlackoutOverride(nextDateKey: string) {
+    setOverrideTarget({ dateKey: nextDateKey, type: "blackout" });
+    setOverrideStaffId("");
+    setOverridePin("");
+    setOverrideError("");
+  }
+
+  async function submitClosedOverride(targetOverride?: { dateKey: string; type: "closed" | "blackout" }) {
+    const target = targetOverride ?? overrideTarget;
+    if (!target) return;
+    if (!overrideStaffId.trim() || overridePin.trim().length !== 4) {
+      setOverrideError("Enter a valid admin staff ID and 4-digit PIN.");
+      return;
+    }
+    setOverrideLoading(true);
+    setOverrideError("");
+    try {
+      const res = await fetch("/api/staff/verify-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId: overrideStaffId.trim(), pin: overridePin.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setOverrideError(json?.error || "Admin override failed.");
+        return;
+      }
+      if (target.type === "closed") {
+        setClosedOverrideDates((prev) => {
+          const next = new Set(prev);
+          next.add(target.dateKey);
+          return next;
+        });
+      } else {
+        setBlackoutOverrideDates((prev) => {
+          const next = new Set(prev);
+          next.add(target.dateKey);
+          return next;
+        });
+      }
+      setDateKey(target.dateKey);
+      setTime("");
+      setOverrideTarget(null);
+    } catch (err: any) {
+      setOverrideError(err?.message || "Admin override failed.");
+    } finally {
+      setOverrideLoading(false);
+    }
+  }
+
   const closed = isClosedDateKey(dateKey);
+  const hasClosedOverride = dateKey ? closedOverrideDates.has(dateKey) : false;
+  const hasBlackoutOverride = dateKey ? blackoutOverrideDates.has(dateKey) : false;
+  const closedForStaff = closed && !hasClosedOverride;
+  const openWindowOverride = useMemo(
+    () => (dateKey && hasClosedOverride ? getOpenWindowForDateKey(dateKey) : null),
+    [dateKey, hasClosedOverride]
+  );
+  const partyAreaDuration = partyAreas.length ? partyAreaMinutes ?? 60 : 0;
+  const bookingWindowMinutes = Math.max(effectiveDuration ?? 0, partyAreaDuration || 0);
 
   const slots = useMemo(() => {
-    if (!effectiveDuration || !dateKey) return [];
-    return buildTimeSlotsForDate(dateKey, effectiveDuration);
-  }, [effectiveDuration, dateKey]);
+    if (!bookingWindowMinutes || !dateKey) return [];
+    if (isStaffMode && hasClosedOverride) {
+      return buildTimeSlotsForWindow(openWindowOverride, bookingWindowMinutes);
+    }
+    return buildTimeSlotsForDate(dateKey, bookingWindowMinutes);
+  }, [bookingWindowMinutes, dateKey, isStaffMode, hasClosedOverride, openWindowOverride]);
 
   const pricing = useMemo(() => {
     if (!activity || !effectiveDuration) return null;
     return calculatePrice(activity, effectiveDuration, partySize, {
       axeMinutes: comboAxeDuration ?? 0,
       duckpinMinutes: comboDuckpinDuration ?? 0,
-    });
-  }, [activity, effectiveDuration, partySize, comboAxeDuration, comboDuckpinDuration]);
+    }, partyAreaDuration, partyAreas.length);
+  }, [activity, effectiveDuration, partySize, comboAxeDuration, comboDuckpinDuration, partyAreaDuration, partyAreas.length]);
 
   const totalCents = pricing?.cents ?? 0;
   const discountedTotalCents = promoApplied?.totalCents ?? totalCents;
   const discountCents = promoApplied?.amountOffCents ?? 0;
+  const cashProvidedCents = useMemo(() => {
+    const value = Number(cashInput || "0");
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.round(value * 100));
+  }, [cashInput]);
+  const changeDueCents = Math.max(0, cashProvidedCents - discountedTotalCents);
 
   async function applyPromo(nextCode?: string) {
     const codeToApply = (nextCode ?? promoCode).trim();
@@ -487,7 +651,7 @@ function BookPageContent() {
       const res = await fetch("/api/promos/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: codeToApply, amount_cents: pricing.cents }),
+        body: JSON.stringify({ code: codeToApply, amount_cents: pricing.cents, customer_email: email.trim() }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.promo) {
@@ -524,14 +688,14 @@ function BookPageContent() {
   }, [activity, partySize]);
 
   const selectedTimeRange = useMemo(() => {
-    if (!time || !effectiveDuration) return "—";
-    return slotRangeLabel(time, effectiveDuration);
-  }, [time, effectiveDuration]);
+    if (!time || !bookingWindowMinutes) return "—";
+    return slotRangeLabel(time, bookingWindowMinutes);
+  }, [time, bookingWindowMinutes]);
 
   const startMin = useMemo(() => (time ? parseLabelToMinutes(time) : null), [time]);
   const endMin = useMemo(
-    () => (startMin != null && effectiveDuration ? startMin + effectiveDuration : null),
-    [startMin, effectiveDuration]
+    () => (startMin != null && bookingWindowMinutes ? startMin + bookingWindowMinutes : null),
+    [startMin, bookingWindowMinutes]
   );
   const selectedTimePast = useMemo(() => {
     if (!dateKey || !time) return false;
@@ -551,6 +715,8 @@ function BookPageContent() {
   async function refreshAvailability(params: {
     activity: Activity;
     partySize: number;
+    partyAreas?: PartyAreaName[];
+    partyAreaMinutes?: number;
     dateKey: string;
     durationMinutes: number;
     comboAxeMinutes?: number;
@@ -559,6 +725,7 @@ function BookPageContent() {
     openEndMin: number;
     slotIntervalMin: number;
     order?: "DUCKPIN_FIRST" | "AXE_FIRST";
+    ignoreBlackouts?: boolean;
   }) {
     // cancel any in-flight request
     availabilityAbortRef.current?.abort();
@@ -613,14 +780,14 @@ function BookPageContent() {
 
   // Auto refresh availability when selections change (debounced)
   useEffect(() => {
-    if (!activity || !effectiveDuration || !dateKey || closed) {
+    if (!activity || !effectiveDuration || !dateKey || (isStaffMode ? closedForStaff : closed)) {
       availabilityAbortRef.current?.abort();
       setAvailabilityLoading(false);
       setBlockedStartMins([]);
       return;
     }
 
-    const openWindow = getOpenWindowForDateKey(dateKey);
+    const openWindow = isStaffMode && hasClosedOverride ? openWindowOverride : getOpenWindowForDateKey(dateKey);
     if (!openWindow) {
       availabilityAbortRef.current?.abort();
       setAvailabilityLoading(false);
@@ -628,7 +795,7 @@ function BookPageContent() {
       return;
     }
 
-    const step = 30;
+    const step = effectiveDuration === 15 ? 15 : 30;
 
     // debounce to avoid spamming API while changing
     if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
@@ -637,6 +804,8 @@ function BookPageContent() {
       refreshAvailability({
         activity,
         partySize,
+        partyAreas,
+        partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
         dateKey,
         durationMinutes: effectiveDuration,
         comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
@@ -645,6 +814,7 @@ function BookPageContent() {
         openEndMin: openWindow.closeMin,
         slotIntervalMin: step,
         order: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
+        ignoreBlackouts: isStaffMode && (hasClosedOverride || hasBlackoutOverride),
       });
     }, 200);
 
@@ -652,30 +822,55 @@ function BookPageContent() {
       if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity, effectiveDuration, partySize, dateKey, closed, comboFirst, comboAxeDuration, comboDuckpinDuration]);
+  }, [
+    activity,
+    effectiveDuration,
+    partySize,
+    partyAreas,
+    partyAreaDuration,
+    dateKey,
+    closed,
+    closedForStaff,
+    hasClosedOverride,
+    hasBlackoutOverride,
+    openWindowOverride,
+    comboFirst,
+    comboAxeDuration,
+    comboDuckpinDuration,
+    isStaffMode,
+  ]);
+
+  const effectiveBlockedSet = useMemo(() => {
+    if (isStaffMode && hasClosedOverride && slots.length && blockedSet.size === slots.length) {
+      return new Set<number>();
+    }
+    return blockedSet;
+  }, [isStaffMode, hasClosedOverride, slots.length, blockedSet]);
 
   // Disable confirm if selected time is blocked
   const selectedTimeBlocked = useMemo(() => {
     if (!time) return false;
     const sm = parseLabelToMinutes(time);
-    return blockedSet.has(sm);
-  }, [time, blockedSet]);
+    return effectiveBlockedSet.has(sm);
+  }, [time, effectiveBlockedSet]);
 
   const canConfirm =
     !!activity &&
     !!effectiveDuration &&
     !!dateKey &&
     !!time &&
-    !closed &&
+    !(partyAreas.length && !partyAreaDuration) &&
+    !(isStaffMode ? closedForStaff : closed) &&
     !selectedTimeBlocked &&
     !selectedTimePast &&
     name.trim().length > 1 &&
     email.trim().length > 3 &&
     phone.trim().length > 6 &&
+    consentChecked &&
     !submitting;
 
   async function createCheckoutSession(opts: { successPath: string; cancelPath: string; uiMode: "customer" | "staff" }) {
-    if (!activity || !effectiveDuration || !dateKey || !time || closed) return;
+    if (!activity || !effectiveDuration || !dateKey || !time || (isStaffMode ? closedForStaff : closed)) return;
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
 
@@ -693,6 +888,8 @@ function BookPageContent() {
           partySize,
           dateKey,
           startMin,
+          partyAreas,
+          partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
@@ -728,16 +925,117 @@ function BookPageContent() {
     setSubmitError("");
     setSubmitSuccess("");
 
-    if (!activity || !effectiveDuration || !dateKey || !time || closed) return;
+    if (!activity || !effectiveDuration || !dateKey || !time || (isStaffMode ? closedForStaff : closed)) return;
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
 
     if (isStaffMode) {
-      setShowPaymentOptions(true);
+      setShowTerminalPanel(true);
+      setAutoStartTerminal(true);
+      loadTerminalReaders();
       return;
     }
 
     await createCheckoutSession({ successPath: "/book/confirmation", cancelPath: "/book", uiMode: "customer" });
+  }
+
+  function normalizeCashInput(value: string) {
+    const cleaned = value.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    const whole = parts[0] ?? "";
+    const decimals = parts[1] ? parts[1].slice(0, 2) : "";
+    if (parts.length > 1) {
+      return `${whole}.${decimals}`;
+    }
+    return whole;
+  }
+
+  function openCashModal() {
+    setCashInput("0.00");
+    setCashError("");
+    setShowTerminalPanel(false);
+    setTerminalError("");
+    setCashModalOpen(true);
+  }
+
+  function closeCashModal() {
+    setCashModalOpen(false);
+    setCashInput("0.00");
+    setCashError("");
+  }
+
+  function backspaceCashInput() {
+    setCashInput((prev) => prev.slice(0, -1));
+  }
+
+  function setCashAmount(amount: number) {
+    setCashInput(amount.toFixed(2));
+  }
+
+  async function submitCashPayment() {
+    setCashError("");
+    if (!activity || !effectiveDuration || !dateKey || !time || (isStaffMode ? closedForStaff : closed)) return;
+    if (startMin == null || endMin == null) return;
+    if (!pricing) return;
+
+    if (cashProvidedCents < discountedTotalCents) {
+      setCashError("Cash provided must cover the total.");
+      return;
+    }
+
+    setCashLoading(true);
+    try {
+      const res = await fetch("/api/staff/bookings/cash", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activity,
+          durationMinutes: effectiveDuration,
+          partySize,
+          dateKey,
+          startMin,
+          partyAreas,
+          partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+          customerName: name.trim(),
+          customerEmail: email.trim(),
+          customerPhone: phone.trim(),
+          comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
+          comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
+          comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
+          totalCentsOverride: discountedTotalCents,
+          promoCode: promoApplied?.code || "",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCashError(json?.error || "Cash payment failed.");
+        return;
+      }
+
+      const comboOrder = activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined;
+      setConfirmation({
+        activity,
+        duration: effectiveDuration,
+        dateKey,
+        timeLabel: selectedTimeRange,
+        partySize,
+        customerName: name.trim(),
+        customerEmail: email.trim(),
+        customerPhone: phone.trim(),
+        totalCents: discountedTotalCents,
+        comboOrder,
+        resourceNames: [],
+      });
+      setShowConfirmation(true);
+      setShowPaymentOptions(false);
+      setShowTerminalPanel(false);
+      closeCashModal();
+      resetBookingState();
+    } catch (e: any) {
+      setCashError(e?.message || "Cash payment failed.");
+    } finally {
+      setCashLoading(false);
+    }
   }
 
   function resetBookingState() {
@@ -746,12 +1044,15 @@ function BookPageContent() {
     setComboAxeDuration(null);
     setComboDuckpinDuration(null);
     setPartySize(2);
+    setPartyAreas([]);
+    setPartyAreaMinutes(null);
     setComboSlot1("Duckpin Bowling");
     setDateKey("");
     setTime("");
     setName("");
     setEmail("");
     setPhone("");
+    setConsentChecked(false);
     setPromoCode("");
     setPromoApplied(null);
     setPromoStatus("");
@@ -779,15 +1080,16 @@ function BookPageContent() {
     }
   }
 
-  async function handleTerminalPayment() {
+  async function handleTerminalPayment(forcedReaderId?: string) {
     if (!terminalRef.current) {
       setTerminalError("Stripe Terminal not initialized.");
       return;
     }
-    if (!activity || !effectiveDuration || !dateKey || !time || closed) return;
+    if (!activity || !effectiveDuration || !dateKey || !time || (isStaffMode ? closedForStaff : closed)) return;
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
-    if (!selectedReaderId) {
+    const readerId = forcedReaderId || selectedReaderId;
+    if (!readerId) {
       setTerminalError("Select a reader to continue.");
       return;
     }
@@ -796,7 +1098,7 @@ function BookPageContent() {
     setTerminalError("");
 
     try {
-      const reader = terminalReaders.find((r) => r.id === selectedReaderId);
+      const reader = terminalReaders.find((r) => r.id === readerId);
       if (!reader) {
         setTerminalError("Reader not found.");
         return;
@@ -817,6 +1119,8 @@ function BookPageContent() {
           partySize,
           dateKey,
           startMin,
+          partyAreas,
+          partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
@@ -903,6 +1207,44 @@ function BookPageContent() {
       uiMode: "staff",
     });
   }
+
+  async function handleCancelTerminalPayment() {
+    if (!terminalRef.current) {
+      setTerminalError("Stripe Terminal not initialized.");
+      return;
+    }
+    try {
+      setTerminalError("");
+      const result = await terminalRef.current.cancelCollectPaymentMethod();
+      if ("error" in result && result.error) {
+        setTerminalError(result.error.message || "Failed to cancel payment.");
+        return;
+      }
+      await terminalRef.current.disconnectReader();
+      setTerminalError("Payment canceled.");
+      setAutoStartTerminal(false);
+      setShowTerminalPanel(false);
+    } catch (e: any) {
+      setTerminalError(e?.message || "Failed to cancel payment.");
+    } finally {
+      setTerminalLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!autoStartTerminal) return;
+    if (!showTerminalPanel) return;
+    if (terminalLoading) return;
+    if (!terminalReaders.length) return;
+
+    const readerId = selectedReaderId || terminalReaders[0]?.id || "";
+    if (!readerId) return;
+    if (!selectedReaderId) {
+      setSelectedReaderId(readerId);
+    }
+    setAutoStartTerminal(false);
+    handleTerminalPayment(readerId);
+  }, [autoStartTerminal, showTerminalPanel, terminalReaders, selectedReaderId, terminalLoading]);
 
   useEffect(() => {
     if (!checkoutSessionId) return;
@@ -1055,7 +1397,7 @@ function BookPageContent() {
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {[30, 60, 120].map((d) => {
+                  {(activity === "Axe Throwing" ? [15, 30, 60, 120] : [30, 60, 120]).map((d) => {
                     const selected = duration === d;
                     return (
                       <button
@@ -1090,6 +1432,80 @@ function BookPageContent() {
               <div className="mb-3 flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-extrabold text-white">
                   3
+                </div>
+                <div className="text-base font-extrabold text-zinc-900">Private Party Areas (Optional)</div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {PARTY_AREA_OPTIONS.filter((area) => area.visible).map((area) => {
+                  const selected = partyAreas.includes(area.name);
+                  return (
+                    <button
+                      key={area.key}
+                      type="button"
+                      onClick={() => {
+                        const nextAreas = selected
+                          ? partyAreas.filter((name) => name !== area.name)
+                          : [...partyAreas, area.name];
+                        setPartyAreas(nextAreas);
+                        setPartyAreaMinutes((prev) => (nextAreas.length ? prev ?? 60 : null));
+                        setTime("");
+                        setSubmitError("");
+                        setSubmitSuccess("");
+                      }}
+                      className={cx(
+                        "rounded-2xl border px-4 py-2 text-sm font-extrabold transition",
+                        selected
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
+                      )}
+                    >
+                      {area.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {partyAreas.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Duration</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {[60, 120, 180, 240, 300, 360, 420, 480].map((mins) => {
+                      const selected = partyAreaMinutes === mins;
+                      return (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => {
+                            setPartyAreaMinutes(mins);
+                            setTime("");
+                            setSubmitError("");
+                            setSubmitSuccess("");
+                          }}
+                          className={cx(
+                            "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                            selected
+                              ? "border-zinc-900 bg-zinc-900 text-white"
+                              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                          )}
+                        >
+                          {mins / 60} hr
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">$50 per hour • up to 8 hours</div>
+                </div>
+              )}
+              <div className="mt-2 text-xs text-zinc-500">
+                Add-on only. Booking can proceed without a party area.
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="mb-6">
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-extrabold text-white">
+                  4
                 </div>
                 <div className="text-base font-extrabold text-zinc-900">Party Size</div>
                 <div className="text-xs font-semibold text-zinc-500">
@@ -1190,11 +1606,11 @@ function BookPageContent() {
               </div>
             )}
 
-            {/* Step 4 */}
+            {/* Step 5 */}
             <div className="mb-6">
               <div className="mb-3 flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-extrabold text-white">
-                  4
+                  5
                 </div>
                 <div className="text-base font-extrabold text-zinc-900">Date</div>
               </div>
@@ -1202,27 +1618,47 @@ function BookPageContent() {
               <MonthCalendar
                 selectedDateKey={dateKey}
                 onSelectDateKey={(dk) => {
-                  if (isClosedDateKey(dk)) return;
+                  if (isClosedDateKey(dk)) {
+                    if (!isStaffMode) return;
+                    if (closedOverrideDates.has(dk)) {
+                      setDateKey(dk);
+                      setTime("");
+                      setSubmitError("");
+                      setSubmitSuccess("");
+                      return;
+                    }
+                    setDateKey(dk);
+                    setTime("");
+                    setSubmitError("");
+                    setSubmitSuccess("");
+                    requestClosedOverride(dk);
+                    return;
+                  }
                   setDateKey(dk);
                   setTime("");
                   setSubmitError("");
                   setSubmitSuccess("");
                 }}
+                allowClosed={isStaffMode}
+                closedOverrideDates={closedOverrideDates}
               />
 
               <div className="mt-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm">
                 <div className="font-extrabold text-zinc-900">{prettyDate(dateKey)}</div>
-                <div className={cx("mt-1", closed ? "text-red-600" : "text-zinc-700")}>
-                  {hoursForDateKey(dateKey)}
+                <div className={cx("mt-1", closedForStaff ? "text-red-600" : "text-zinc-700")}>
+                  {closedForStaff ? "Closed (admin override required)" : hoursForDateKey(dateKey)}
                 </div>
+                {isStaffMode && hasBlackoutOverride ? (
+                  <div className="mt-1 text-xs font-semibold text-amber-700">Blackout override applied.</div>
+                ) : null}
               </div>
             </div>
 
-            {/* Step 5 */}
+            {/* Step 6 */}
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-extrabold text-white">
-                  5
+                  6
                 </div>
                 <div className="text-base font-extrabold text-zinc-900">Time</div>
 
@@ -1239,15 +1675,50 @@ function BookPageContent() {
                 <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
                   Select a date to see time slots.
                 </div>
-              ) : closed ? (
+              ) : (isStaffMode ? closedForStaff : closed) ? (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
-                  Axe Quacks is closed on this date. Choose Thu–Sun.
+                  <div>Axe Quacks is closed on this date. Admin override required to book.</div>
+                  {isStaffMode && dateKey ? (
+                    <div className="mt-3 grid gap-3">
+                      <label className="text-xs font-semibold text-zinc-700">
+                        Admin Staff ID
+                        <input
+                          value={overrideStaffId}
+                          onChange={(e) => setOverrideStaffId(e.target.value)}
+                          className="mt-1 h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                          placeholder="e.g. bda"
+                          disabled={overrideLoading}
+                        />
+                      </label>
+                      <label className="text-xs font-semibold text-zinc-700">
+                        Admin PIN
+                        <input
+                          value={overridePin}
+                          onChange={(e) => setOverridePin(e.target.value)}
+                          type="password"
+                          inputMode="numeric"
+                          className="mt-1 h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                          placeholder="4-digit PIN"
+                          disabled={overrideLoading}
+                        />
+                      </label>
+                      {overrideError ? <div className="text-xs text-red-700">{overrideError}</div> : null}
+                      <button
+                        type="button"
+                        onClick={() => submitClosedOverride({ dateKey, type: "closed" })}
+                        className="w-fit rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-extrabold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                        disabled={overrideLoading}
+                      >
+                        {overrideLoading ? "Verifying..." : "Approve Override"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                   {slots.map((startLabel) => {
                     const sm = parseLabelToMinutes(startLabel);
-                    const isBlocked = blockedSet.has(sm);
+                    const isBlocked = effectiveBlockedSet.has(sm);
                     const selected = time === startLabel;
                     const isPastTime = dateKey === todayDateKeyNY() && sm < nowMinutesNY();
 
@@ -1277,14 +1748,27 @@ function BookPageContent() {
                             : "Available"
                         }
                       >
-                        {slotRangeLabel(startLabel, effectiveDuration)}
+                        {slotRangeLabel(startLabel, bookingWindowMinutes)}
                       </button>
                     );
                   })}
                 </div>
               )}
 
-              {!closed && effectiveDuration && dateKey && (
+              {isStaffMode && dateKey && !hasClosedOverride ? (
+                <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+                  Need to override blackout restrictions?{" "}
+                  <button
+                    type="button"
+                    onClick={() => requestBlackoutOverride(dateKey)}
+                    className="ml-2 rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-extrabold text-amber-800 hover:bg-amber-100"
+                  >
+                    Admin Override
+                  </button>
+                </div>
+              ) : null}
+
+              {!(isStaffMode ? closedForStaff : closed) && effectiveDuration && dateKey && (
                 <div className="mt-2 text-xs text-zinc-500">
                   Times that are unavailable will be greyed out automatically.
                 </div>
@@ -1333,6 +1817,19 @@ function BookPageContent() {
                   <span className="font-semibold text-zinc-600">Party Size</span>
                   <span className="font-extrabold text-zinc-900">{partySize}</span>
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-zinc-600">Party Areas</span>
+                  <span className="font-extrabold text-zinc-900">
+                    {partyAreas.length ? partyAreas.join(", ") : "None"}
+                  </span>
+                </div>
+                {partyAreas.length ? (
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-zinc-600">Party Area Duration</span>
+                    <span className="font-extrabold text-zinc-900">{partyAreaDuration / 60} hr</span>
+                  </div>
+                ) : null}
 
                 {resources && (
                   <div className="mt-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
@@ -1479,6 +1976,22 @@ function BookPageContent() {
                   inputMode="tel"
                 />
               </div>
+              <label className="mt-3 flex items-start gap-10 text-xs text-zinc-600">
+                <input
+                  type="checkbox"
+                  checked={consentChecked}
+                  onChange={(e) => {
+                    setConsentChecked(e.target.checked);
+                    setSubmitError("");
+                    setSubmitSuccess("");
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                />
+                <span style={{ marginLeft: 8 }}>
+                  I consent to providing my email address and phone number for booking updates and future marketing
+                  communications.
+                </span>
+              </label>
 
               {selectedTimeBlocked && (
                 <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
@@ -1506,12 +2019,98 @@ function BookPageContent() {
                   canConfirm ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-zinc-200 text-zinc-500"
                 )}
               >
-                {submitting ? "Starting checkout..." : isStaffMode ? "Confirm Booking (Payment)" : "Confirm Booking"}
+                {submitting ? "Starting checkout..." : isStaffMode ? "Pay With Card" : "Confirm Booking"}
               </button>
+
+              {isStaffMode && (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={!canConfirm}
+                    onClick={() => {
+                      setShowPaymentOptions(false);
+                      setShowTerminalPanel(false);
+                      setTerminalError("");
+                      setCashModalOpen(true);
+                    }}
+                    className={cx(
+                      "h-11 rounded-2xl border text-sm font-extrabold transition",
+                      canConfirm
+                        ? "border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800"
+                        : "border-zinc-200 bg-zinc-100 text-zinc-400"
+                    )}
+                  >
+                    Pay With Cash
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canConfirm || submitting}
+                    onClick={async () => {
+                      setSubmitError("");
+                      setSubmitSuccess("");
+                      if (!activity || !effectiveDuration || !dateKey || !time) return;
+                      if (startMin == null || endMin == null) return;
+                      if (!pricing) return;
+                      setSubmitting(true);
+                      try {
+                        const res = await fetch("/api/staff/bookings/payment-link", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          activity,
+                          durationMinutes: effectiveDuration,
+                          partySize,
+                          dateKey,
+                          startMin,
+                          partyAreas,
+                          partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+                          customerName: name.trim(),
+                          customerEmail: email.trim(),
+                          customerPhone: phone.trim(),
+                            comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
+                            comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
+                            comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
+                            promoCode: promoApplied?.code || "",
+                            totalCentsOverride: discountedTotalCents,
+                          }),
+                        });
+                        const json = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                          setSubmitError(json?.error || "Failed to send payment link.");
+                          return;
+                        }
+                        setSubmitSuccess("Payment link sent to the customer.");
+                      } catch (e: any) {
+                        setSubmitError(e?.message || "Failed to send payment link.");
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                    className={cx(
+                      "h-11 rounded-2xl border text-sm font-extrabold transition",
+                      canConfirm
+                        ? "border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800"
+                        : "border-zinc-200 bg-zinc-100 text-zinc-400"
+                    )}
+                  >
+                    Send Payment Link
+                  </button>
+                </div>
+              )}
+
+              {isStaffMode && showTerminalPanel ? (
+                <button
+                  type="button"
+                  onClick={handleCancelTerminalPayment}
+                  className="mt-3 h-10 w-full rounded-2xl border border-red-200 bg-white text-xs font-extrabold text-red-700 hover:bg-red-50"
+                >
+                  Cancel Card Payment
+                </button>
+              ) : null}
 
               {!canConfirm && !submitting && (
                 <div className="mt-2 text-xs text-zinc-500">
-                  Complete activity, duration, date (Thu–Sun), time, and customer info to enable confirmation.
+                  Complete activity, duration, date, time, and customer info to enable confirmation.
                 </div>
               )}
             </div>
@@ -1520,6 +2119,172 @@ function BookPageContent() {
 
         <div className="mt-6 text-xs text-zinc-500">Note: This saves bookings + resource reservations in Supabase now.</div>
       </div>
+
+      {cashModalOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 2147483647,
+                background: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+              }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeCashModal();
+              }}
+            >
+              <div
+                className="w-full max-w-4xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-lg font-semibold text-zinc-900">Cash Payment</div>
+                  <button
+                    type="button"
+                    onClick={closeCashModal}
+                    className="rounded-lg border border-zinc-200 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="mt-5 grid grid-cols-[1.1fr_1fr] gap-6">
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
+                    <div className="text-xs font-semibold uppercase text-zinc-500">Total Due</div>
+                    <div className="mt-2 text-3xl font-semibold text-zinc-900">
+                      ${(discountedTotalCents / 100).toFixed(2)}
+                    </div>
+
+                    <div className="mt-6">
+                      <label className="text-xs font-semibold uppercase text-zinc-500">Cash Given</label>
+                      <input
+                        ref={cashInputRef}
+                        value={cashInput}
+                        onChange={(e) => setCashInput(normalizeCashInput(e.target.value))}
+                        inputMode="decimal"
+                        className="mt-2 h-12 w-full rounded-xl border border-zinc-200 bg-white px-4 text-lg font-semibold"
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="text-xs font-semibold uppercase text-emerald-700">Change Due</div>
+                      <div className="mt-2 text-4xl font-semibold text-emerald-700">
+                        ${(changeDueCents / 100).toFixed(2)}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-5 gap-3">
+                      {[5, 10, 20, 50, 100].map((amount) => (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => setCashAmount(amount)}
+                          className="rounded-xl border border-zinc-200 bg-white py-3 text-base font-semibold text-zinc-800 hover:bg-zinc-100"
+                        >
+                          ${amount}
+                        </button>
+                      ))}
+                    </div>
+
+                    {cashError ? <div className="mt-4 text-xs font-semibold text-red-600">{cashError}</div> : null}
+
+                    <button
+                      type="button"
+                      onClick={submitCashPayment}
+                      disabled={cashLoading || cashProvidedCents < discountedTotalCents}
+                      className="mt-4 h-12 w-full rounded-xl border border-black bg-white text-base font-semibold text-black shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {cashLoading ? "Recording…" : "Confirm Cash Payment"}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                    <button
+                      type="button"
+                      onClick={backspaceCashInput}
+                      className="h-12 rounded-2xl border border-zinc-200 bg-white text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
+                    >
+                      Backspace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCashInput("0.00")}
+                      className="h-12 rounded-2xl border border-zinc-200 bg-zinc-100 text-sm font-semibold text-zinc-700 hover:bg-zinc-200"
+                    >
+                      Clear
+                    </button>
+                    <div className="text-xs text-zinc-500">
+                      Enter the amount using the hot buttons or type directly in the cash field.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {overrideTarget && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+              <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+                <div className="text-sm font-semibold text-zinc-900">Admin Override Required</div>
+                <div className="mt-1 text-xs text-zinc-500">
+                  Override requested for {prettyDate(overrideTarget.dateKey)}. Enter admin credentials to proceed.
+                </div>
+                <div className="mt-4 grid gap-3">
+                  <label className="text-xs font-semibold text-zinc-600">
+                    Admin Staff ID
+                    <input
+                      value={overrideStaffId}
+                      onChange={(e) => setOverrideStaffId(e.target.value)}
+                      className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                      placeholder="e.g. bda"
+                      disabled={overrideLoading}
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-zinc-600">
+                    Admin PIN
+                    <input
+                      value={overridePin}
+                      onChange={(e) => setOverridePin(e.target.value)}
+                      type="password"
+                      inputMode="numeric"
+                      className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                      placeholder="4-digit PIN"
+                      disabled={overrideLoading}
+                    />
+                  </label>
+                  {overrideError ? <div className="text-xs text-red-600">{overrideError}</div> : null}
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOverrideTarget(null)}
+                    className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold"
+                    disabled={overrideLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitClosedOverride}
+                    className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                    disabled={overrideLoading}
+                  >
+                    {overrideLoading ? "Verifying..." : "Approve Override"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {showConfirmation && confirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -1580,43 +2345,6 @@ function BookPageContent() {
         </div>
       )}
 
-      {showPaymentOptions ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-lg">
-            <div className="text-lg font-extrabold text-zinc-900">Collect Payment</div>
-            <div className="mt-2 text-sm text-zinc-600">Choose how you want to take payment for this booking.</div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTerminalPanel(true);
-                  loadTerminalReaders();
-                }}
-                className="rounded-2xl border border-zinc-900 bg-zinc-900 px-4 py-3 text-sm font-extrabold text-white hover:bg-zinc-800"
-              >
-                Card Reader
-              </button>
-              <button
-                type="button"
-                onClick={handleManualCheckout}
-                className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-extrabold text-zinc-900 hover:bg-zinc-50"
-              >
-                Manual Card Checkout
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowPaymentOptions(false)}
-              className="mt-4 text-xs font-semibold text-zinc-500 hover:text-zinc-700"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {showTerminalPanel ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-lg">
@@ -1644,7 +2372,10 @@ function BookPageContent() {
             <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={handleTerminalPayment}
+                onClick={() => {
+                  setAutoStartTerminal(false);
+                  handleTerminalPayment();
+                }}
                 disabled={terminalLoading}
                 className={cx(
                   "rounded-2xl border border-zinc-900 bg-zinc-900 px-5 py-3 text-sm font-extrabold text-white hover:bg-zinc-800",
@@ -1652,6 +2383,13 @@ function BookPageContent() {
                 )}
               >
                 {terminalLoading ? "Processing…" : "Collect Payment"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelTerminalPayment}
+                className="rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-extrabold text-red-700 hover:bg-red-50"
+              >
+                Cancel Payment
               </button>
               <button
                 type="button"

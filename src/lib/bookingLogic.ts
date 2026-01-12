@@ -2,6 +2,20 @@
 
 export type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 
+export const PARTY_AREA_OPTIONS = [
+  { key: "duck-blind", name: "The Duck Blind (Indoor Party Area)", visible: true },
+  { key: "duck-pond", name: "The Duck Pond (Outdoor Party Area)", visible: false },
+] as const;
+
+export type PartyAreaName = (typeof PARTY_AREA_OPTIONS)[number]["name"];
+export const PARTY_AREA_RATE_CENTS_PER_HOUR = 5000;
+
+export function partyAreaCostCents(minutes: number, count: number) {
+  if (!Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(count) || count <= 0) return 0;
+  const hours = minutes / 60;
+  return Math.round(hours * PARTY_AREA_RATE_CENTS_PER_HOUR * count);
+}
+
 export type NeededResources = {
   AXE: number;
   DUCKPIN: number;
@@ -14,7 +28,7 @@ export const MAX_PARTY_SIZES: Record<Activity, number> = {
 };
 
 export const DURATIONS_MINUTES: Record<Activity, number[]> = {
-  "Axe Throwing": [30, 60, 120],
+  "Axe Throwing": [15, 30, 60, 120],
   "Duckpin Bowling": [30, 60, 120],
   // Combo uses per-activity durations (axe + duckpin)
   "Combo Package": [60, 120, 180, 240],
@@ -94,6 +108,7 @@ export function totalCents(
 
   if (activity === "Axe Throwing") {
     const perPerson =
+      durationMinutes === 15 ? 10 :
       durationMinutes === 30 ? 20 :
       durationMinutes === 60 ? 25 :
       durationMinutes === 120 ? 45 :

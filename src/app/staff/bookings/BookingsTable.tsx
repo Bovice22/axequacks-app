@@ -14,6 +14,7 @@ type BookingRow = {
   customer_email: string | null;
   customer_id?: string | null;
   total_cents: number;
+  payment_intent_id?: string | null;
   combo_order: string | null;
   status?: string | null;
   paid?: boolean | null;
@@ -182,15 +183,17 @@ const RESOURCE_COL_WIDTH = 260;
 const TIME_GUTTER = 96;
 const HEADER_HEIGHT = 64;
 const BLOCK_INSET_PX = 0;
+const CLOSED_WEEKDAYS = new Set([1, 2, 3]);
 
 function getOpenWindowForDateKey(dateKey: string): { openMin: number; closeMin: number } | null {
   if (!dateKey) return null;
   const day = weekdayNY(dateKey); // Sun=0
+  if (CLOSED_WEEKDAYS.has(day)) return { openMin: 12 * 60, closeMin: 20 * 60 }; // Mon-Wed 12pm-8pm
   if (day === 4) return { openMin: 16 * 60, closeMin: 22 * 60 }; // Thu 4pm-10pm
   if (day === 5) return { openMin: 16 * 60, closeMin: 23 * 60 }; // Fri 4pm-11pm
   if (day === 6) return { openMin: 12 * 60, closeMin: 23 * 60 }; // Sat 12pm-11pm
   if (day === 0) return { openMin: 12 * 60, closeMin: 21 * 60 }; // Sun 12pm-9pm
-  return null; // Mon-Wed closed
+  return null;
 }
 
 function MonthCalendar(props: {
@@ -225,8 +228,6 @@ function MonthCalendar(props: {
   }, [cursor]);
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const closedWeekdays = new Set([1, 2, 3]);
-
   return (
     <div
       className="rounded-2xl border border-zinc-200 bg-white p-4"
@@ -265,8 +266,7 @@ function MonthCalendar(props: {
           const dk = toDateKey(cell.date);
           const selected = selectedDateKey === dk;
           const isPast = dk < todayKey;
-          const closed = closedWeekdays.has(cell.date.getDay());
-          const disabled = isPast || closed;
+          const disabled = isPast;
 
           return (
             <button
@@ -281,6 +281,7 @@ function MonthCalendar(props: {
                   ? "cursor-not-allowed border-zinc-100 bg-zinc-100 text-zinc-400 line-through"
                   : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
               }`}
+              title="Open"
             >
               {cell.date.getDate()}
             </button>
@@ -304,6 +305,9 @@ export default function BookingsTable() {
   const [isClient, setIsClient] = useState(false);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
+  const [hoveredBookingId, setHoveredBookingId] = useState<string | null>(null);
+
+  const ACTION_BAR_COLOR = "#F3C04E";
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPartySize, setEditPartySize] = useState<number>(1);
@@ -326,8 +330,17 @@ export default function BookingsTable() {
     name: string;
     email: string;
     notes: string;
+    partySize: number;
   } | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [staffRole, setStaffRole] = useState<"admin" | "staff" | null>(null);
+  const [refundBooking, setRefundBooking] = useState<BookingRow | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundManagerId, setRefundManagerId] = useState("");
+  const [refundManagerPin, setRefundManagerPin] = useState("");
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundError, setRefundError] = useState("");
   const todayKey = todayDateKeyNY();
 
   async function loadBookings(nextOrder: "upcoming" | "newest") {
@@ -380,6 +393,83 @@ export default function BookingsTable() {
     }
   }
 
+  function openRefund(booking: BookingRow) {
+    setRefundBooking(booking);
+    setRefundAmount("");
+    setRefundReason("");
+    setRefundManagerId("");
+    setRefundManagerPin("");
+    setRefundError("");
+  }
+
+  function closeRefund() {
+    setRefundBooking(null);
+    setRefundAmount("");
+    setRefundReason("");
+    setRefundManagerId("");
+    setRefundManagerPin("");
+    setRefundError("");
+  }
+
+  async function submitRefund() {
+    if (!refundBooking) return;
+    if (!refundReason.trim()) {
+      setRefundError("Refund reason is required.");
+      return;
+    }
+    const amountFloat = refundAmount.trim() ? Number(refundAmount) : 0;
+    const amountCents = refundAmount.trim() ? Math.round(amountFloat * 100) : 0;
+    if (refundAmount.trim() && (!Number.isFinite(amountFloat) || amountFloat <= 0)) {
+      setRefundError("Enter a valid refund amount.");
+      return;
+    }
+
+    setRefundLoading(true);
+    setRefundError("");
+    try {
+      const res = await fetch(`/api/staff/bookings/${refundBooking.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: refundReason.trim(),
+          amount_cents: amountCents,
+          manager_staff_id: refundManagerId.trim(),
+          manager_pin: refundManagerPin.trim(),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRefundError(json?.error || "Failed to issue refund.");
+        return;
+      }
+      closeRefund();
+      await loadBookings(order);
+    } catch (err: any) {
+      setRefundError(err?.message || "Failed to issue refund.");
+    } finally {
+      setRefundLoading(false);
+    }
+  }
+
+  async function openTabForBooking(bookingId: string) {
+    setActionLoadingId(bookingId);
+    try {
+      const res = await fetch("/api/staff/tabs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.tab?.id) {
+        alert(json?.error || "Failed to open tab.");
+        return;
+      }
+      window.open(`/staff/pos?tab=${json.tab.id}`, "_blank", "noopener,noreferrer");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   useEffect(() => {
     loadBookings(order);
   }, [order]);
@@ -410,6 +500,19 @@ export default function BookingsTable() {
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/staff/me")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.role === "admin" || json?.role === "staff") {
+          setStaffRole(json.role);
+        }
+      })
+      .catch(() => {
+        setStaffRole(null);
+      });
   }, []);
 
   const filtered = useMemo(() => {
@@ -459,6 +562,7 @@ export default function BookingsTable() {
         name: booking.customer_name || "",
         email: booking.customer_email || "",
         notes: booking.notes || "",
+        partySize: booking.party_size || 1,
       });
       return;
     }
@@ -500,6 +604,7 @@ export default function BookingsTable() {
         name: b?.customer_name || "",
         email: b?.customer_email || "",
         notes: b?.notes || "",
+        partySize: b?.party_size || 1,
       });
     } finally {
       setEditLoading(false);
@@ -557,6 +662,7 @@ export default function BookingsTable() {
           customer_name: editName,
           customer_email: editEmail,
           notes: editNotes,
+          party_size: editPartySize || 1,
           activity: editActivity,
           dateKey: editDateKey,
           startMin: editStartMin,
@@ -621,7 +727,7 @@ export default function BookingsTable() {
         durationMinutes: editDuration,
         openStartMin: openWindow.openMin,
         openEndMin: openWindow.closeMin,
-        slotIntervalMin: 30,
+        slotIntervalMin: editDuration === 15 ? 15 : 30,
         order: editActivity === "Combo Package" ? (editComboOrder === "AXE_FIRST" ? "AXE_FIRST" : "DUCKPIN_FIRST") : undefined,
       }),
     })
@@ -637,7 +743,12 @@ export default function BookingsTable() {
   }, [editingBookingId, editActivity, editPartySize, editDateKey, editDuration, editComboOrder]);
 
   const editDurationOptions = useMemo(() => {
-    const base = editActivity === "Combo Package" ? [120] : [30, 60, 120];
+    const base =
+      editActivity === "Combo Package"
+        ? [120]
+        : editActivity === "Axe Throwing"
+        ? [15, 30, 60, 120]
+        : [30, 60, 120];
     const set = new Set(base);
     if (editDuration && !set.has(editDuration)) set.add(editDuration);
     return Array.from(set).sort((a, b) => a - b);
@@ -668,7 +779,8 @@ export default function BookingsTable() {
       editSnapshot.duration !== editDuration ||
       editSnapshot.name !== editName ||
       editSnapshot.email !== editEmail ||
-      editSnapshot.notes !== editNotes);
+      editSnapshot.notes !== editNotes ||
+      editSnapshot.partySize !== editPartySize);
 
   const resourceColumns = useMemo(() => {
     const active = resources.filter((r) => r.active !== false);
@@ -676,10 +788,12 @@ export default function BookingsTable() {
       Number.isFinite(r.sort_order) ? Number(r.sort_order) : Number.MAX_SAFE_INTEGER;
     const axes = active.filter((r) => r.type === "AXE").sort((a, b) => sortKey(a) - sortKey(b));
     const lanes = active.filter((r) => r.type === "DUCKPIN").sort((a, b) => sortKey(a) - sortKey(b));
+    const partyAreas = active.filter((r) => r.type === "PARTY").sort((a, b) => sortKey(a) - sortKey(b));
 
     return [
       ...axes.map((r, i) => ({ ...r, label: r.name || `Axe Bay ${i + 1}` })),
       ...lanes.map((r, i) => ({ ...r, label: r.name || `Lane ${i + 1}` })),
+      ...partyAreas.map((r, i) => ({ ...r, label: r.name || `Party Area ${i + 1}` })),
     ];
   }, [resources]);
 
@@ -781,6 +895,20 @@ export default function BookingsTable() {
     return minutesFromOpen * PX_PER_MIN;
   }
 
+  const editingRow = editingBookingId ? bookingById.get(editingBookingId) || null : null;
+  const originalPartySize = editSnapshot?.partySize ?? editPartySize;
+  const reducedCount = originalPartySize - editPartySize;
+  const refundRequired = !!editingRow?.paid && reducedCount > 0;
+  const refundEstimateCents =
+    refundRequired && editingRow?.total_cents && originalPartySize > 0
+      ? Math.max(0, Math.round((editingRow.total_cents * reducedCount) / originalPartySize))
+      : null;
+  const stripeDashboardPaymentUrl = (paymentIntentId: string) => {
+    const isLocalhost = typeof window !== "undefined" && window.location.hostname.includes("localhost");
+    const base = isLocalhost ? "https://dashboard.stripe.com/test" : "https://dashboard.stripe.com";
+    return `${base}/payments/${paymentIntentId}`;
+  };
+
   const modalContent = editingBookingId ? (
     <div
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 px-4"
@@ -843,6 +971,17 @@ export default function BookingsTable() {
             className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
             disabled={editLoading}
           />
+          <label className="text-xs font-semibold text-zinc-600">
+            Group Size
+            <input
+              value={editPartySize}
+              onChange={(e) => setEditPartySize(Number(e.target.value || 0))}
+              type="number"
+              min="1"
+              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+              disabled={editLoading}
+            />
+          </label>
           <textarea
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
@@ -851,6 +990,26 @@ export default function BookingsTable() {
             disabled={editLoading}
           />
         </div>
+        {refundRequired ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Group size reduced by {reducedCount}.{" "}
+            {refundEstimateCents != null ? `Estimated refund: $${(refundEstimateCents / 100).toFixed(2)}.` : ""}
+            <div className="mt-2">
+              {staffRole === "admin" && editingRow?.payment_intent_id ? (
+                <a
+                  className="inline-flex rounded-lg border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-900"
+                  href={stripeDashboardPaymentUrl(editingRow.payment_intent_id)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Refund Required
+                </a>
+              ) : (
+                <span className="text-[11px] font-semibold text-amber-900">Refund requires admin access.</span>
+              )}
+            </div>
+          </div>
+        ) : null}
         <div className="mt-5 border-t border-zinc-200 pt-4">
           <div className="text-sm font-semibold text-zinc-900">Reschedule</div>
           <div className="mt-2 text-xs text-zinc-500">Choose a new date and time slot.</div>
@@ -873,7 +1032,8 @@ export default function BookingsTable() {
               const nowMin = editDateKey === todayKey ? nowMinutesNY() : -1;
               const slots: number[] = [];
               const lastStart = openWindow.closeMin - editDuration;
-              for (let m = openWindow.openMin; m <= lastStart; m += 30) slots.push(m);
+              const step = editDuration === 15 ? 15 : 30;
+              for (let m = openWindow.openMin; m <= lastStart; m += step) slots.push(m);
               if (editStartMin != null && !slots.includes(editStartMin)) {
                 slots.unshift(editStartMin);
               }
@@ -956,10 +1116,110 @@ export default function BookingsTable() {
     </div>
   ) : null;
   const modal = modalContent;
+  const refundModal = refundBooking ? (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        zIndex: 2147483647,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "520px",
+          background: "#ffffff",
+          borderRadius: "16px",
+          border: "1px solid #e5e7eb",
+          padding: "16px",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div className="text-sm font-semibold text-zinc-900">Issue Refund</div>
+        <div className="mt-1 text-xs text-zinc-500">
+          Booking for {refundBooking.customer_name || "Customer"} · $
+          {(refundBooking.total_cents / 100).toFixed(2)}
+        </div>
 
+        <div className="mt-4 space-y-3">
+          <label className="text-xs font-semibold text-zinc-600">
+            Refund Amount (leave blank for full refund)
+            <input
+              value={refundAmount}
+              onChange={(e) => setRefundAmount(e.target.value)}
+              type="number"
+              min="0"
+              step="0.01"
+              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+              placeholder="Full refund"
+            />
+          </label>
+          <label className="text-xs font-semibold text-zinc-600">
+            Reason (required)
+            <textarea
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              className="mt-1 min-h-[80px] w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+              placeholder="Reason for refund"
+            />
+          </label>
+
+          {staffRole !== "admin" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold text-zinc-600">
+                Manager Staff ID
+                <input
+                  value={refundManagerId}
+                  onChange={(e) => setRefundManagerId(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                  placeholder="Manager ID"
+                />
+              </label>
+              <label className="text-xs font-semibold text-zinc-600">
+                Manager PIN
+                <input
+                  value={refundManagerPin}
+                  onChange={(e) => setRefundManagerPin(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                  placeholder="4-digit PIN"
+                  maxLength={4}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {refundError ? <div className="text-xs font-semibold text-red-600">{refundError}</div> : null}
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={closeRefund}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submitRefund}
+            disabled={refundLoading}
+            className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {refundLoading ? "Processing..." : "Issue Refund"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
   return (
     <>
       {modal}
+      {refundModal}
       <div className={`relative z-0 rounded-2xl border border-zinc-200 bg-white p-4 ${editingBookingId ? "pointer-events-none" : ""}`}>
         <div className="mb-6 grid gap-6 lg:grid-cols-1">
         <div className="mx-auto w-full max-w-[640px]">
@@ -995,14 +1255,12 @@ export default function BookingsTable() {
             <div className="text-xs text-zinc-500">{prettyDate(selectedDateKey)}</div>
           </div>
           {!openWindow ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
-              Closed today (Mon–Wed).
-            </div>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">Closed today.</div>
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3" style={{ pointerEvents: "auto" }}>
               {resourceColumns.length === 0 ? (
                 <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-600">
-                  No active resources found. Add Axe bays and Duckpin lanes in the resources table.
+                  No active resources found. Add Axe bays, Duckpin lanes, and party areas in the resources table.
                 </div>
               ) : (
                 <>
@@ -1109,6 +1367,8 @@ export default function BookingsTable() {
                       const top = offsetFromOpen(startMin - openStartMin);
                       const height = Math.max(28, (endMin - startMin) * PX_PER_MIN);
                       if (top + height < 0 || top > scheduleMinutes * PX_PER_MIN) return null;
+                      const durationMinutes = endMin - startMin;
+                      const isCompact = durationMinutes <= 30;
 
                       const booking = bookingById.get(resv.booking_id);
                       const left = TIME_GUTTER + colIndex * RESOURCE_COL_WIDTH + 6;
@@ -1116,12 +1376,23 @@ export default function BookingsTable() {
                       const resourceLabel =
                         resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
                       const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
+                      const actionBarColor = ACTION_BAR_COLOR;
+                      const actionTextColor = "#111";
 
                       return (
                         <div
                           key={`${resv.booking_id}-${resv.resource_id}-${resv.start_ts}`}
                           className="absolute z-50 cursor-pointer rounded-xl p-3 text-xs text-white shadow-sm"
-                          style={{ top, height, left, width, position: "absolute", backgroundColor: bgColor, pointerEvents: "auto" }}
+                          style={{
+                            top,
+                            height,
+                            left,
+                            width,
+                            position: "absolute",
+                            backgroundColor: bgColor,
+                            pointerEvents: "auto",
+                            paddingTop: 26,
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             openEditForBooking(resv.booking_id);
@@ -1131,12 +1402,14 @@ export default function BookingsTable() {
                             openEditForBooking(resv.booking_id);
                           }}
                           onMouseEnter={() => {
+                            if (isCompact) setHoveredBookingId(resv.booking_id);
                             const note = (booking?.notes || "").trim();
                             if (note && !note.startsWith("Event Request:")) {
                               setHoveredNoteId(resv.booking_id);
                             }
                           }}
                           onMouseLeave={() => {
+                            if (hoveredBookingId === resv.booking_id) setHoveredBookingId(null);
                             if (hoveredNoteId === resv.booking_id) setHoveredNoteId(null);
                           }}
                           onTouchStart={(e) => {
@@ -1153,18 +1426,45 @@ export default function BookingsTable() {
                             }
                           }}
                         >
-                          <button
-                            type="button"
-                            aria-label="Edit booking"
-                            className="absolute right-2 top-2 z-20 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white underline"
-                            data-booking-id={resv.booking_id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEditForBooking(resv.booking_id);
-                            }}
+                          <div
+                            className="absolute left-0 right-0 top-0 z-20 flex h-[22px] items-center justify-end gap-2 rounded-t-xl px-2"
+                            style={{ backgroundColor: actionBarColor, color: actionTextColor }}
                           >
-                            Edit
-                          </button>
+                            <button
+                              type="button"
+                              aria-label="Open tab"
+                              className="rounded-full px-3 py-1 text-[10px] font-bold"
+                              style={{
+                                border: "1px solid rgba(0,0,0,0.35)",
+                                color: "#111",
+                                backgroundColor: "#fff",
+                              }}
+                              data-booking-id={resv.booking_id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openTabForBooking(resv.booking_id);
+                              }}
+                            >
+                              Tab
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Edit booking"
+                              className="rounded-full px-3 py-1 text-[10px] font-bold"
+                              style={{
+                                border: "1px solid rgba(0,0,0,0.35)",
+                                color: "#111",
+                                backgroundColor: "#fff",
+                              }}
+                              data-booking-id={resv.booking_id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditForBooking(resv.booking_id);
+                              }}
+                            >
+                              Edit
+                            </button>
+                          </div>
                           {hoveredNoteId === resv.booking_id &&
                           (booking?.notes || "").trim() &&
                           !(booking?.notes || "").trim().startsWith("Event Request:") ? (
@@ -1173,6 +1473,27 @@ export default function BookingsTable() {
                               style={{ color: "#000" }}
                             >
                               {booking?.notes?.trim()}
+                            </div>
+                          ) : null}
+                          {isCompact && hoveredBookingId === resv.booking_id ? (
+                            <div
+                              className="absolute left-2 right-2 z-30 rounded-lg border border-black/10 bg-white px-2 py-2 text-[11px] shadow-lg"
+                              style={{
+                                top: -8,
+                                transform: "translateY(-100%)",
+                                color: "#111",
+                                pointerEvents: "none",
+                              }}
+                            >
+                              <div className="font-semibold">
+                                {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                              </div>
+                              <div>{activityLabel(booking?.activity) || "Booking"}</div>
+                              <div className="text-[10px] text-zinc-600">{resourceLabel}</div>
+                              <div className="text-[10px] text-zinc-600">
+                                {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
+                              </div>
+                              <div className="text-[10px] text-zinc-600">{paymentLabel(booking?.status, booking?.paid)}</div>
                             </div>
                           ) : null}
                           <div className="font-semibold">
@@ -1277,6 +1598,24 @@ export default function BookingsTable() {
                   <td className="py-2 text-center">${(r.total_cents / 100).toFixed(2)}</td>
                   <td className="py-2 text-center">
                     <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openTabForBooking(r.id)}
+                        disabled={actionLoadingId === r.id}
+                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                      >
+                        Tab
+                      </button>
+                      {r.paid ? (
+                        <button
+                          type="button"
+                          onClick={() => openRefund(r)}
+                          disabled={actionLoadingId === r.id}
+                          className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                        >
+                          Refund
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => deleteBooking(r.id)}

@@ -2,10 +2,79 @@ import { NextResponse } from "next/server";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { createBookingWithResources } from "@/lib/server/bookingService";
-import { nyLocalDateKeyPlusMinutesToUTCISOString, totalCents } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, nyLocalDateKeyPlusMinutesToUTCISOString, totalCents } from "@/lib/bookingLogic";
 import { sendEventRequestAcceptedEmail } from "@/lib/server/mailer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+
+function normalizePartyAreas(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const item of input) {
+    const name = String(item || "").trim();
+    if (!name || seen.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+async function reservePartyAreasForBooking(
+  sb: ReturnType<typeof supabaseServer>,
+  bookingId: string,
+  partyAreas: string[],
+  startIso: string,
+  endIso: string
+) {
+  if (!partyAreas.length) return;
+  const { data: resources, error: resErr } = await sb
+    .from("resources")
+    .select("id,name,type,active")
+    .in("name", partyAreas)
+    .eq("type", "PARTY")
+    .or("active.eq.true,active.is.null");
+
+  if (resErr) {
+    console.error("party resources query error:", resErr);
+    throw new Error("Failed to load party areas");
+  }
+
+  const resourceIds = (resources || []).map((r: any) => r.id).filter(Boolean);
+  if (resourceIds.length !== partyAreas.length) {
+    throw new Error("Selected party area is unavailable");
+  }
+
+  const { data: reservations, error: resvErr } = await sb
+    .from("resource_reservations")
+    .select("resource_id, bookings(status)")
+    .in("resource_id", resourceIds)
+    .gt("end_ts", startIso)
+    .lt("start_ts", endIso);
+
+  if (resvErr) {
+    console.error("party reservations query error:", resvErr);
+    throw new Error("Failed to check party area availability");
+  }
+
+  const conflicts = (reservations || []).some((row: any) => row?.bookings?.status !== "CANCELLED");
+  if (conflicts) {
+    throw new Error("Selected party area is already booked");
+  }
+
+  const inserts = resourceIds.map((resourceId) => ({
+    booking_id: bookingId,
+    resource_id: resourceId,
+    start_ts: startIso,
+    end_ts: endIso,
+  }));
+  const { error: insertErr } = await sb.from("resource_reservations").insert(inserts);
+  if (insertErr) {
+    console.error("party reservations insert error:", insertErr);
+    throw new Error("Failed to reserve party area");
+  }
+}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -38,6 +107,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error || !requestRow) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
+
+    const partyAreas = normalizePartyAreas(requestRow.party_areas);
+    const partyAreaMinutes = Number(requestRow.party_area_minutes);
+    const normalizedPartyAreaMinutes =
+      partyAreas.length && Number.isFinite(partyAreaMinutes)
+        ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
+        : 0;
 
     if (action !== "reschedule" && requestRow.status && requestRow.status !== "PENDING") {
       return NextResponse.json({ error: "Request already processed" }, { status: 400 });
@@ -72,11 +148,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (action === "reschedule") {
       const dateKey = String(body?.dateKey || "");
       const startMin = Number(body?.startMin);
+      const partySizeOverride = Number(body?.partySize);
       if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
         return NextResponse.json({ error: "Invalid date" }, { status: 400 });
       }
       if (!Number.isFinite(startMin) || startMin < 0) {
         return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
+      }
+      const requestedPartySize = Number.isFinite(partySizeOverride)
+        ? partySizeOverride
+        : Number(requestRow.party_size || 1);
+      if (!Number.isFinite(requestedPartySize) || requestedPartySize < 1 || requestedPartySize > 100) {
+        return NextResponse.json({ error: "Invalid party size" }, { status: 400 });
       }
 
       const bookingIds = Array.isArray(requestRow.booking_ids) ? requestRow.booking_ids : [];
@@ -84,7 +167,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json({ error: "No bookings to reschedule" }, { status: 400 });
       }
 
-      const requestedPartySize = Number(requestRow.party_size || 1);
       const bookingPartySize = Math.min(24, Math.max(1, requestedPartySize));
       let offsetMinutes = 0;
 
@@ -100,6 +182,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const segmentEndMin = segmentStartMin + durationMinutes;
         const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentStartMin);
         const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentEndMin);
+        const partyAreaEndMin = segmentStartMin + (normalizedPartyAreaMinutes || durationMinutes);
+        const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
         const activityTotalCents = totalCents(activity as any, requestedPartySize, durationMinutes);
 
         const startHour = Math.floor(segmentStartMin / 60);
@@ -142,16 +226,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           await sb.from("resource_reservations").insert(inserts);
         }
 
+        if (partyAreas.length) {
+          try {
+            await reservePartyAreasForBooking(sb, bookingId, partyAreas, startIso, partyAreaEndIso);
+          } catch (err: any) {
+            return NextResponse.json({ error: err?.message || "Selected party area is unavailable" }, { status: 400 });
+          }
+        }
+
         offsetMinutes += durationMinutes;
       }
 
       const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
+      const totalCentsValue = activities.reduce((sum: number, a: any) => {
+        const activity = a?.activity as Activity | undefined;
+        const durationMinutes = Number(a?.durationMinutes);
+        if (!activity || ![30, 60, 120].includes(durationMinutes)) return sum;
+        return sum + totalCents(activity as any, requestedPartySize, durationMinutes);
+      }, 0);
       const { error: updateErr } = await sb
         .from("event_requests")
         .update({
           date_key: dateKey,
           start_min: startMin,
           duration_minutes: totalDuration,
+          party_size: requestedPartySize,
+          total_cents: totalCentsValue,
         })
         .eq("id", id);
 
@@ -182,6 +282,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const activityDb = activity === "Axe Throwing" ? "AXE" : "DUCKPIN";
       const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentStartMin);
       const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentEndMin);
+      const partyAreaEndMin = segmentStartMin + (normalizedPartyAreaMinutes || durationMinutes);
+      const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
       const activityTotalCents = totalCents(activity as any, requestedPartySize, durationMinutes);
       const startHour = Math.floor(segmentStartMin / 60);
       const startMinute = String(segmentStartMin % 60).padStart(2, "0");
@@ -237,6 +339,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         await sb.from("resource_reservations").insert(inserts);
       }
 
+      if (partyAreas.length) {
+        try {
+          await reservePartyAreasForBooking(sb, bookingId, partyAreas, startIso, partyAreaEndIso);
+        } catch (err: any) {
+          return NextResponse.json({ error: err?.message || "Selected party area is unavailable" }, { status: 400 });
+        }
+      }
+
       offsetMinutes += durationMinutes;
     }
 
@@ -245,6 +355,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const acceptedAt = new Date().toISOString();
+    const payInPerson = Boolean(requestRow.pay_in_person);
     const { error: updateErr } = await sb
       .from("event_requests")
       .update({
@@ -252,7 +363,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         accepted_at: acceptedAt,
         accepted_by: staff.id,
         booking_ids: bookingIds,
-        payment_status: "UNPAID",
+        payment_status: payInPerson ? "PAY_IN_PERSON" : "UNPAID",
       })
       .eq("id", id);
 

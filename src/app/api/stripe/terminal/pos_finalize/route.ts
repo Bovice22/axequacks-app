@@ -95,6 +95,17 @@ export async function POST(req: Request) {
       metadata: { ...intent.metadata, pos_sale_id: sale.id },
     });
 
+    const tabId = String(intent.metadata?.tab_id || "");
+    if (tabId) {
+      const { error: tabErr } = await sb
+        .from("booking_tabs")
+        .update({ status: "CLOSED" })
+        .eq("id", tabId);
+      if (tabErr) {
+        console.error("tab close error:", tabErr);
+      }
+    }
+
     return NextResponse.json({ ok: true, saleId: sale.id }, { status: 200 });
   } catch (e: any) {
     console.error("pos finalize error:", e);

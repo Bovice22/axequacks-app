@@ -10,7 +10,7 @@ export async function GET() {
     const sb = supabaseServer();
     const { data, error } = await sb
       .from("add_ons")
-      .select("id,name,description,price_cents,image_url,active,created_at")
+      .select("id,name,description,price_cents,image_url,category,active,created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     const description = String(body?.description || "").trim();
     const priceCents = Number(body?.price_cents ?? 0);
     const imageUrl = String(body?.image_url || "").trim();
+    const category = body?.category != null ? String(body.category).trim() : null;
     const active = !!body?.active;
 
     if (!name) return NextResponse.json({ error: "Missing name" }, { status: 400 });
@@ -47,9 +48,10 @@ export async function POST(req: Request) {
         description: description || null,
         price_cents: priceCents,
         image_url: imageUrl || null,
+        category: category || null,
         active,
       })
-      .select("id,name,description,price_cents,image_url,active,created_at")
+      .select("id,name,description,price_cents,image_url,category,active,created_at")
       .single();
 
     if (error) {
@@ -80,12 +82,13 @@ export async function PATCH(req: Request) {
     if (body?.description != null) updates.description = String(body.description).trim() || null;
     if (body?.price_cents != null) updates.price_cents = Number(body.price_cents);
     if (body?.image_url != null) updates.image_url = String(body.image_url).trim() || null;
+    if (body?.category != null) updates.category = String(body.category).trim() || null;
     if (body?.active != null) updates.active = !!body.active;
 
     const sb = supabaseServer();
     const query = sb.from("add_ons").update(updates);
     const { data, error } = await (id ? query.eq("id", id) : query.eq("name", name))
-      .select("id,name,description,price_cents,image_url,active,created_at")
+      .select("id,name,description,price_cents,image_url,category,active,created_at")
       .single();
 
     if (error) {

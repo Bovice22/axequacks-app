@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
-import { neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
 
 const ALLOWED_STATUSES = new Set(["CONFIRMED", "CANCELLED", "NO-SHOW", "COMPLETED"]);
 const ACTIVITY_DB = {
@@ -9,6 +9,7 @@ const ACTIVITY_DB = {
   "Duckpin Bowling": "DUCKPIN",
   "Combo Package": "COMBO",
 } as const;
+const PARTY_AREA_NAME_SET = new Set(PARTY_AREA_OPTIONS.map((option) => option.name));
 
 type RouteContext = { params: Promise<{ id: string }> | { id: string } };
 
@@ -341,6 +342,52 @@ export async function PATCH(req: Request, context: RouteContext) {
         return NextResponse.json({ error: "Selected time is unavailable" }, { status: 400 });
       }
 
+      const { data: existingPartyReservations } = await sb
+        .from("resource_reservations")
+        .select("resource_id,start_ts,end_ts, resources!inner(type,name)")
+        .eq("booking_id", id);
+      const partyResourceIds = (existingPartyReservations || [])
+        .filter((row: any) => {
+          const type = String(row?.resources?.type || "").toUpperCase();
+          const name = String(row?.resources?.name || "");
+          return type === "PARTY" || PARTY_AREA_NAME_SET.has(name);
+        })
+        .map((row: any) => row.resource_id)
+        .filter(Boolean);
+      const partyDurationMs = (existingPartyReservations || [])
+        .filter((row: any) => {
+          const type = String(row?.resources?.type || "").toUpperCase();
+          const name = String(row?.resources?.name || "");
+          return type === "PARTY" || PARTY_AREA_NAME_SET.has(name);
+        })
+        .map((row: any) => {
+          const start = new Date(row.start_ts as string).getTime();
+          const end = new Date(row.end_ts as string).getTime();
+          return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0;
+        })
+        .reduce((max: number, val: number) => Math.max(max, val), 0);
+      const partyEndIso =
+        partyDurationMs > 0 ? new Date(new Date(startIso).getTime() + partyDurationMs).toISOString() : endIso;
+
+      if (partyResourceIds.length) {
+        const { data: partyConflicts, error: partyErr } = await sb
+          .from("resource_reservations")
+          .select("resource_id, bookings(status)")
+          .in("resource_id", partyResourceIds)
+          .neq("booking_id", id)
+          .gt("end_ts", startIso)
+          .lt("start_ts", endIso);
+
+        if (partyErr) {
+          return NextResponse.json({ error: "Failed to check party area availability" }, { status: 500 });
+        }
+
+        const hasConflict = (partyConflicts || []).some((row: any) => row?.bookings?.status !== "CANCELLED");
+        if (hasConflict) {
+          return NextResponse.json({ error: "Selected party area is unavailable" }, { status: 400 });
+        }
+      }
+
       await sb.from("resource_reservations").delete().eq("booking_id", id);
       const inserts: Array<{ booking_id: string; resource_id: string; start_ts: string; end_ts: string }> = [];
       for (const rid of axeResources || []) {
@@ -348,6 +395,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       }
       for (const rid of duckResources || []) {
         inserts.push({ booking_id: id, resource_id: rid, start_ts: duckStartIso, end_ts: duckEndIso });
+      }
+      for (const rid of partyResourceIds) {
+        inserts.push({ booking_id: id, resource_id: rid, start_ts: startIso, end_ts: partyEndIso });
       }
       if (inserts.length) {
         const { error: insertErr } = await sb.from("resource_reservations").insert(inserts);

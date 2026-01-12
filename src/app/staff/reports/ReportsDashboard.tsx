@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { duckpinLanesForParty } from "@/lib/bookingLogic";
+import { comboAxePersonCents, comboDuckpinLaneCents, duckpinLanesForParty } from "@/lib/bookingLogic";
 
 type BookingRow = {
   id: string;
@@ -11,6 +11,23 @@ type BookingRow = {
   total_cents: number;
   start_ts: string;
   status?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  paid?: boolean | null;
+  payment_intent_id?: string | null;
+};
+type CashSaleRow = {
+  activity: string | null;
+  line_total_cents: number;
+  created_at: string;
+  name?: string | null;
+  quantity?: number | null;
+};
+type PosItemRow = {
+  name: string | null;
+  quantity: number | null;
+  line_total_cents: number | null;
+  created_at: string;
 };
 
 type ViewMode = "day" | "week" | "month" | "year";
@@ -78,11 +95,15 @@ function normalizeActivity(activity: string) {
 export default function ReportsDashboard() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [allBookings, setAllBookings] = useState<BookingRow[]>([]);
+  const [cashSales, setCashSales] = useState<CashSaleRow[]>([]);
+  const [allCashSales, setAllCashSales] = useState<CashSaleRow[]>([]);
+  const [posItems, setPosItems] = useState<PosItemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const startInputRef = useRef<HTMLInputElement | null>(null);
   const endInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -111,6 +132,8 @@ export default function ReportsDashboard() {
       return;
     }
     setBookings(json.bookings || []);
+    setCashSales(json.cashSales || []);
+    setPosItems(json.posItems || []);
     setLoading(false);
   }
 
@@ -119,6 +142,7 @@ export default function ReportsDashboard() {
     const json = await res.json().catch(() => ({}));
     if (res.ok) {
       setAllBookings(json.bookings || []);
+      setAllCashSales(json.cashSales || []);
     }
   }
 
@@ -127,22 +151,159 @@ export default function ReportsDashboard() {
     loadAllBookings();
   }, []);
 
-  const filtered = useMemo(() => {
-    return bookings.filter((b) => b.status !== "CANCELLED");
-  }, [bookings]);
+  useEffect(() => {
+    if (!startDate && !endDate) return;
+    loadBookings();
+  }, [startDate, endDate]);
 
-  const revenueByActivity = useMemo(() => {
+  const cashAsBookings = useMemo<BookingRow[]>(() => {
+    return cashSales.map((row, idx) => ({
+      id: `cash-${idx}-${row.created_at}`,
+      activity: row.activity || "Other",
+      party_size: 0,
+      duration_minutes: 0,
+      total_cents: row.line_total_cents || 0,
+      start_ts: row.created_at,
+      status: "PAID",
+      customer_name: "Walk-in Cash",
+    }));
+  }, [cashSales]);
+
+  const filtered = useMemo(() => {
+    return [...bookings, ...cashAsBookings].filter((b) => b.status !== "CANCELLED");
+  }, [bookings, cashAsBookings]);
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of filtered) {
+      set.add(normalizeActivity(row.activity));
+    }
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
+  }, [filtered]);
+
+  const filteredByCategory = useMemo(() => {
+    if (!selectedCategories.length) return filtered;
+    return filtered.filter((row) => selectedCategories.includes(normalizeActivity(row.activity)));
+  }, [filtered, selectedCategories]);
+
+  const { revenueByActivity, comboBreakdown } = useMemo(() => {
     const map = new Map<string, number>();
-    for (const b of filtered) {
+    let comboAxeCents = 0;
+    let comboDuckpinCents = 0;
+
+    for (const b of filteredByCategory) {
+      const activity = normalizeActivity(b.activity);
+      if (activity === "Combo Package") {
+        const totalMinutes = b.duration_minutes || 0;
+        const axeMinutes = totalMinutes > 0 ? Math.max(Math.floor(totalMinutes / 2), 15) : 60;
+        const duckpinMinutes = totalMinutes > 0 ? Math.max(totalMinutes - axeMinutes, 15) : 60;
+        const lanes = duckpinLanesForParty(b.party_size || 0);
+        const duckpinPortion = lanes * comboDuckpinLaneCents(duckpinMinutes) * 100;
+        const axePortion = (b.party_size || 0) * comboAxePersonCents(axeMinutes) * 100;
+        comboAxeCents += axePortion;
+        comboDuckpinCents += duckpinPortion;
+        map.set("Axe Throwing", (map.get("Axe Throwing") || 0) + axePortion);
+        map.set("Duckpin Bowling", (map.get("Duckpin Bowling") || 0) + duckpinPortion);
+        continue;
+      }
+      map.set(activity, (map.get(activity) || 0) + (b.total_cents || 0));
+    }
+
+    const entries = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    return {
+      revenueByActivity: entries,
+      comboBreakdown: { axe: comboAxeCents, duckpin: comboDuckpinCents },
+    };
+  }, [filteredByCategory]);
+
+  const revenueByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of filteredByCategory) {
       const key = normalizeActivity(b.activity);
       map.set(key, (map.get(key) || 0) + (b.total_cents || 0));
     }
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-  }, [filtered]);
+  }, [filteredByCategory]);
+
+  const paymentBreakdown = useMemo(() => {
+    const paidBookings = bookings.filter((row) => (row.status ?? "CONFIRMED") !== "CANCELLED" && row.paid === true);
+    let cardBookingCents = 0;
+    let cashBookingCents = 0;
+    for (const row of paidBookings) {
+      const cents = Number(row.total_cents || 0);
+      if (row.payment_intent_id) {
+        cardBookingCents += cents;
+      } else {
+        cashBookingCents += cents;
+      }
+    }
+
+    let posCardCents = 0;
+    for (const row of posItems) {
+      posCardCents += Number(row.line_total_cents || 0);
+    }
+
+    let posCashCents = 0;
+    for (const row of cashSales) {
+      posCashCents += Number(row.line_total_cents || 0);
+    }
+
+    const cardTotal = cardBookingCents + posCardCents;
+    const cashTotal = cashBookingCents + posCashCents;
+    const grandTotal = cardTotal + cashTotal;
+    const cardPct = grandTotal ? Math.round((cardTotal / grandTotal) * 1000) / 10 : 0;
+    const cashPct = grandTotal ? Math.round((cashTotal / grandTotal) * 1000) / 10 : 0;
+
+    return {
+      cardBookingCents,
+      cashBookingCents,
+      posCardCents,
+      posCashCents,
+      cardTotal,
+      cashTotal,
+      grandTotal,
+      cardPct,
+      cashPct,
+    };
+  }, [bookings, posItems, cashSales]);
+
+  const totalRevenueCents = useMemo(() => {
+    return filteredByCategory.reduce((sum, row) => sum + (row.total_cents || 0), 0);
+  }, [filteredByCategory]);
+
+  const itemsSold = useMemo(() => {
+    const map = new Map<string, { quantity: number; revenue: number }>();
+    for (const row of posItems) {
+      const name = (row.name || "").trim();
+      if (!name) continue;
+      const qty = Number(row.quantity || 0);
+      const revenue = Number(row.line_total_cents || 0);
+      if (!qty && !revenue) continue;
+      const existing = map.get(name) || { quantity: 0, revenue: 0 };
+      existing.quantity += qty;
+      existing.revenue += revenue;
+      map.set(name, existing);
+    }
+    for (const row of cashSales) {
+      const name = (row.name || "").trim();
+      if (!name) continue;
+      const qty = Number(row.quantity || 0);
+      const revenue = Number(row.line_total_cents || 0);
+      if (!qty && !revenue) continue;
+      const existing = map.get(name) || { quantity: 0, revenue: 0 };
+      existing.quantity += qty;
+      existing.revenue += revenue;
+      map.set(name, existing);
+    }
+    return Array.from(map.entries())
+      .map(([name, values]) => ({ name, ...values }))
+      .filter((row) => row.quantity > 0)
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [posItems, cashSales]);
 
   const revenueByPeriod = useMemo(() => {
     const map = new Map<string, { label: string; sortKey: number; total: number }>();
-    for (const b of filtered) {
+    for (const b of filteredByCategory) {
       if (!b.start_ts) continue;
       const date = new Date(b.start_ts);
       if (Number.isNaN(date.getTime())) continue;
@@ -172,11 +333,11 @@ export default function ReportsDashboard() {
       }
     }
     return Array.from(map.values()).sort((a, b) => a.sortKey - b.sortKey);
-  }, [filtered, viewMode]);
+  }, [filteredByCategory, viewMode]);
 
   const duckpinRevenueCents = useMemo(() => {
     let total = 0;
-    for (const b of filtered) {
+    for (const b of filteredByCategory) {
       const activity = normalizeActivity(b.activity);
       if (activity === "Duckpin Bowling") {
         total += b.total_cents || 0;
@@ -186,33 +347,22 @@ export default function ReportsDashboard() {
       }
     }
     return total;
-  }, [filtered]);
+  }, [filteredByCategory]);
 
-  const rickShareCents = Math.round(duckpinRevenueCents * 0.25);
-  const jasonShareCents = Math.min(Math.round(duckpinRevenueCents * 0.75), INVESTMENT_CENTS);
+  const rickShareCents = Math.round(duckpinRevenueCents * 0.5);
+  const jasonShareCents = Math.min(Math.round(duckpinRevenueCents * 0.5), INVESTMENT_CENTS);
 
-  const payoffAmountCents = useMemo(() => {
-    let total = 0;
-    for (const b of allBookings.filter((row) => row.status !== "CANCELLED")) {
-      const activity = normalizeActivity(b.activity);
-      if (activity === "Duckpin Bowling") {
-        total += b.total_cents || 0;
-      } else if (activity === "Combo Package") {
-        const lanes = duckpinLanesForParty(b.party_size || 0);
-        total += lanes * 40 * 100;
-      }
-    }
-    const totalJasonShare = Math.min(Math.round(total * 0.75), INVESTMENT_CENTS);
-    return Math.max(INVESTMENT_CENTS - totalJasonShare, 0);
-  }, [allBookings]);
+  const payoffAmountCents = Math.max(INVESTMENT_CENTS - duckpinRevenueCents, 0);
+  const [paymentLogNote, setPaymentLogNote] = useState("");
+  const [paymentLogEntries, setPaymentLogEntries] = useState<string[]>([]);
 
   function downloadSummaryCsv() {
     const lines: string[] = [];
     lines.push("Metric,Value");
     lines.push(`Duckpin Bowling Revenue,${formatMoney(duckpinRevenueCents)}`);
-    lines.push(`Rick's Share (25%),${formatMoney(rickShareCents)}`);
-    lines.push(`Jason's Share (75%),${formatMoney(jasonShareCents)}`);
-    lines.push(`Pay-Off Amount,${formatMoney(payoffAmountCents)}`);
+    lines.push(`Rick's Share (50%),${formatMoney(rickShareCents)}`);
+    lines.push(`Jason's Share (50%),${formatMoney(jasonShareCents)}`);
+    lines.push(`Total Pay-Off Amount,${formatMoney(payoffAmountCents)}`);
     lines.push("");
     lines.push("Revenue by Activity,Amount");
     for (const [name, cents] of revenueByActivity) {
@@ -237,7 +387,7 @@ export default function ReportsDashboard() {
     <div className="space-y-6">
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="text-sm font-extrabold text-zinc-900">Filters</div>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-5">
           <label className="text-xs font-semibold text-zinc-600">
             Start Date
             <div className="mt-1 flex items-center gap-2">
@@ -293,14 +443,45 @@ export default function ReportsDashboard() {
               <option value="year">Year</option>
             </select>
           </label>
+          <div className="md:col-span-2">
+            <div className="text-xs font-semibold text-zinc-600">Categories</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {categoryOptions.map((option) => {
+                const selected = selectedCategories.includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() =>
+                      setSelectedCategories((prev) =>
+                        prev.includes(option) ? prev.filter((item) => item !== option) : [...prev, option]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                      selected
+                        ? "border-black bg-black text-white"
+                        : "border-zinc-200 bg-white text-zinc-700"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+              {!categoryOptions.length ? (
+                <div className="text-xs text-zinc-400">No categories yet.</div>
+              ) : null}
+            </div>
+            {selectedCategories.length ? (
+              <button
+                type="button"
+                onClick={() => setSelectedCategories([])}
+                className="mt-2 text-xs font-semibold text-zinc-500 underline"
+              >
+                Clear category filters
+              </button>
+            ) : null}
+          </div>
           <div className="flex items-end gap-2">
-            <button
-              type="button"
-              onClick={loadBookings}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold leading-none"
-            >
-              <span className="block leading-none">Apply</span>
-            </button>
             <button
               type="button"
               onClick={() => {
@@ -309,7 +490,7 @@ export default function ReportsDashboard() {
                 if (endDate) params.set("end", endDate);
                 window.location.href = `/api/staff/reports/bookings.csv?${params.toString()}`;
               }}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold leading-none"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-black bg-black px-3 text-sm font-semibold leading-none text-white"
             >
               <span className="block leading-none">Download</span>
             </button>
@@ -326,6 +507,45 @@ export default function ReportsDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 md:col-span-2">
+          <div className="text-sm font-extrabold text-zinc-900">Payments Breakdown</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+          ) : (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                <div className="text-xs font-semibold text-zinc-500">Card Payments</div>
+                <div className="mt-1 text-lg font-extrabold text-zinc-900">
+                  {formatMoney(paymentBreakdown.cardTotal)}
+                </div>
+                <div className="text-xs text-zinc-500">{paymentBreakdown.cardPct}% of total</div>
+                <div className="mt-2 text-xs text-zinc-600">
+                  Bookings: {formatMoney(paymentBreakdown.cardBookingCents)}
+                </div>
+                <div className="text-xs text-zinc-600">
+                  POS: {formatMoney(paymentBreakdown.posCardCents)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                <div className="text-xs font-semibold text-zinc-500">Cash Payments</div>
+                <div className="mt-1 text-lg font-extrabold text-zinc-900">
+                  {formatMoney(paymentBreakdown.cashTotal)}
+                </div>
+                <div className="text-xs text-zinc-500">{paymentBreakdown.cashPct}% of total</div>
+                <div className="mt-2 text-xs text-zinc-600">
+                  Bookings: {formatMoney(paymentBreakdown.cashBookingCents)}
+                </div>
+                <div className="text-xs text-zinc-600">
+                  POS: {formatMoney(paymentBreakdown.posCashCents)}
+                </div>
+              </div>
+              <div className="text-xs font-semibold text-zinc-600 md:col-span-2">
+                Total processed: {formatMoney(paymentBreakdown.grandTotal)}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="text-sm font-extrabold text-zinc-900">Revenue Share (Duckpin Only)</div>
           {loading ? (
@@ -333,9 +553,39 @@ export default function ReportsDashboard() {
           ) : (
             <div className="mt-3 space-y-2 text-sm">
               <div>Duckpin Bowling Revenue: {formatMoney(duckpinRevenueCents)}</div>
-              <div>Rick's Share (25%): {formatMoney(rickShareCents)}</div>
-              <div>Jason's Share (75%): {formatMoney(jasonShareCents)}</div>
-              <div>Pay-Off Amount: {formatMoney(payoffAmountCents)}</div>
+              <div>Rick's Share (50%): {formatMoney(rickShareCents)}</div>
+              <div>Jason's Share (50%): {formatMoney(jasonShareCents)}</div>
+              <div>Total Pay-Off Amount: {formatMoney(payoffAmountCents)}</div>
+              <div className="pt-2">
+                <div className="text-xs font-semibold text-zinc-500">Payment Log</div>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    value={paymentLogNote}
+                    onChange={(e) => setPaymentLogNote(e.target.value)}
+                    placeholder="Paid $2,000 1/12/26"
+                    className="h-9 flex-1 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const note = paymentLogNote.trim();
+                      if (!note) return;
+                      setPaymentLogEntries((prev) => [note, ...prev]);
+                      setPaymentLogNote("");
+                    }}
+                    className="h-9 rounded-lg border border-zinc-900 px-3 text-xs font-semibold text-zinc-900 hover:bg-zinc-50"
+                  >
+                    Save
+                  </button>
+                </div>
+                {paymentLogEntries.length ? (
+                  <div className="mt-2 space-y-1 text-xs text-zinc-600">
+                    {paymentLogEntries.map((entry, idx) => (
+                      <div key={`${entry}-${idx}`}>• {entry}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           )}
         </div>
@@ -345,17 +595,169 @@ export default function ReportsDashboard() {
           {loading ? (
             <div className="mt-3 text-sm text-zinc-600">Loading…</div>
           ) : (
-            <div className="mt-3 space-y-2 text-sm">
-              {revenueByActivity.map(([name, cents]) => (
-                <div key={name} className="flex items-center gap-2">
-                  <span>{name}</span>
-                  <span>- {formatMoney(cents)}</span>
-                </div>
-              ))}
+            <div className="mt-3 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="text-center text-zinc-600">
+                  <tr>
+                    <th className="px-3 py-2">Activity</th>
+                    <th className="px-3 py-2">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-zinc-100 font-semibold text-zinc-900">
+                    <td className="px-3 py-2 text-center">Total Revenue</td>
+                    <td className="px-3 py-2 text-center">{formatMoney(totalRevenueCents)}</td>
+                  </tr>
+                  {revenueByActivity.map(([name, cents]) => (
+                    <tr key={name} className="border-t border-zinc-100">
+                      <td className="px-3 py-2 text-center">{name}</td>
+                      <td className="px-3 py-2 text-center">{formatMoney(cents)}</td>
+                    </tr>
+                  ))}
+                  {!revenueByActivity.length ? (
+                    <tr>
+                      <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={2}>
+                        No activity revenue in this range.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="text-sm font-extrabold text-zinc-900">Combo Package Breakdown</div>
+        {loading ? (
+          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+        ) : (
+          <div className="mt-3 space-y-2 text-sm">
+            <div>Combo Axe Throwing Revenue: {formatMoney(comboBreakdown.axe)}</div>
+            <div>Combo Duckpin Bowling Revenue: {formatMoney(comboBreakdown.duckpin)}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="text-sm font-extrabold text-zinc-900">Category Summary</div>
+        {loading ? (
+          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+        ) : (
+          <div className="mt-3 overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-center text-zinc-600">
+                <tr>
+                  <th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2">Revenue</th>
+                </tr>
+              </thead>
+                <tbody>
+                  <tr className="border-t border-zinc-100 font-semibold text-zinc-900">
+                    <td className="px-3 py-2 text-center">Total Revenue</td>
+                    <td className="px-3 py-2 text-center">{formatMoney(totalRevenueCents)}</td>
+                  </tr>
+                  {revenueByCategory.map(([name, cents]) => (
+                    <tr key={name} className="border-t border-zinc-100">
+                      <td className="px-3 py-2 text-center">{name}</td>
+                      <td className="px-3 py-2 text-center">{formatMoney(cents)}</td>
+                  </tr>
+                ))}
+                {!revenueByCategory.length ? (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={2}>
+                      No category revenue in this range.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="text-sm font-extrabold text-zinc-900">POS Items Sold</div>
+        {loading ? (
+          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+        ) : (
+          <div className="mt-3 overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-center text-zinc-600">
+                <tr>
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Quantity Sold</th>
+                  <th className="px-3 py-2">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemsSold.map((row) => (
+                  <tr key={row.name} className="border-t border-zinc-100">
+                    <td className="px-3 py-2 text-center">{row.name}</td>
+                    <td className="px-3 py-2 text-center">{row.quantity}</td>
+                    <td className="px-3 py-2 text-center">{formatMoney(row.revenue)}</td>
+                  </tr>
+                ))}
+                {!itemsSold.length ? (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={3}>
+                      No POS items sold in this range.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {selectedCategories.length ? (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">Transactions (Selected Categories)</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+          ) : (
+            <div className="mt-3 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="text-center text-zinc-600">
+                  <tr>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Activity</th>
+                    <th className="px-3 py-2">Customer</th>
+                    <th className="px-3 py-2">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredByCategory.map((row) => {
+                    const date = row.start_ts ? new Date(row.start_ts) : null;
+                    const dateLabel = date && !Number.isNaN(date.getTime())
+                      ? date.toLocaleDateString("en-US")
+                      : "—";
+                    const customerLabel =
+                      row.customer_name?.trim() || row.customer_email?.trim() || (row.id.startsWith("cash-") ? "Walk-in" : "—");
+                    return (
+                      <tr key={row.id} className="border-t border-zinc-100">
+                        <td className="px-3 py-2 text-center">{dateLabel}</td>
+                        <td className="px-3 py-2 text-center">{normalizeActivity(row.activity)}</td>
+                        <td className="px-3 py-2 text-center">{customerLabel}</td>
+                        <td className="px-3 py-2 text-center">{formatMoney(row.total_cents || 0)}</td>
+                      </tr>
+                    );
+                  })}
+                  {!filteredByCategory.length ? (
+                    <tr>
+                      <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={4}>
+                        No transactions for the selected categories.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="text-sm font-extrabold text-zinc-900">

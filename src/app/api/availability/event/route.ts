@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { comboSegments, neededResources as neededResourcesStandard, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
+import {
+  PARTY_AREA_OPTIONS,
+  comboSegments,
+  neededResources as neededResourcesStandard,
+  nyLocalDateKeyPlusMinutesToUTCISOString,
+} from "@/lib/bookingLogic";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 type ResourceType = "AXE" | "DUCKPIN";
 type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
+const PARTY_AREA_OPTIONS_SAFE = Array.isArray(PARTY_AREA_OPTIONS) ? PARTY_AREA_OPTIONS : [];
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS_SAFE.filter((option) => option.visible).map((option) => option.name));
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -55,10 +62,21 @@ export async function POST(req: Request) {
     const partySize = Number(body?.partySize);
     const dateKey = String(body?.dateKey || "");
     const durationMinutes = Number(body?.durationMinutes);
+    const partyAreaMinutes = Number(body?.partyAreaMinutes);
     const openStartMin = Number(body?.openStartMin);
     const openEndMin = Number(body?.openEndMin);
     const slotIntervalMin = Number(body?.slotIntervalMin);
     const order = (body?.order as ComboOrder | undefined) ?? "DUCKPIN_FIRST";
+    const ignoreBlackouts = Boolean(body?.ignoreBlackouts);
+    const partyAreas = Array.isArray(body?.partyAreas)
+      ? Array.from(
+          new Set(
+            body.partyAreas
+              .map((item: any) => String(item || "").trim())
+              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(name))
+          )
+        )
+      : [];
 
     if (!activity || !["Axe Throwing", "Duckpin Bowling", "Combo Package"].includes(activity)) {
       return NextResponse.json({ error: "Invalid activity" }, { status: 400 });
@@ -69,13 +87,13 @@ export async function POST(req: Request) {
     if (!Number.isFinite(partySize) || partySize < 1) {
       return NextResponse.json({ error: "Invalid partySize" }, { status: 400 });
     }
-    if (![30, 60, 120].includes(durationMinutes)) {
+    if (![15, 30, 60, 120].includes(durationMinutes)) {
       return NextResponse.json({ error: "Invalid durationMinutes" }, { status: 400 });
     }
     if (!Number.isFinite(openStartMin) || !Number.isFinite(openEndMin) || openEndMin <= openStartMin) {
       return NextResponse.json({ error: "Invalid time window" }, { status: 400 });
     }
-    if (![30, 60].includes(slotIntervalMin)) {
+    if (![15, 30, 60].includes(slotIntervalMin)) {
       return NextResponse.json({ error: "Invalid slotIntervalMin" }, { status: 400 });
     }
     if (!["DUCKPIN_FIRST", "AXE_FIRST"].includes(order)) {
@@ -86,8 +104,13 @@ export async function POST(req: Request) {
     const needs = neededResources(activity, partySize);
     let needsAxe = buyout ? 0 : needs.AXE;
     let needsDuck = buyout ? 0 : needs.DUCKPIN;
+    const partyDurationMinutes =
+      partyAreas.length && Number.isFinite(partyAreaMinutes)
+        ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
+        : 0;
+    const bookingWindowMinutes = Math.max(durationMinutes, partyDurationMinutes);
 
-    if (!buyout && needsAxe <= 0 && needsDuck <= 0) {
+    if (!buyout && needsAxe <= 0 && needsDuck <= 0 && partyAreas.length === 0) {
       return NextResponse.json({ blockedStartMins: [] }, { status: 200 });
     }
 
@@ -121,10 +144,31 @@ export async function POST(req: Request) {
       if (t === "AXE" || t === "DUCKPIN") activeByType[t].push(r.id);
     }
 
+    let partyResourceIds: string[] = [];
+    const partyIntervalsById = new Map<string, Array<[number, number]>>();
+    if (partyAreas.length) {
+      const { data: partyResources, error: partyErr } = await supabase
+        .from("resources")
+        .select("id,name,type,active")
+        .in("name", partyAreas)
+        .eq("type", "PARTY")
+        .or("active.eq.true,active.is.null");
+
+      if (partyErr) {
+        console.error("party resources query error:", partyErr);
+        return NextResponse.json({ error: "Database error (party resources)" }, { status: 500 });
+      }
+
+      partyResourceIds = (partyResources || []).map((r: any) => r.id).filter(Boolean);
+      if (partyResourceIds.length !== partyAreas.length) {
+        return NextResponse.json({ error: "Selected party area is unavailable" }, { status: 400 });
+      }
+    }
+
     if (!buyout) {
       if ((needsAxe > 0 && activeByType.AXE.length === 0) || (needsDuck > 0 && activeByType.DUCKPIN.length === 0)) {
         const blockedAll: number[] = [];
-        const lastStart = openEndMin - durationMinutes;
+        const lastStart = openEndMin - bookingWindowMinutes;
         for (let t = openStartMin; t <= lastStart; t += slotIntervalMin) blockedAll.push(t);
         return NextResponse.json({ blockedStartMins: blockedAll }, { status: 200 });
       }
@@ -137,11 +181,13 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: blackouts, error: blackoutErr } = await supabase
-      .from("blackout_rules")
-      .select("start_min,end_min,activity")
-      .eq("date_key", dateKey)
-      .in("activity", [activityDB, "ALL"]);
+    const { data: blackouts, error: blackoutErr } = ignoreBlackouts
+      ? { data: [], error: null }
+      : await supabase
+          .from("blackout_rules")
+          .select("start_min,end_min,activity")
+          .eq("date_key", dateKey)
+          .in("activity", [activityDB, "ALL"]);
 
     if (blackoutErr) {
       console.error("blackout rules query error:", blackoutErr);
@@ -162,6 +208,32 @@ export async function POST(req: Request) {
 
     const openStartISO = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, openStartMin);
     const openEndISO = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, openEndMin);
+
+    if (partyResourceIds.length) {
+      const { data: partyReservations, error: partyResvErr } = await supabase
+        .from("resource_reservations")
+        .select("resource_id,start_ts,end_ts, bookings(status)")
+        .gt("end_ts", openStartISO)
+        .lt("start_ts", openEndISO)
+        .in("resource_id", partyResourceIds);
+
+      if (partyResvErr) {
+        console.error("party reservations query error:", partyResvErr);
+        return NextResponse.json({ error: "Database error (party reservations)" }, { status: 500 });
+      }
+
+      for (const row of partyReservations || []) {
+        const status = (row as any)?.bookings?.status as string | null | undefined;
+        if (status === "CANCELLED") continue;
+        const resourceId = row.resource_id as string;
+        const s = new Date(row.start_ts as string).getTime();
+        const e = new Date(row.end_ts as string).getTime();
+        if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+        const list = partyIntervalsById.get(resourceId) || [];
+        list.push([s, e]);
+        partyIntervalsById.set(resourceId, list);
+      }
+    }
 
     const resourceIds = [...activeByType.AXE, ...activeByType.DUCKPIN];
     let reservations: any[] = [];
@@ -242,6 +314,19 @@ export async function POST(req: Request) {
       return free;
     };
 
+    const partyBlocked = (slotStartISO: string, slotEndISO: string) => {
+      if (!partyResourceIds.length) return false;
+      const slotS = new Date(slotStartISO).getTime();
+      const slotE = new Date(slotEndISO).getTime();
+      for (const resourceId of partyResourceIds) {
+        const intervals = partyIntervalsById.get(resourceId) || [];
+        for (const [s, e] of intervals) {
+          if (overlaps(slotS, slotE, s, e)) return true;
+        }
+      }
+      return false;
+    };
+
     const bookingUsage = (type: ResourceType, slotStartISO: string, slotEndISO: string) => {
       if (!bookingList.length) return 0;
       const slotS = new Date(slotStartISO).getTime();
@@ -286,7 +371,7 @@ export async function POST(req: Request) {
     };
 
     const blockedStartMins: number[] = [];
-    const lastStart = openEndMin - durationMinutes;
+    const lastStart = openEndMin - bookingWindowMinutes;
 
     for (let startMin = openStartMin; startMin <= lastStart; startMin += slotIntervalMin) {
       let blocked = false;
@@ -335,6 +420,16 @@ export async function POST(req: Request) {
             if (freeDuck < needsDuck) blocked = true;
           }
         }
+      }
+
+      if (!blocked && partyResourceIds.length) {
+        const partyWindowMinutes = partyDurationMinutes || durationMinutes;
+        const partyStartISO = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, slotStartMin);
+        const partyEndISO = nyLocalDateKeyPlusMinutesToUTCISOString(
+          dateKey,
+          Math.min(openEndMin, startMin + partyWindowMinutes + bufferAfter)
+        );
+        if (partyBlocked(partyStartISO, partyEndISO)) blocked = true;
       }
 
       if (blocked) blockedStartMins.push(startMin);

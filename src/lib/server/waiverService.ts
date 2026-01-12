@@ -22,9 +22,14 @@ function needsWaiver(activity: ActivityUI | string) {
   return false;
 }
 
-function buildWaiverUrl(token: string) {
+function buildWaiverUrl(token: string, bookingId?: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return `${base}/waiver?token=${encodeURIComponent(token)}`;
+  const url = new URL("/waiver", base);
+  url.searchParams.set("token", token);
+  if (bookingId) {
+    url.searchParams.set("booking_id", bookingId);
+  }
+  return url.toString();
 }
 
 export async function ensureWaiverForBooking(params: {
@@ -121,7 +126,7 @@ export async function ensureWaiverForBooking(params: {
     token = data.token as string;
   }
 
-  const waiverUrl = buildWaiverUrl(token as string);
+  const waiverUrl = buildWaiverUrl(token as string, params.bookingId);
   if (!existingRequest?.sent_at && requestId) {
     await sb
       .from("waiver_requests")

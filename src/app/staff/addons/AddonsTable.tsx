@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Addon = {
   id: string;
@@ -8,11 +8,13 @@ type Addon = {
   description: string | null;
   price_cents: number;
   image_url?: string | null;
+  category?: string | null;
   active: boolean;
   created_at: string;
 };
 
 export default function AddonsTable() {
+  const categoryOptions = ["Concessions", "Beverages", "Alcohol", "Merchandise"];
   const [rows, setRows] = useState<Addon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -22,6 +24,7 @@ export default function AddonsTable() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [category, setCategory] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [active, setActive] = useState(true);
@@ -31,10 +34,12 @@ export default function AddonsTable() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [editCategory, setEditCategory] = useState("");
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
+  const editSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!imageFile) {
@@ -73,6 +78,11 @@ export default function AddonsTable() {
   useEffect(() => {
     loadAddons();
   }, []);
+
+  useEffect(() => {
+    if (!editId || !editSectionRef.current) return;
+    editSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [editId]);
 
   async function uploadImage() {
     if (!imageFile) return "";
@@ -119,6 +129,7 @@ export default function AddonsTable() {
           description,
           price_cents: priceCents,
           image_url: imageUrl,
+          category: category || null,
           active,
         }),
       });
@@ -130,6 +141,7 @@ export default function AddonsTable() {
       setName("");
       setDescription("");
       setPrice("");
+      setCategory("");
       setImageFile(null);
       setActive(true);
       await loadAddons();
@@ -201,6 +213,7 @@ export default function AddonsTable() {
     setEditName(addon.name);
     setEditDescription(addon.description || "");
     setEditPrice((addon.price_cents / 100).toFixed(2));
+    setEditCategory(addon.category || "");
     setEditImageFile(null);
     setEditImagePreview(null);
     setEditError("");
@@ -227,6 +240,7 @@ export default function AddonsTable() {
           description: editDescription,
           price_cents: priceCents,
           image_url: imageUrl || undefined,
+          category: editCategory || null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -249,7 +263,7 @@ export default function AddonsTable() {
     <div className="space-y-6">
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="text-sm font-extrabold text-zinc-900">Create Product</div>
-        <form className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-5" onSubmit={createAddon}>
+        <form className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-6" onSubmit={createAddon}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -273,6 +287,18 @@ export default function AddonsTable() {
             className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
             required
           />
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+          >
+            <option value="">Category</option>
+            {categoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           <label className="flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-700">
             <input
               type="file"
@@ -291,7 +317,7 @@ export default function AddonsTable() {
             Active
           </label>
           {imagePreview ? (
-            <div className="flex items-center gap-3 md:col-span-5">
+            <div className="flex items-center gap-3 md:col-span-6">
               <img
                 src={imagePreview}
                 alt="Preview"
@@ -303,11 +329,11 @@ export default function AddonsTable() {
               <span className="text-xs text-zinc-500">Preview</span>
             </div>
           ) : null}
-          {error ? <div className="text-sm text-red-600 md:col-span-5">{error}</div> : null}
+          {error ? <div className="text-sm text-red-600 md:col-span-6">{error}</div> : null}
           <button
             type="submit"
             disabled={saving}
-            className="h-10 rounded-xl bg-zinc-900 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 md:col-span-5"
+            className="h-10 rounded-xl bg-zinc-900 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 md:col-span-6"
           >
             {saving ? "Saving..." : "Add Product"}
           </button>
@@ -336,6 +362,7 @@ export default function AddonsTable() {
                   <th className="px-2 py-2 text-center">Product</th>
                   <th className="px-2 py-2 text-center">Description</th>
                   <th className="px-2 py-2 text-center">Price</th>
+                  <th className="px-2 py-2 text-center">Category</th>
                   <th className="px-2 py-2 text-center">Active</th>
                   <th className="px-2 py-2 text-center">Actions</th>
                 </tr>
@@ -367,6 +394,7 @@ export default function AddonsTable() {
                     </td>
                     <td className="px-2 py-2 text-center">{r.description || "—"}</td>
                     <td className="px-2 py-2 text-center">${(r.price_cents / 100).toFixed(2)}</td>
+                    <td className="px-2 py-2 text-center">{r.category || "—"}</td>
                     <td className="px-2 py-2 text-center">{r.active ? "Yes" : "No"}</td>
                     <td className="px-2 py-2 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -411,9 +439,9 @@ export default function AddonsTable() {
       </div>
 
       {editId ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div ref={editSectionRef} className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="mb-3 text-sm font-extrabold text-zinc-900">Edit Product</div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
             <input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -437,6 +465,18 @@ export default function AddonsTable() {
               className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
               required
             />
+            <select
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value)}
+              className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            >
+              <option value="">Category</option>
+              {categoryOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
             <label className="flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-700">
               <input
                 type="file"

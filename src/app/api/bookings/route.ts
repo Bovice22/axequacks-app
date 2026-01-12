@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { neededResources, nyLocalDateKeyPlusMinutesToUTCISOString, totalCents } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
 import { ensureCustomerAndLinkBooking, type BookingInput } from "@/lib/server/bookingService";
 
 /**
@@ -12,6 +12,7 @@ type ActivityUI = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
  * DB constraint uses these values
  */
 type ActivityDB = "AXE" | "DUCKPIN" | "COMBO";
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,6 +36,73 @@ function mapActivityToDB(activity: ActivityUI): ActivityDB {
 function computeNeeds(activity: ActivityUI, partySize: number) {
   const needs = neededResources(activity, partySize);
   return { axeBays: needs.AXE, lanes: needs.DUCKPIN };
+}
+
+function normalizePartyAreas(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const item of input) {
+    const name = String(item || "").trim();
+    if (!name || seen.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+async function reservePartyAreas(
+  sb: ReturnType<typeof supabaseAdmin>,
+  bookingId: string,
+  partyAreas: string[],
+  startTsUtc: string,
+  endTsUtc: string
+) {
+  if (!partyAreas.length) return;
+
+  const { data: resources, error: resErr } = await sb
+    .from("resources")
+    .select("id,name,type,active")
+    .in("name", partyAreas)
+    .eq("type", "PARTY")
+    .or("active.eq.true,active.is.null");
+
+  if (resErr) {
+    throw new Error(resErr.message || "Failed to load party areas");
+  }
+
+  const resourceIds = (resources || []).map((r: any) => r.id).filter(Boolean);
+  if (resourceIds.length !== partyAreas.length) {
+    throw new Error("Selected party area is unavailable");
+  }
+
+  const { data: reservations, error: resvErr } = await sb
+    .from("resource_reservations")
+    .select("resource_id, bookings(status)")
+    .in("resource_id", resourceIds)
+    .gt("end_ts", startTsUtc)
+    .lt("start_ts", endTsUtc);
+
+  if (resvErr) {
+    throw new Error(resvErr.message || "Failed to check party area availability");
+  }
+
+  const conflicts = (reservations || []).some((row: any) => row?.bookings?.status !== "CANCELLED");
+  if (conflicts) {
+    throw new Error("Selected party area is already booked");
+  }
+
+  const inserts = resourceIds.map((resourceId: string) => ({
+    booking_id: bookingId,
+    resource_id: resourceId,
+    start_ts: startTsUtc,
+    end_ts: endTsUtc,
+  }));
+
+  const { error: insertErr } = await sb.from("resource_reservations").insert(inserts);
+  if (insertErr) {
+    throw new Error(insertErr.message || "Failed to reserve party area");
+  }
 }
 
 function parseStartTimeToMinutes(startTime: string) {
@@ -91,7 +159,11 @@ export async function POST(req: Request) {
     const date = String(body.date || "");
     const startTime = String(body.startTime || "");
     const durationMinutes = Number(body.durationMinutes);
+    const comboAxeMinutes = Number(body.comboAxeMinutes);
+    const comboDuckpinMinutes = Number(body.comboDuckpinMinutes);
     const order = String(body.comboOrder || body.order || "DUCKPIN_FIRST");
+    const partyAreas = normalizePartyAreas(body.partyAreas);
+    const partyAreaMinutes = Number(body.partyAreaMinutes);
 
     const customerName = String(body.customerName || "").trim();
     const customerEmail = String(body.customerEmail || "").trim();
@@ -131,8 +203,19 @@ export async function POST(req: Request) {
       }
     }
 
-    // If combo, you can accept 120 here, but we enforce it for safety
-    const effectiveDuration = activityUI === "Combo Package" ? 120 : durationMinutes;
+    const isCombo = activityUI === "Combo Package";
+    const validDurations = [15, 30, 60, 120];
+    const validComboDurations = [30, 60, 120];
+    if (isCombo) {
+      if (!validComboDurations.includes(comboAxeMinutes) || !validComboDurations.includes(comboDuckpinMinutes)) {
+        return NextResponse.json({ error: "Invalid combo durations" }, { status: 400 });
+      }
+    } else if (!validDurations.includes(durationMinutes)) {
+      return NextResponse.json({ error: "Invalid durationMinutes" }, { status: 400 });
+    }
+
+    const comboTotalMinutes = isCombo ? comboAxeMinutes + comboDuckpinMinutes : 0;
+    const effectiveDuration = isCombo ? comboTotalMinutes : durationMinutes;
 
     const endMin = startMin + effectiveDuration;
     if (!Number.isFinite(endMin) || endMin <= startMin) {
@@ -144,29 +227,43 @@ export async function POST(req: Request) {
 
     const startTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, startMin);
     const endTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, endMin);
+    const partyAreaEndMin = normalizedPartyAreaMinutes ? startMin + normalizedPartyAreaMinutes : endMin;
+    const partyAreaEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, partyAreaEndMin);
 
-    const totalCentsValue = totalCents(activityUI, partySize, durationMinutes);
+    const normalizedPartyAreaMinutes =
+      partyAreas.length && Number.isFinite(partyAreaMinutes)
+        ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
+        : 0;
+    if (partyAreas.length && !normalizedPartyAreaMinutes) {
+      return NextResponse.json({ error: "Invalid party area duration" }, { status: 400 });
+    }
+    const totalCentsValue =
+      totalCents(activityUI, partySize, durationMinutes, {
+        axeMinutes: comboAxeMinutes,
+        duckpinMinutes: comboDuckpinMinutes,
+      }) + partyAreaCostCents(normalizedPartyAreaMinutes, partyAreas.length);
 
     if (activityUI === "Combo Package") {
-      // Force 2 hours total for combo booking window
-      const comboDuration = 120;
+      const comboDuration = comboTotalMinutes;
       const comboEndMin = startMin + comboDuration;
 
       const comboStartTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, startMin);
       const comboEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, comboEndMin);
 
-      // Segment windows: 60 + 60
+      const isDuckpinFirst = order === "DUCKPIN_FIRST";
+
+      const firstSegDuration = isDuckpinFirst ? comboDuckpinMinutes : comboAxeMinutes;
+      const secondSegDuration = isDuckpinFirst ? comboAxeMinutes : comboDuckpinMinutes;
+
       const firstSegStartMin = startMin;
-      const firstSegEndMin = startMin + 60;
-      const secondSegStartMin = startMin + 60;
-      const secondSegEndMin = startMin + 120;
+      const firstSegEndMin = firstSegStartMin + firstSegDuration;
+      const secondSegStartMin = firstSegEndMin;
+      const secondSegEndMin = secondSegStartMin + secondSegDuration;
 
       const firstSegStartUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, firstSegStartMin);
       const firstSegEndUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, firstSegEndMin);
       const secondSegStartUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, secondSegStartMin);
       const secondSegEndUtc = nyLocalDateKeyPlusMinutesToUTCISOString(date, secondSegEndMin);
-
-      const isDuckpinFirst = order === "DUCKPIN_FIRST";
 
       const duckpinStart = isDuckpinFirst ? firstSegStartUtc : secondSegStartUtc;
       const duckpinEnd = isDuckpinFirst ? firstSegEndUtc : secondSegEndUtc;
@@ -215,18 +312,21 @@ export async function POST(req: Request) {
         partySize,
         dateKey: date,
         startMin,
-        durationMinutes: durationMinutes,
+        durationMinutes: comboDuration,
+        comboAxeMinutes,
+        comboDuckpinMinutes,
         customerName,
         customerEmail,
         customerPhone,
         comboOrder: order === "DUCKPIN_FIRST" || order === "AXE_FIRST" ? (order as any) : undefined,
       };
-      if (bookingId) {
-        await ensureCustomerAndLinkBooking(customerInput, bookingId as string);
-      }
-
-      return NextResponse.json({ ok: true, bookingId, needs }, { status: 200 });
+    if (bookingId) {
+      await ensureCustomerAndLinkBooking(customerInput, bookingId as string);
+      await reservePartyAreas(sb, bookingId as string, partyAreas, comboStartTsUtc, partyAreaEndTsUtc);
     }
+
+    return NextResponse.json({ ok: true, bookingId, needs }, { status: 200 });
+  }
 
     // Non-combo (AXE / DUCKPIN) stays the same:
     const { data: bookingId, error } = await sb.rpc("create_booking_with_resources", {
@@ -268,6 +368,7 @@ export async function POST(req: Request) {
     };
     if (bookingId) {
       await ensureCustomerAndLinkBooking(customerInput, bookingId as string);
+      await reservePartyAreas(sb, bookingId as string, partyAreas, startTsUtc, partyAreaEndTsUtc);
     }
 
     return NextResponse.json({ ok: true, bookingId, needs }, { status: 200 });

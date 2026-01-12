@@ -40,18 +40,26 @@ export async function GET(req: Request) {
       "status",
       "created_at",
     ];
+    const selectWithPayment = [...baseFields, "payment_intent_id", "notes", "paid"].join(",");
     const selectWithPaid = [...baseFields, "notes", "paid"].join(",");
 
     let data: any[] | null = null;
     let error: any = null;
     ({ data, error } = await sb
       .from("bookings")
-      .select(selectWithPaid)
+      .select(selectWithPayment)
       .order("start_ts", { ascending })
       .limit(200));
 
     const errorMessage = String(error?.message || "").toLowerCase();
-    if (error && (errorMessage.includes("paid") || errorMessage.includes("notes"))) {
+    if (error && errorMessage.includes("payment_intent")) {
+      ({ data, error } = await sb
+        .from("bookings")
+        .select(selectWithPaid)
+        .order("start_ts", { ascending })
+        .limit(200));
+    }
+    if (error && (String(error?.message || "").toLowerCase().includes("paid") || String(error?.message || "").toLowerCase().includes("notes"))) {
       ({ data, error } = await sb
         .from("bookings")
         .select(baseFields.join(","))

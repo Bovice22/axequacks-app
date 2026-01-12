@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 
 type ValidateBody = {
   code?: string;
   amount_cents?: number;
+  customer_email?: string;
 };
-
-function normalizeCode(code: string) {
-  return code.trim().toUpperCase().replace(/\s+/g, "");
-}
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as ValidateBody;
     const codeRaw = String(body?.code || "");
-    const code = normalizeCode(codeRaw);
+    const code = normalizePromoCode(codeRaw);
     const amountCents = Number(body?.amount_cents ?? NaN);
+    const customerEmail = normalizeEmail(String(body?.customer_email || ""));
 
     if (!code) return NextResponse.json({ error: "Missing promo code." }, { status: 400 });
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
@@ -46,6 +45,12 @@ export async function POST(req: Request) {
     }
     if (data.max_redemptions != null && data.redemptions_count >= data.max_redemptions) {
       return NextResponse.json({ error: "Promo has reached its limit." }, { status: 400 });
+    }
+    if (customerEmail) {
+      const alreadyUsed = await hasPromoRedemption(code, customerEmail);
+      if (alreadyUsed) {
+        return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
+      }
     }
 
     let amountOffCents = 0;

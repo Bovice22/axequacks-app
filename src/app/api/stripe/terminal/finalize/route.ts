@@ -1,9 +1,32 @@
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/server/stripe";
+import { PARTY_AREA_OPTIONS, type PartyAreaName } from "@/lib/bookingLogic";
+import { getStripeTerminal } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
+import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
+
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+
+function parsePartyAreas(value?: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const unique = new Set<string>();
+    const names: PartyAreaName[] = [];
+    for (const item of parsed) {
+      const name = String(item || "").trim();
+      if (!name || unique.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
+      unique.add(name);
+      names.push(name as PartyAreaName);
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}
 
 function parseBookingMetadata(metadata: Record<string, string | null | undefined>) {
   const activity = metadata.activity as ActivityUI | undefined;
@@ -11,6 +34,10 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
   const dateKey = String(metadata.date_key || "");
   const startMin = Number(metadata.start_min);
   const durationMinutes = Number(metadata.duration_minutes);
+  const comboAxeMinutes = Number(metadata.combo_axe_minutes);
+  const comboDuckpinMinutes = Number(metadata.combo_duckpin_minutes);
+  const partyAreas = parsePartyAreas(metadata.party_areas);
+  const partyAreaMinutes = Number(metadata.party_area_minutes);
   const customerName = String(metadata.customer_name || "");
   const customerEmail = String(metadata.customer_email || "");
   const customerPhone = String(metadata.customer_phone || "");
@@ -30,6 +57,10 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
     dateKey,
     startMin,
     durationMinutes,
+    comboAxeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
+    comboDuckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
+    partyAreas,
+    partyAreaMinutes: Number.isFinite(partyAreaMinutes) ? partyAreaMinutes : undefined,
     customerName,
     customerEmail,
     customerPhone,
@@ -46,13 +77,22 @@ async function markBookingPaid(bookingId: string) {
   }
 }
 
+async function markBookingPaymentIntent(bookingId: string, paymentIntentId: string) {
+  if (!paymentIntentId) return;
+  const sb = supabaseServer();
+  const { error } = await sb.from("bookings").update({ payment_intent_id: paymentIntentId }).eq("id", bookingId);
+  if (error) {
+    console.error("booking payment intent update error:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const paymentIntentId = String(body?.payment_intent_id || "");
     if (!paymentIntentId) return NextResponse.json({ error: "Missing payment_intent_id" }, { status: 400 });
 
-    const stripe = getStripe();
+    const stripe = getStripeTerminal();
     const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     const bookingInput = parseBookingMetadata(intent.metadata || {});
@@ -61,6 +101,15 @@ export async function POST(req: Request) {
       const bookingId = intent.metadata.booking_id as string;
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
+      await markBookingPaymentIntent(bookingId, paymentIntentId);
+      if (bookingInput && intent.metadata?.promo_code) {
+        await recordPromoRedemption({
+          promoCode: String(intent.metadata.promo_code || ""),
+          customerEmail: bookingInput.customerEmail,
+          customerId,
+          bookingId,
+        });
+      }
       if ((intent.metadata as any)?.confirmation_email_sent !== "true") {
         if (bookingInput) {
           let waiverUrl = "";
@@ -108,6 +157,15 @@ export async function POST(req: Request) {
     try {
       const result = await createBookingWithResources(bookingInput);
       await markBookingPaid(result.bookingId);
+      await markBookingPaymentIntent(result.bookingId, paymentIntentId);
+      if (intent.metadata?.promo_code) {
+        await recordPromoRedemption({
+          promoCode: String(intent.metadata.promo_code || ""),
+          customerEmail: bookingInput.customerEmail,
+          customerId: result.customerId,
+          bookingId: result.bookingId,
+        });
+      }
       await stripe.paymentIntents.update(paymentIntentId, {
         metadata: {
           ...intent.metadata,

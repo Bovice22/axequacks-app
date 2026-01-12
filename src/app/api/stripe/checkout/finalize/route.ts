@@ -1,9 +1,32 @@
 import { NextResponse } from "next/server";
+import { PARTY_AREA_OPTIONS, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripe } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { createClient } from "@supabase/supabase-js";
+import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
+
+const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+
+function parsePartyAreas(value?: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const unique = new Set<string>();
+    const names: PartyAreaName[] = [];
+    for (const item of parsed) {
+      const name = String(item || "").trim();
+      if (!name || unique.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
+      unique.add(name);
+      names.push(name as PartyAreaName);
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}
 
 function parseBookingMetadata(metadata: Record<string, string | null | undefined>) {
   const activity = metadata.activity as ActivityUI | undefined;
@@ -13,6 +36,8 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
   const durationMinutes = Number(metadata.duration_minutes);
   const comboAxeMinutes = Number(metadata.combo_axe_minutes);
   const comboDuckpinMinutes = Number(metadata.combo_duckpin_minutes);
+  const partyAreas = parsePartyAreas(metadata.party_areas);
+  const partyAreaMinutes = Number(metadata.party_area_minutes);
   const customerName = String(metadata.customer_name || "");
   const customerEmail = String(metadata.customer_email || "");
   const customerPhone = String(metadata.customer_phone || "");
@@ -34,6 +59,8 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
     durationMinutes,
     comboAxeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
     comboDuckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
+    partyAreas,
+    partyAreaMinutes: Number.isFinite(partyAreaMinutes) ? partyAreaMinutes : undefined,
     customerName,
     customerEmail,
     customerPhone,
@@ -133,6 +160,14 @@ export async function POST(req: Request) {
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
       await markBookingPaymentIntent(bookingId, paymentIntentId);
+      if (bookingInput && intent.metadata?.promo_code) {
+        await recordPromoRedemption({
+          promoCode: String(intent.metadata.promo_code || ""),
+          customerEmail: bookingInput.customerEmail,
+          customerId,
+          bookingId,
+        });
+      }
       const resources = await fetchBookingResources(bookingId);
       let waiverUrl = "";
       if (bookingInput) {
@@ -190,6 +225,14 @@ export async function POST(req: Request) {
     const result = await createBookingWithResources(bookingInput);
     await markBookingPaid(result.bookingId);
     await markBookingPaymentIntent(result.bookingId, paymentIntentId);
+    if (intent.metadata?.promo_code) {
+      await recordPromoRedemption({
+        promoCode: String(intent.metadata.promo_code || ""),
+        customerEmail: bookingInput.customerEmail,
+        customerId: result.customerId,
+        bookingId: result.bookingId,
+      });
+    }
     await stripe.paymentIntents.update(paymentIntentId, {
       metadata: {
         ...intent.metadata,

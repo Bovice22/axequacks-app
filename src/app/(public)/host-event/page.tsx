@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { totalCents } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, type PartyAreaName, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
 
 const ACTIVITIES = ["Axe Throwing", "Duckpin Bowling"] as const;
 const DURATIONS = [30, 60, 120] as const;
@@ -176,6 +176,8 @@ export default function HostEventPage() {
   const [selectedActivities, setSelectedActivities] = useState<Array<(typeof ACTIVITIES)[number]>>([]);
   const [durationByActivity, setDurationByActivity] = useState<Record<string, number>>({});
   const [partySize, setPartySize] = useState(10);
+  const [partyAreas, setPartyAreas] = useState<PartyAreaName[]>([]);
+  const [partyAreaMinutes, setPartyAreaMinutes] = useState<number | null>(null);
   const [dateKey, setDateKey] = useState(() => todayDateKeyNY());
   const [startMin, setStartMin] = useState<number | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
@@ -186,10 +188,26 @@ export default function HostEventPage() {
   const [contactPhone, setContactPhone] = useState("");
   const [requestStatus, setRequestStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [requestMessage, setRequestMessage] = useState("");
+  const [payInPerson, setPayInPerson] = useState(false);
+
+  useEffect(() => {
+    if (!partyAreas.length) {
+      if (partyAreaMinutes != null) setPartyAreaMinutes(null);
+      return;
+    }
+    if (partyAreaMinutes == null || !Number.isFinite(partyAreaMinutes)) {
+      setPartyAreaMinutes(60);
+      return;
+    }
+    const clamped = Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60));
+    if (clamped !== partyAreaMinutes) setPartyAreaMinutes(clamped);
+  }, [partyAreas, partyAreaMinutes]);
 
   const totalDuration = useMemo(() => {
     return selectedActivities.reduce((sum, a) => sum + (durationByActivity[a] || 0), 0);
   }, [selectedActivities, durationByActivity]);
+  const partyAreaDuration = partyAreas.length ? partyAreaMinutes ?? 60 : 0;
+  const bookingWindowMinutes = Math.max(totalDuration, partyAreaDuration);
 
   const openWindow = useMemo(() => getOpenWindowForDateKey(dateKey), [dateKey]);
 
@@ -212,16 +230,18 @@ export default function HostEventPage() {
         if (!durationMinutes) {
           return Promise.resolve({ activity, blockedStartMins: [] as number[] });
         }
-        return fetch("/api/availability/event", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            activity,
-            partySize,
-            dateKey,
-            durationMinutes,
-            openStartMin: openWindow.openMin,
+          return fetch("/api/availability/event", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              activity,
+              partySize,
+              partyAreas,
+              partyAreaMinutes: partyAreas.length ? partyAreaMinutes ?? 60 : undefined,
+              dateKey,
+              durationMinutes,
+              openStartMin: openWindow.openMin,
             openEndMin: openWindow.closeMin,
             slotIntervalMin: 30,
           }),
@@ -261,11 +281,11 @@ export default function HostEventPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [selectedActivities, durationByActivity, partySize, dateKey, openWindow, totalDuration]);
+  }, [selectedActivities, durationByActivity, partySize, partyAreas, partyAreaMinutes, dateKey, openWindow, totalDuration]);
 
   const timeSlots = useMemo(() => {
-    if (!openWindow || totalDuration <= 0) return [];
-    const lastStart = openWindow.closeMin - totalDuration;
+    if (!openWindow || bookingWindowMinutes <= 0) return [];
+    const lastStart = openWindow.closeMin - bookingWindowMinutes;
     if (lastStart < openWindow.openMin) return [];
     const slots: number[] = [];
     const nowMin = dateKey === todayDateKeyNY() ? nowMinutesNY() : -1;
@@ -289,30 +309,32 @@ export default function HostEventPage() {
       if (allowed) slots.push(m);
     }
     return slots;
-  }, [openWindow, totalDuration, selectedActivities, durationByActivity, blockedByActivity, dateKey]);
+  }, [openWindow, bookingWindowMinutes, selectedActivities, durationByActivity, blockedByActivity, dateKey]);
 
   const summaryTotalCents = useMemo(() => {
-    return selectedActivities.reduce((sum, a) => {
+    const activityTotal = selectedActivities.reduce((sum, a) => {
       const duration = durationByActivity[a] || 0;
       if (!duration) return sum;
       return sum + totalCents(a, partySize, duration);
     }, 0);
-  }, [selectedActivities, durationByActivity, partySize]);
+    return activityTotal + partyAreaCostCents(partyAreaDuration, partyAreas.length);
+  }, [selectedActivities, durationByActivity, partySize, partyAreaDuration, partyAreas.length]);
 
   const summary = useMemo(() => {
     const startLabel = startMin == null ? "—" : minutesToLabel(startMin);
-    const endLabel = startMin == null ? "—" : minutesToLabel(startMin + totalDuration);
+    const endLabel = startMin == null ? "—" : minutesToLabel(startMin + bookingWindowMinutes);
     return {
       date: dateKey ? prettyDate(dateKey) : "—",
       time: startMin == null ? "—" : `${startLabel} – ${endLabel}`,
     };
-  }, [dateKey, startMin, totalDuration]);
+  }, [dateKey, startMin, bookingWindowMinutes]);
 
   const canSubmitRequest =
     selectedActivities.length > 0 &&
     totalDuration > 0 &&
     !!dateKey &&
     startMin != null &&
+    !(partyAreas.length && !partyAreaDuration) &&
     contactName.trim().length > 0 &&
     contactEmail.trim().length > 0;
 
@@ -330,6 +352,8 @@ export default function HostEventPage() {
           customerEmail: contactEmail.trim(),
           customerPhone: contactPhone.trim(),
           partySize,
+          partyAreas,
+          partyAreaMinutes: partyAreas.length ? partyAreaMinutes ?? 60 : undefined,
           dateKey,
           startMin,
           durationMinutes: totalDuration,
@@ -338,6 +362,7 @@ export default function HostEventPage() {
             durationMinutes: durationByActivity[activity] || 0,
           })),
           totalCents: summaryTotalCents,
+          payInPerson,
         }),
       });
 
@@ -351,12 +376,15 @@ export default function HostEventPage() {
       setSelectedActivities([]);
       setDurationByActivity({});
       setPartySize(10);
+      setPartyAreas([]);
+      setPartyAreaMinutes(null);
       setDateKey(todayDateKeyNY());
       setStartMin(null);
       setContactName("");
       setContactEmail("");
       setContactPhone("");
       setBlockedByActivity({});
+      setPayInPerson(false);
     } catch (err: any) {
       setRequestStatus("error");
       setRequestMessage(err?.message || "Unable to submit request.");
@@ -463,7 +491,66 @@ export default function HostEventPage() {
           </section>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-5">
-            <div className="text-sm font-semibold text-zinc-800">2) Group Size</div>
+            <div className="text-sm font-semibold text-zinc-800">2) Private Party Areas (Optional)</div>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {PARTY_AREA_OPTIONS.filter((area) => area.visible).map((area) => {
+                const selected = partyAreas.includes(area.name);
+                return (
+                  <button
+                    key={area.key}
+                    type="button"
+                    onClick={() => {
+                      const nextAreas = selected
+                        ? partyAreas.filter((name) => name !== area.name)
+                        : [...partyAreas, area.name];
+                      setPartyAreas(nextAreas);
+                      setPartyAreaMinutes((prev) => (nextAreas.length ? prev ?? 60 : null));
+                      setStartMin(null);
+                    }}
+                    className={`rounded-2xl border px-4 py-2 text-sm font-extrabold transition ${
+                      selected
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {area.name}
+                  </button>
+                );
+              })}
+            </div>
+            {partyAreas.length > 0 ? (
+              <div className="mt-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Duration</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[60, 120, 180, 240, 300, 360, 420, 480].map((mins) => {
+                    const selected = partyAreaMinutes === mins;
+                    return (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => {
+                          setPartyAreaMinutes(mins);
+                          setStartMin(null);
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                          selected
+                            ? "border-zinc-900 bg-zinc-900 text-white"
+                            : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                      >
+                        {mins / 60} hr
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">$50 per hour • up to 8 hours</div>
+              </div>
+            ) : null}
+            <div className="mt-2 text-xs text-zinc-500">Add-on only. Event requests can proceed without a party area.</div>
+          </section>
+
+          <section className="rounded-2xl border border-zinc-200 bg-white p-5">
+            <div className="text-sm font-semibold text-zinc-800">3) Group Size</div>
             <div className="mt-3 flex items-center gap-3">
               <button
                 type="button"
@@ -495,7 +582,7 @@ export default function HostEventPage() {
           </section>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-5">
-            <div className="text-sm font-semibold text-zinc-800">3) Contact Info</div>
+            <div className="text-sm font-semibold text-zinc-800">4) Contact Info</div>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <input
                 type="text"
@@ -519,10 +606,19 @@ export default function HostEventPage() {
                 className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 md:col-span-2"
               />
             </div>
+            <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-zinc-700">
+              <input
+                type="checkbox"
+                checked={payInPerson}
+                onChange={(e) => setPayInPerson(e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+              />
+              Pay in person (reserve now, pay at the venue)
+            </label>
           </section>
 
           <section className="rounded-2xl border border-zinc-200 bg-white p-5">
-            <div className="text-sm font-semibold text-zinc-800">4) Date & Time</div>
+            <div className="text-sm font-semibold text-zinc-800">5) Date & Time</div>
             <div className="mt-4 flex flex-col gap-4 md:flex-row">
               <div>
                 <MonthCalendar selectedDateKey={dateKey} onSelectDateKey={(dk) => {
@@ -558,7 +654,7 @@ export default function HostEventPage() {
                                   : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
                               }`}
                             >
-                              {timeRangeLabel(m, totalDuration)}
+                              {timeRangeLabel(m, bookingWindowMinutes)}
                             </button>
                           );
                         })}
@@ -590,13 +686,25 @@ export default function HostEventPage() {
                     <div className="font-semibold text-zinc-900">{summary.date}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-zinc-500">Time</div>
-                    <div className="font-semibold text-zinc-900">{summary.time}</div>
+                          <div className="text-[10px] text-zinc-500">Time</div>
+                          <div className="font-semibold text-zinc-900">{summary.time}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-zinc-500">Group Size</div>
-                    <div className="font-semibold text-zinc-900">{partySize} guests</div>
+                          <div className="text-[10px] text-zinc-500">Group Size</div>
+                          <div className="font-semibold text-zinc-900">{partySize} guests</div>
                   </div>
+                  <div>
+                    <div className="text-[10px] text-zinc-500">Party Areas</div>
+                    <div className="font-semibold text-zinc-900">
+                      {partyAreas.length ? partyAreas.join(", ") : "None"}
+                    </div>
+                  </div>
+                  {partyAreas.length ? (
+                    <div>
+                      <div className="text-[10px] text-zinc-500">Party Area Duration</div>
+                      <div className="font-semibold text-zinc-900">{partyAreaDuration / 60} hr</div>
+                    </div>
+                  ) : null}
                   <div>
                     <div className="text-[10px] text-zinc-500">Activities</div>
                     {selectedActivities.length === 0 ? (
