@@ -9,7 +9,7 @@ const ACTIVITY_DB = {
   "Duckpin Bowling": "DUCKPIN",
   "Combo Package": "COMBO",
 } as const;
-const PARTY_AREA_NAME_SET = new Set(PARTY_AREA_OPTIONS.map((option) => option.name));
+const PARTY_AREA_NAME_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.map((option) => option.name));
 
 type RouteContext = { params: Promise<{ id: string }> | { id: string } };
 
