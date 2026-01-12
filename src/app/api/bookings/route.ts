@@ -12,7 +12,9 @@ type ActivityUI = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
  * DB constraint uses these values
  */
 type ActivityDB = "AXE" | "DUCKPIN" | "COMBO";
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name)
+);
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
