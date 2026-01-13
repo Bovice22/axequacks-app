@@ -21,6 +21,18 @@ type EmailBookingInput = {
   paid?: boolean;
 };
 
+type PaymentLinkEmailInput = {
+  activity: ActivityUI;
+  partySize: number;
+  dateKey: string;
+  startMin: number;
+  durationMinutes: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  totalCents?: number;
+};
+
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -503,7 +515,7 @@ export async function sendEventPaymentLinkEmail(
 }
 
 export async function sendBookingPaymentLinkEmail(
-  input: EmailBookingInput & { paymentUrl: string }
+  input: PaymentLinkEmailInput & { paymentUrl: string }
 ): Promise<{ sent: boolean; id?: string; skippedReason?: string }> {
   const apiKey = process.env.RESEND_API_KEY || "";
   const fromEmail = process.env.RESEND_FROM_EMAIL || "";
