@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { PARTY_AREA_OPTIONS, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
+import {
+  PARTY_AREA_OPTIONS,
+  canonicalPartyAreaName,
+  normalizePartyAreaName,
+  partyAreaCostCents,
+  totalCents,
+} from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
@@ -39,15 +45,18 @@ function validate(body: TerminalIntentRequest) {
   return null;
 }
 
-const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
+);
 
 function normalizePartyAreas(input?: string[]) {
   if (!Array.isArray(input)) return [];
   return Array.from(
     new Set(
       input
-        .map((item) => String(item || "").trim())
-        .filter((name) => PARTY_AREA_BOOKABLE_SET.has(name))
+        .map((item) => canonicalPartyAreaName(String(item || "")))
+        .filter((name): name is string => !!name)
+        .filter((name) => PARTY_AREA_BOOKABLE_SET.has(normalizePartyAreaName(name)))
     )
   );
 }

@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
+import {
+  PARTY_AREA_OPTIONS,
+  canonicalPartyAreaName,
+  normalizePartyAreaName,
+  neededResources,
+  nyLocalDateKeyPlusMinutesToUTCISOString,
+} from "@/lib/bookingLogic";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 type ResourceType = "AXE" | "DUCKPIN";
 type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
 const PARTY_AREA_OPTIONS_SAFE = Array.isArray(PARTY_AREA_OPTIONS) ? PARTY_AREA_OPTIONS : [];
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
-  PARTY_AREA_OPTIONS_SAFE.filter((option) => option.visible).map((option) => option.name)
+  PARTY_AREA_OPTIONS_SAFE.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
 );
 
 function getSupabaseAdmin() {
@@ -54,8 +60,9 @@ export async function POST(req: Request) {
       ? Array.from(
           new Set(
             body.partyAreas
-              .map((item: any) => String(item || "").trim())
-              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(name))
+              .map((item: any) => canonicalPartyAreaName(String(item || "")))
+              .filter((name: string | null): name is string => !!name)
+              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(normalizePartyAreaName(name)))
           )
         )
       : [];
@@ -136,7 +143,7 @@ export async function POST(req: Request) {
     const partyIntervalsById = new Map<string, Array<[number, number]>>();
 
     if (partyAreas.length) {
-      const normalizedPartyNames = new Set(partyAreas.map((name) => String(name || "").trim().toLowerCase()));
+      const normalizedPartyNames = new Set(partyAreas.map((name) => normalizePartyAreaName(name)));
       const { data: partyResources, error: partyErr } = await supabase
         .from("resources")
         .select("id,name,type,active")
@@ -149,7 +156,7 @@ export async function POST(req: Request) {
       }
 
       partyResourceIds = (partyResources || [])
-        .filter((r: any) => normalizedPartyNames.has(String(r?.name || "").trim().toLowerCase()))
+        .filter((r: any) => normalizedPartyNames.has(normalizePartyAreaName(String(r?.name || ""))))
         .map((r: any) => r.id)
         .filter(Boolean);
       if (partyResourceIds.length !== partyAreas.length) {

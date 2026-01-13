@@ -10,6 +10,23 @@ export const PARTY_AREA_OPTIONS = [
 export type PartyAreaName = (typeof PARTY_AREA_OPTIONS)[number]["name"];
 export const PARTY_AREA_RATE_CENTS_PER_HOUR = 5000;
 
+export function normalizePartyAreaName(name: string): string {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const PARTY_AREA_CANONICAL_BY_NORMALIZED = new Map(
+  PARTY_AREA_OPTIONS.map((option) => [normalizePartyAreaName(option.name), option.name as PartyAreaName])
+);
+
+export function canonicalPartyAreaName(name: string): PartyAreaName | null {
+  const normalized = normalizePartyAreaName(name);
+  return PARTY_AREA_CANONICAL_BY_NORMALIZED.get(normalized) ?? null;
+}
+
 export function partyAreaCostCents(minutes: number, count: number) {
   if (!Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(count) || count <= 0) return 0;
   const hours = minutes / 60;

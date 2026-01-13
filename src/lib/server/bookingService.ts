@@ -1,5 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
-import { PARTY_AREA_OPTIONS, type PartyAreaName, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString, totalCents } from "@/lib/bookingLogic";
+import {
+  PARTY_AREA_OPTIONS,
+  type PartyAreaName,
+  canonicalPartyAreaName,
+  normalizePartyAreaName,
+  neededResources,
+  nyLocalDateKeyPlusMinutesToUTCISOString,
+  totalCents,
+} from "@/lib/bookingLogic";
 
 export type ActivityUI = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 export type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
@@ -83,17 +91,21 @@ function computeNeeds(activity: ActivityUI, partySize: number) {
   return { axeBays: needs.AXE, lanes: needs.DUCKPIN };
 }
 
-const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
+);
 
 function normalizePartyAreas(input?: PartyAreaName[]) {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
   const normalized: PartyAreaName[] = [];
   for (const item of input) {
-    const name = String(item || "").trim();
-    if (!name || seen.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
-    seen.add(name);
-    normalized.push(name as PartyAreaName);
+    const canonical = canonicalPartyAreaName(String(item || ""));
+    if (!canonical) continue;
+    const normalizedName = normalizePartyAreaName(canonical);
+    if (seen.has(normalizedName) || !PARTY_AREA_BOOKABLE_SET.has(normalizedName)) continue;
+    seen.add(normalizedName);
+    normalized.push(canonical);
   }
   return normalized;
 }
@@ -117,9 +129,9 @@ async function reservePartyAreas(
     throw new Error(resErr.message || "Failed to load party areas");
   }
 
-  const normalizedPartyNames = new Set(partyAreas.map((name) => String(name || "").trim().toLowerCase()));
+  const normalizedPartyNames = new Set(partyAreas.map((name) => normalizePartyAreaName(name)));
   const resourceIds = (resources || [])
-    .filter((r: any) => normalizedPartyNames.has(String(r?.name || "").trim().toLowerCase()))
+    .filter((r: any) => normalizedPartyNames.has(normalizePartyAreaName(String(r?.name || ""))))
     .map((r: any) => r.id)
     .filter(Boolean);
   if (resourceIds.length !== partyAreas.length) {

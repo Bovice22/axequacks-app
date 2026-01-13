@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { PARTY_AREA_OPTIONS } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
-  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name)
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
 );
 
 export async function POST(req: Request) {
@@ -24,8 +24,9 @@ export async function POST(req: Request) {
       ? Array.from(
           new Set(
             body.partyAreas
-              .map((item: any) => String(item || "").trim())
-              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(name))
+              .map((item: any) => canonicalPartyAreaName(String(item || "")))
+              .filter((name: string | null): name is string => !!name)
+              .filter((name: string) => PARTY_AREA_BOOKABLE_SET.has(normalizePartyAreaName(name)))
           )
         )
       : [];

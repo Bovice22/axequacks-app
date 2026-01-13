@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PARTY_AREA_OPTIONS, type PartyAreaName } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
@@ -7,7 +7,9 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
 
-const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
+);
 
 function parsePartyAreas(value?: string | null) {
   if (!value) return [];
@@ -17,10 +19,12 @@ function parsePartyAreas(value?: string | null) {
     const unique = new Set<string>();
     const names: PartyAreaName[] = [];
     for (const item of parsed) {
-      const name = String(item || "").trim();
-      if (!name || unique.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
-      unique.add(name);
-      names.push(name as PartyAreaName);
+      const canonical = canonicalPartyAreaName(String(item || ""));
+      if (!canonical) continue;
+      const normalized = normalizePartyAreaName(canonical);
+      if (!normalized || unique.has(normalized) || !PARTY_AREA_BOOKABLE_SET.has(normalized)) continue;
+      unique.add(normalized);
+      names.push(canonical);
     }
     return names;
   } catch {

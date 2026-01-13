@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
+import {
+  PARTY_AREA_OPTIONS,
+  canonicalPartyAreaName,
+  normalizePartyAreaName,
+  neededResources,
+  nyLocalDateKeyPlusMinutesToUTCISOString,
+  partyAreaCostCents,
+  totalCents,
+} from "@/lib/bookingLogic";
 import { ensureCustomerAndLinkBooking, type BookingInput } from "@/lib/server/bookingService";
 
 /**
@@ -13,7 +21,7 @@ type ActivityUI = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
  */
 type ActivityDB = "AXE" | "DUCKPIN" | "COMBO";
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
-  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name)
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
 );
 
 function supabaseAdmin() {
@@ -45,10 +53,12 @@ function normalizePartyAreas(input: unknown) {
   const seen = new Set<string>();
   const names: string[] = [];
   for (const item of input) {
-    const name = String(item || "").trim();
-    if (!name || seen.has(name) || !PARTY_AREA_BOOKABLE_SET.has(name)) continue;
-    seen.add(name);
-    names.push(name);
+    const canonical = canonicalPartyAreaName(String(item || ""));
+    if (!canonical) continue;
+    const normalized = normalizePartyAreaName(canonical);
+    if (!normalized || seen.has(normalized) || !PARTY_AREA_BOOKABLE_SET.has(normalized)) continue;
+    seen.add(normalized);
+    names.push(canonical);
   }
   return names;
 }
@@ -72,9 +82,9 @@ async function reservePartyAreas(
     throw new Error(resErr.message || "Failed to load party areas");
   }
 
-  const normalizedPartyNames = new Set(partyAreas.map((name) => String(name || "").trim().toLowerCase()));
+  const normalizedPartyNames = new Set(partyAreas.map((name) => normalizePartyAreaName(name)));
   const resourceIds = (resources || [])
-    .filter((r: any) => normalizedPartyNames.has(String(r?.name || "").trim().toLowerCase()))
+    .filter((r: any) => normalizedPartyNames.has(normalizePartyAreaName(String(r?.name || ""))))
     .map((r: any) => r.id)
     .filter(Boolean);
   if (resourceIds.length !== partyAreas.length) {
