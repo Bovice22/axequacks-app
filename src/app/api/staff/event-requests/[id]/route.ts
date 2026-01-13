@@ -5,6 +5,7 @@ import { createBookingWithResources } from "@/lib/server/bookingService";
 import {
   PARTY_AREA_OPTIONS,
   canonicalPartyAreaName,
+  neededResources,
   normalizePartyAreaName,
   nyLocalDateKeyPlusMinutesToUTCISOString,
   totalCents,
@@ -29,6 +30,10 @@ function normalizePartyAreas(input: unknown) {
     names.push(canonical);
   }
   return names;
+}
+
+function overlaps(startA: number, endA: number, startB: number, endB: number) {
+  return startA < endB && startB < endA;
 }
 
 async function reservePartyAreasForBooking(
@@ -75,7 +80,10 @@ async function reservePartyAreasForBooking(
     throw new Error("Failed to check party area availability");
   }
 
-  const conflicts = (reservations || []).some((row: any) => row?.bookings?.status !== "CANCELLED");
+  const conflicts = (reservations || []).some((row: any) => {
+    if (row?.bookings == null) return false;
+    return row?.bookings?.status !== "CANCELLED";
+  });
   if (conflicts) {
     throw new Error("Selected party area is already booked");
   }
@@ -280,6 +288,65 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ status: "RESCHEDULED" }, { status: 200 });
     }
 
+    if (action === "accept") {
+      const existingBookingIds = Array.isArray(requestRow.booking_ids)
+        ? requestRow.booking_ids.map((value: any) => String(value || "")).filter(Boolean)
+        : [];
+      if (existingBookingIds.length) {
+        const acceptedAt = new Date().toISOString();
+        const payInPerson = Boolean(requestRow.pay_in_person);
+        const { error: updateErr } = await sb
+          .from("event_requests")
+          .update({
+            status: "ACCEPTED",
+            accepted_at: acceptedAt,
+            accepted_by: staff.id,
+            booking_ids: existingBookingIds,
+            payment_status: payInPerson ? "PAY_IN_PERSON" : "UNPAID",
+          })
+          .eq("id", id);
+
+        if (updateErr) {
+          console.error("event request accept update error:", updateErr);
+          return NextResponse.json({ error: "Failed to update request" }, { status: 500 });
+        }
+
+        return NextResponse.json({ bookingIds: existingBookingIds, acceptedAt }, { status: 200 });
+      }
+
+      const { data: existingBookings, error: existingBookingsErr } = await sb
+        .from("bookings")
+        .select("id")
+        .eq("notes", `Event Request: ${id}`);
+
+      if (existingBookingsErr) {
+        console.error("event request booking lookup error:", existingBookingsErr);
+      }
+
+      const recoveredBookingIds = (existingBookings || []).map((row: any) => String(row?.id || "")).filter(Boolean);
+      if (recoveredBookingIds.length) {
+        const acceptedAt = new Date().toISOString();
+        const payInPerson = Boolean(requestRow.pay_in_person);
+        const { error: updateErr } = await sb
+          .from("event_requests")
+          .update({
+            status: "ACCEPTED",
+            accepted_at: acceptedAt,
+            accepted_by: staff.id,
+            booking_ids: recoveredBookingIds,
+            payment_status: payInPerson ? "PAY_IN_PERSON" : "UNPAID",
+          })
+          .eq("id", id);
+
+        if (updateErr) {
+          console.error("event request accept update error:", updateErr);
+          return NextResponse.json({ error: "Failed to update request" }, { status: 500 });
+        }
+
+        return NextResponse.json({ bookingIds: recoveredBookingIds, acceptedAt }, { status: 200 });
+      }
+    }
+
     const bookingIds: string[] = [];
     const requestedPartySize = Number(requestRow.party_size || 1);
     const bookingPartySize = Math.min(24, Math.max(1, requestedPartySize));
@@ -338,26 +405,61 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       bookingIds.push(bookingId);
 
       const resourceType = activity === "Axe Throwing" ? "AXE" : "DUCKPIN";
+      const needs = neededResources(activity, bookingPartySize);
+      const neededCount = needs[resourceType];
       const { data: resources } = await sb
         .from("resources")
         .select("id,type,active")
         .eq("type", resourceType)
         .or("active.eq.true,active.is.null");
 
-      const resourceIds = (resources || []).map((r: any) => r.id).filter(Boolean);
-      if (resourceIds.length) {
+      const resourceIds = Array.from(new Set((resources || []).map((r: any) => r.id).filter(Boolean)));
+      if (neededCount > 0 && resourceIds.length < neededCount) {
+        return NextResponse.json({ error: "Selected time is unavailable" }, { status: 400 });
+      }
+      if (neededCount > 0 && resourceIds.length) {
         await sb.from("resource_reservations").delete().eq("booking_id", bookingId);
-        const inserts = resourceIds.map((resourceId) => ({
+        const { data: reservations, error: resvLookupErr } = await sb
+          .from("resource_reservations")
+          .select("resource_id,start_ts,end_ts, bookings(status)")
+          .in("resource_id", resourceIds)
+          .gt("end_ts", startIso)
+          .lt("start_ts", endIso);
+
+        if (resvLookupErr) {
+          return NextResponse.json({ error: "Failed to check resource availability" }, { status: 500 });
+        }
+
+        const occupied = new Set<string>();
+        for (const row of reservations || []) {
+          if ((row as any)?.bookings == null) continue;
+          const status = (row as any)?.bookings?.status as string | null | undefined;
+          if (status === "CANCELLED") continue;
+          const resourceId = String((row as any)?.resource_id || "");
+          const start = new Date((row as any)?.start_ts as string).getTime();
+          const end = new Date((row as any)?.end_ts as string).getTime();
+          if (!resourceId || !Number.isFinite(start) || !Number.isFinite(end)) continue;
+          if (overlaps(start, end, new Date(startIso).getTime(), new Date(endIso).getTime())) {
+            occupied.add(resourceId);
+          }
+        }
+
+        const available = resourceIds.filter((resourceId) => !occupied.has(resourceId));
+        if (available.length < neededCount) {
+          return NextResponse.json({ error: "Selected time is unavailable" }, { status: 400 });
+        }
+
+        const inserts = available.slice(0, neededCount).map((resourceId) => ({
           booking_id: bookingId,
           resource_id: resourceId,
           start_ts: startIso,
           end_ts: endIso,
         }));
-        const { error: resvErr } = await sb.from("resource_reservations").insert(inserts);
-        if (resvErr) {
-          console.error("event request reservations insert error:", resvErr);
+        const { error: insertErr } = await sb.from("resource_reservations").insert(inserts);
+        if (insertErr) {
+          console.error("event request reservations insert error:", insertErr);
           return NextResponse.json(
-            { error: "Failed to reserve resources", detail: resvErr?.message || "Insert failed" },
+            { error: "Failed to reserve resources", detail: insertErr?.message || "Insert failed" },
             { status: 500 }
           );
         }

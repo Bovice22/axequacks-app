@@ -236,6 +236,7 @@ export async function POST(req: Request) {
       }
 
       for (const row of partyReservations || []) {
+        if ((row as any)?.bookings == null) continue;
         const status = (row as any)?.bookings?.status as string | null | undefined;
         if (status === "CANCELLED") continue;
         const resourceId = row.resource_id as string;
@@ -282,6 +283,7 @@ export async function POST(req: Request) {
     const allIntervals: Array<[number, number]> = [];
 
     for (const row of reservations || []) {
+      if ((row as any)?.bookings == null) continue;
       const status = (row as any)?.bookings?.status as string | null | undefined;
       if (status === "CANCELLED") continue;
       const resourceId = row.resource_id as string;

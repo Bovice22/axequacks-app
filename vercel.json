@@ -1,0 +1,15 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/staff/login",
+      "permanent": false,
+      "has": [
+        {
+          "type": "host",
+          "value": "staff.axequacks.com"
+        }
+      ]
+    }
+  ]
+}

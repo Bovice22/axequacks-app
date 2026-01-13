@@ -153,7 +153,10 @@ async function reservePartyAreas(
     throw new Error(resvErr.message || "Failed to check party area availability");
   }
 
-  const conflicts = (reservations || []).some((row: any) => row?.bookings?.status !== "CANCELLED");
+  const conflicts = (reservations || []).some((row: any) => {
+    if (row?.bookings == null) return false;
+    return row?.bookings?.status !== "CANCELLED";
+  });
   if (conflicts) {
     throw new Error("Selected party area is already booked");
   }

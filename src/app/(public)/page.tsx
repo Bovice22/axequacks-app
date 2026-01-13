@@ -1,4 +1,13 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
 export default function Home() {
+  const headerList = headers();
+  const host = (headerList.get("x-forwarded-host") || headerList.get("host") || "").toLowerCase();
+  if (host.startsWith("staff.")) {
+    redirect("/staff/login");
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-10">
       <h1 className="text-3xl font-extrabold text-zinc-900">Axe Quacks Booking Portal</h1>

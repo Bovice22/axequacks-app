@@ -382,7 +382,10 @@ export async function PATCH(req: Request, context: RouteContext) {
           return NextResponse.json({ error: "Failed to check party area availability" }, { status: 500 });
         }
 
-        const hasConflict = (partyConflicts || []).some((row: any) => row?.bookings?.status !== "CANCELLED");
+        const hasConflict = (partyConflicts || []).some((row: any) => {
+          if (row?.bookings == null) return false;
+          return row?.bookings?.status !== "CANCELLED";
+        });
         if (hasConflict) {
           return NextResponse.json({ error: "Selected party area is unavailable" }, { status: 400 });
         }
