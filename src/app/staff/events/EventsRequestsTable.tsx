@@ -176,8 +176,15 @@ export default function EventsRequestsTable() {
         body: JSON.stringify({ action: "accept" }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "Unable to accept request.");
+        const raw = await res.text();
+        let detail = "";
+        try {
+          const parsed = JSON.parse(raw || "{}");
+          detail = parsed?.detail || parsed?.error || "";
+        } catch {
+          detail = raw;
+        }
+        throw new Error(detail || "Unable to accept request.");
       }
       load();
     } catch (err: any) {

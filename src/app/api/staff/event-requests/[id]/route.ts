@@ -353,15 +353,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           start_ts: startIso,
           end_ts: endIso,
         }));
-        await sb.from("resource_reservations").insert(inserts);
+        const { error: resvErr } = await sb.from("resource_reservations").insert(inserts);
+        if (resvErr) {
+          console.error("event request reservations insert error:", resvErr);
+          return NextResponse.json(
+            { error: "Failed to reserve resources", detail: resvErr?.message || "Insert failed" },
+            { status: 500 }
+          );
+        }
       }
 
       if (partyAreas.length) {
         try {
           await reservePartyAreasForBooking(sb, bookingId, partyAreas, startIso, partyAreaEndIso);
         } catch (err: any) {
-          return NextResponse.json({ error: err?.message || "Selected party area is unavailable" }, { status: 400 });
-        }
+        return NextResponse.json(
+          { error: err?.message || "Selected party area is unavailable", detail: err?.message || "" },
+          { status: 400 }
+        );
+      }
       }
 
       offsetMinutes += durationMinutes;
@@ -409,6 +419,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ bookingIds, acceptedAt }, { status: 200 });
   } catch (err: any) {
     console.error("event request accept fatal:", err);
-    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Server error", detail: err?.message || "" },
+      { status: 500 }
+    );
   }
 }
