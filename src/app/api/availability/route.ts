@@ -143,7 +143,7 @@ export async function POST(req: Request) {
     const partyIntervalsById = new Map<string, Array<[number, number]>>();
 
     if (partyAreas.length) {
-      const normalizedPartyNames = new Set(partyAreas.map((name) => normalizePartyAreaName(name)));
+      const normalizedPartyNames = new Set(partyAreas.map((name) => normalizePartyAreaName(String(name))));
       const { data: partyResources, error: partyErr } = await supabase
         .from("resources")
         .select("id,name,type,active")
