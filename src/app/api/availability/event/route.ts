@@ -149,10 +149,10 @@ export async function POST(req: Request) {
     let partyResourceIds: string[] = [];
     const partyIntervalsById = new Map<string, Array<[number, number]>>();
     if (partyAreas.length) {
+      const normalizedPartyNames = new Set(partyAreas.map((name) => String(name || "").trim().toLowerCase()));
       const { data: partyResources, error: partyErr } = await supabase
         .from("resources")
         .select("id,name,type,active")
-        .in("name", partyAreas)
         .eq("type", "PARTY")
         .or("active.eq.true,active.is.null");
 
@@ -161,7 +161,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Database error (party resources)" }, { status: 500 });
       }
 
-      partyResourceIds = (partyResources || []).map((r: any) => r.id).filter(Boolean);
+      partyResourceIds = (partyResources || [])
+        .filter((r: any) => normalizedPartyNames.has(String(r?.name || "").trim().toLowerCase()))
+        .map((r: any) => r.id)
+        .filter(Boolean);
       if (partyResourceIds.length !== partyAreas.length) {
         return NextResponse.json({ error: "Selected party area is unavailable" }, { status: 400 });
       }

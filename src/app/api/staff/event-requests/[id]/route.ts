@@ -34,7 +34,6 @@ async function reservePartyAreasForBooking(
   const { data: resources, error: resErr } = await sb
     .from("resources")
     .select("id,name,type,active")
-    .in("name", partyAreas)
     .eq("type", "PARTY")
     .or("active.eq.true,active.is.null");
 
@@ -43,7 +42,11 @@ async function reservePartyAreasForBooking(
     throw new Error("Failed to load party areas");
   }
 
-  const resourceIds = (resources || []).map((r: any) => r.id).filter(Boolean);
+  const normalizedPartyNames = new Set(partyAreas.map((name) => String(name || "").trim().toLowerCase()));
+  const resourceIds = (resources || [])
+    .filter((r: any) => normalizedPartyNames.has(String(r?.name || "").trim().toLowerCase()))
+    .map((r: any) => r.id)
+    .filter(Boolean);
   if (resourceIds.length !== partyAreas.length) {
     throw new Error("Selected party area is unavailable");
   }
