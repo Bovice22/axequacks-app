@@ -5,6 +5,7 @@ import {
   normalizePartyAreaName,
   partyAreaCostCents,
   totalCents,
+  type PartyAreaName,
 } from "@/lib/bookingLogic";
 import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { getStripe } from "@/lib/server/stripe";
@@ -72,7 +73,7 @@ function normalizePartyAreas(input?: string[]) {
     new Set(
       input
         .map((item) => canonicalPartyAreaName(String(item || "")))
-        .filter((name): name is string => !!name)
+        .filter((name): name is PartyAreaName => !!name)
         .filter((name) => PARTY_AREA_BOOKABLE_SET.has(normalizePartyAreaName(name)))
     )
   );

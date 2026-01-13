@@ -5,6 +5,7 @@ import {
   normalizePartyAreaName,
   partyAreaCostCents,
   totalCents,
+  type PartyAreaName,
 } from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -55,7 +56,7 @@ function normalizePartyAreas(input?: string[]) {
     new Set(
       input
         .map((item) => canonicalPartyAreaName(String(item || "")))
-        .filter((name): name is string => !!name)
+        .filter((name): name is PartyAreaName => !!name)
         .filter((name) => PARTY_AREA_BOOKABLE_SET.has(normalizePartyAreaName(name)))
     )
   );
