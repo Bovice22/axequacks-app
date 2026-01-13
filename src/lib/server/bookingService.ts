@@ -83,7 +83,7 @@ function computeNeeds(activity: ActivityUI, partySize: number) {
   return { axeBays: needs.AXE, lanes: needs.DUCKPIN };
 }
 
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
 
 function normalizePartyAreas(input?: PartyAreaName[]) {
   if (!Array.isArray(input)) return [];

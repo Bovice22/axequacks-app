@@ -39,7 +39,7 @@ function validate(body: TerminalIntentRequest) {
   return null;
 }
 
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
 
 function normalizePartyAreas(input?: string[]) {
   if (!Array.isArray(input)) return [];

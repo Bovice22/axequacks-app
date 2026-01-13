@@ -7,7 +7,7 @@ import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { createClient } from "@supabase/supabase-js";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
 
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
 
 function parsePartyAreas(value?: string | null) {
   if (!value) return [];
