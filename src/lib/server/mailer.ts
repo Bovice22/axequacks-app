@@ -503,7 +503,7 @@ export async function sendEventPaymentLinkEmail(
 }
 
 export async function sendBookingPaymentLinkEmail(
-  input: BookingEmailInput & { paymentUrl: string }
+  input: EmailBookingInput & { paymentUrl: string }
 ): Promise<{ sent: boolean; id?: string; skippedReason?: string }> {
   const apiKey = process.env.RESEND_API_KEY || "";
   const fromEmail = process.env.RESEND_FROM_EMAIL || "";
