@@ -100,7 +100,10 @@ export async function POST(req: Request) {
 
     if (error) {
       console.error("event request insert error:", error);
-      return NextResponse.json({ error: "Unable to submit request" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Unable to submit request", detail: error?.message || "Insert failed" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ id: data?.id }, { status: 200 });
