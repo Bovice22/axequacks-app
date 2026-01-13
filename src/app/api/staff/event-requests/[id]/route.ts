@@ -6,7 +6,9 @@ import { PARTY_AREA_OPTIONS, nyLocalDateKeyPlusMinutesToUTCISOString, totalCents
 import { sendEventRequestAcceptedEmail } from "@/lib/server/mailer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
-const PARTY_AREA_BOOKABLE_SET = new Set(PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name));
+const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
+  PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => option.name)
+);
 
 function normalizePartyAreas(input: unknown) {
   if (!Array.isArray(input)) return [];
