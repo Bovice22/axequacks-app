@@ -188,6 +188,16 @@ export default function HostEventPage() {
   const [contactPhone, setContactPhone] = useState("");
   const [requestStatus, setRequestStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [requestMessage, setRequestMessage] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState<{
+    code: string;
+    discountType: string;
+    discountValue: number;
+    amountOffCents: number;
+    totalCents: number;
+  } | null>(null);
+  const [promoStatus, setPromoStatus] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
   const [payInPerson, setPayInPerson] = useState(false);
 
   useEffect(() => {
@@ -311,7 +321,7 @@ export default function HostEventPage() {
     return slots;
   }, [openWindow, bookingWindowMinutes, selectedActivities, durationByActivity, blockedByActivity, dateKey]);
 
-  const summaryTotalCents = useMemo(() => {
+  const baseTotalCents = useMemo(() => {
     const activityTotal = selectedActivities.reduce((sum, a) => {
       const duration = durationByActivity[a] || 0;
       if (!duration) return sum;
@@ -319,6 +329,8 @@ export default function HostEventPage() {
     }, 0);
     return activityTotal + partyAreaCostCents(partyAreaDuration, partyAreas.length);
   }, [selectedActivities, durationByActivity, partySize, partyAreaDuration, partyAreas.length]);
+  const discountedTotalCents = promoApplied?.totalCents ?? baseTotalCents;
+  const discountCents = promoApplied?.amountOffCents ?? 0;
 
   const summary = useMemo(() => {
     const startLabel = startMin == null ? "—" : minutesToLabel(startMin);
@@ -337,6 +349,57 @@ export default function HostEventPage() {
     !(partyAreas.length && !partyAreaDuration) &&
     contactName.trim().length > 0 &&
     contactEmail.trim().length > 0;
+
+  async function applyPromo(nextCode?: string) {
+    const codeToApply = (nextCode ?? promoCode).trim();
+    if (!codeToApply) {
+      setPromoApplied(null);
+      setPromoStatus("");
+      return;
+    }
+    if (!baseTotalCents) {
+      setPromoStatus("Select activities and duration first.");
+      return;
+    }
+    setPromoLoading(true);
+    setPromoStatus("");
+    try {
+      const res = await fetch("/api/promos/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: codeToApply,
+          amount_cents: baseTotalCents,
+          customer_email: contactEmail.trim(),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.promo) {
+        setPromoApplied(null);
+        setPromoStatus(json?.error || "Invalid promo code.");
+        return;
+      }
+      setPromoApplied({
+        code: json.promo.code,
+        discountType: json.promo.discount_type,
+        discountValue: json.promo.discount_value,
+        amountOffCents: json.amount_off_cents ?? 0,
+        totalCents: json.total_cents ?? baseTotalCents,
+      });
+      setPromoStatus("Promo applied.");
+    } catch (e: any) {
+      setPromoApplied(null);
+      setPromoStatus(e?.message || "Failed to apply promo.");
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!promoApplied || !baseTotalCents) return;
+    applyPromo(promoApplied.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseTotalCents]);
 
   const submitRequest = async () => {
     if (!canSubmitRequest || requestStatus === "submitting") return;
@@ -361,7 +424,8 @@ export default function HostEventPage() {
             activity,
             durationMinutes: durationByActivity[activity] || 0,
           })),
-          totalCents: summaryTotalCents,
+          totalCents: baseTotalCents,
+          promoCode: promoApplied?.code || "",
           payInPerson,
         }),
       });
@@ -383,6 +447,9 @@ export default function HostEventPage() {
       setContactName("");
       setContactEmail("");
       setContactPhone("");
+      setPromoCode("");
+      setPromoApplied(null);
+      setPromoStatus("");
       setBlockedByActivity({});
       setPayInPerson(false);
     } catch (err: any) {
@@ -736,11 +803,59 @@ export default function HostEventPage() {
                 <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 p-2">
                   <div className="text-[10px] text-zinc-500">Estimated Total</div>
                   <div className="mt-1 text-base font-extrabold text-zinc-900">
-                    ${((summaryTotalCents || 0) / 100).toFixed(2)}
+                    ${((discountedTotalCents || 0) / 100).toFixed(2)}
                   </div>
+                  {promoApplied && discountCents > 0 ? (
+                    <div className="mt-1 text-[10px] text-zinc-500">
+                      Promo {promoApplied.code}: -${(discountCents / 100).toFixed(2)}
+                    </div>
+                  ) : null}
                   <div className="mt-1 text-[9px] text-zinc-500">
                     Final pricing may change based on staffing and resource availability.
                   </div>
+                </div>
+                <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Promo Code</div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value);
+                        setPromoStatus("");
+                      }}
+                      placeholder="Enter code"
+                      className="h-9 flex-1 rounded-lg border border-zinc-200 px-2 text-[10px] font-semibold text-zinc-700"
+                    />
+                    {promoApplied ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPromoApplied(null);
+                          setPromoStatus("");
+                          setPromoCode("");
+                        }}
+                        className="h-9 rounded-lg border border-zinc-200 px-3 text-[10px] font-semibold text-zinc-700"
+                      >
+                        Remove
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => applyPromo()}
+                        disabled={promoLoading || !promoCode.trim()}
+                        className={`h-9 rounded-lg px-3 text-[10px] font-semibold ${
+                          promoLoading || !promoCode.trim()
+                            ? "bg-zinc-100 text-zinc-400"
+                            : "bg-zinc-900 text-white"
+                        }`}
+                      >
+                        {promoLoading ? "Checking..." : "Apply"}
+                      </button>
+                    )}
+                  </div>
+                  {promoStatus ? (
+                    <div className="mt-2 text-[10px] font-semibold text-zinc-600">{promoStatus}</div>
+                  ) : null}
                 </div>
               </aside>
             </div>

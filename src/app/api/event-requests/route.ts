@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
+import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
@@ -18,6 +19,7 @@ export async function POST(req: Request) {
     const startMin = Number(body?.startMin);
     const durationMinutes = Number(body?.durationMinutes);
     const totalCents = Number(body?.totalCents);
+    const promoCodeRaw = String(body?.promoCode || "");
     const activities = Array.isArray(body?.activities) ? body.activities : [];
     const payInPerson = Boolean(body?.payInPerson);
     const partyAreas = Array.isArray(body?.partyAreas)
@@ -78,6 +80,54 @@ export async function POST(req: Request) {
     }
 
     const sb = supabaseServer();
+    let finalTotalCents = totalCents;
+    const promoCode = promoCodeRaw ? normalizePromoCode(promoCodeRaw) : "";
+    if (promoCode) {
+      const customerEmailNorm = normalizeEmail(customerEmail || "");
+      if (customerEmailNorm) {
+        const alreadyUsed = await hasPromoRedemption(promoCode, customerEmailNorm);
+        if (alreadyUsed) {
+          return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
+        }
+      }
+
+      const { data: promo, error: promoErr } = await sb
+        .from("promo_codes")
+        .select("code,discount_type,discount_value,active,starts_at,ends_at,max_redemptions,redemptions_count")
+        .eq("code", promoCode)
+        .maybeSingle();
+
+      if (promoErr) {
+        console.error("promo lookup error:", promoErr);
+        return NextResponse.json({ error: "Failed to validate promo code" }, { status: 500 });
+      }
+      if (!promo || !promo.active) {
+        return NextResponse.json({ error: "Invalid promo code" }, { status: 400 });
+      }
+      const now = new Date();
+      if (promo.starts_at && new Date(promo.starts_at) > now) {
+        return NextResponse.json({ error: "Promo not active yet" }, { status: 400 });
+      }
+      if (promo.ends_at && new Date(promo.ends_at) < now) {
+        return NextResponse.json({ error: "Promo has expired" }, { status: 400 });
+      }
+      if (promo.max_redemptions != null && promo.redemptions_count >= promo.max_redemptions) {
+        return NextResponse.json({ error: "Promo has reached its limit" }, { status: 400 });
+      }
+
+      let amountOff = 0;
+      if (promo.discount_type === "PERCENT") {
+        amountOff = Math.round((totalCents * Number(promo.discount_value || 0)) / 100);
+      } else {
+        amountOff = Number(promo.discount_value || 0);
+      }
+      amountOff = Math.max(0, Math.min(amountOff, totalCents));
+      const discounted = totalCents - amountOff;
+      if (discounted < 50) {
+        return NextResponse.json({ error: "Promo discount exceeds total" }, { status: 400 });
+      }
+      finalTotalCents = discounted;
+    }
     const { data, error } = await sb
       .from("event_requests")
       .insert({
@@ -90,7 +140,7 @@ export async function POST(req: Request) {
         date_key: dateKey,
         start_min: startMin,
         duration_minutes: durationMinutes,
-        total_cents: totalCents,
+        total_cents: finalTotalCents,
         activities: cleanActivities,
         pay_in_person: payInPerson,
         status: "PENDING",
