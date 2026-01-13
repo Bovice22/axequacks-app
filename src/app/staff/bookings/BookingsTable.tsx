@@ -23,7 +23,7 @@ type BookingRow = {
 
 type ResourceRow = {
   id: string;
-  type: "AXE" | "DUCKPIN";
+  type: "AXE" | "DUCKPIN" | "PARTY";
   active?: boolean | null;
   name?: string | null;
   sort_order?: number | null;
