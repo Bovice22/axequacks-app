@@ -130,10 +130,14 @@ async function reservePartyAreas(
   }
 
   const normalizedPartyNames = new Set(partyAreas.map((name) => normalizePartyAreaName(name)));
-  const resourceIds = (resources || [])
+  let resourceIds = (resources || [])
     .filter((r: any) => normalizedPartyNames.has(normalizePartyAreaName(String(r?.name || ""))))
     .map((r: any) => r.id)
     .filter(Boolean);
+  if (!resourceIds.length && partyAreas.length === 1 && (resources || []).length === 1) {
+    const fallbackId = (resources || [])[0]?.id;
+    if (fallbackId) resourceIds = [fallbackId];
+  }
   if (resourceIds.length !== partyAreas.length) {
     throw new Error("Selected party area is unavailable");
   }

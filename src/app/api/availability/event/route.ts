@@ -168,6 +168,10 @@ export async function POST(req: Request) {
         .filter((r: any) => normalizedPartyNames.has(normalizePartyAreaName(String(r?.name || ""))))
         .map((r: any) => r.id)
         .filter(Boolean);
+      if (!partyResourceIds.length && partyAreas.length === 1 && (partyResources || []).length === 1) {
+        const fallbackId = (partyResources || [])[0]?.id;
+        if (fallbackId) partyResourceIds = [fallbackId];
+      }
       if (partyResourceIds.length !== partyAreas.length) {
         return NextResponse.json({ error: "Selected party area is unavailable" }, { status: 400 });
       }
