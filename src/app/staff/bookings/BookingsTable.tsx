@@ -183,9 +183,9 @@ const RESOURCE_COL_WIDTH = 260;
 const MIN_RESOURCE_COL_WIDTH = 110;
 const TIME_GUTTER = 72;
 const HEADER_HEIGHT = 56;
-const COMPACT_MIN_COL_WIDTH = 90;
-const COMPACT_TIME_GUTTER = 56;
-const COMPACT_HEADER_HEIGHT = 48;
+const COMPACT_MIN_COL_WIDTH = 64;
+const COMPACT_TIME_GUTTER = 48;
+const COMPACT_HEADER_HEIGHT = 40;
 const BLOCK_INSET_PX = 0;
 const CLOSED_WEEKDAYS = new Set([1, 2, 3]);
 
@@ -517,6 +517,11 @@ export default function BookingsTable() {
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
   }, []);
+
+  useEffect(() => {
+    if (!scheduleWidth) return;
+    setCompactMode(scheduleWidth < 1200);
+  }, [scheduleWidth]);
 
   useEffect(() => {
     fetch("/api/staff/me")
