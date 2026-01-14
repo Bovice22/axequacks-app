@@ -51,11 +51,20 @@ export async function getStaffUserFromCookies(): Promise<StaffUser | null> {
   if (authErr || !authData.user) return null;
 
   const admin = supabaseServer();
-  const { data: staff } = await admin
+  let { data: staff } = await admin
     .from("staff_users")
     .select("id,staff_id,role,full_name,active")
     .eq("auth_user_id", authData.user.id)
     .single();
+
+  if (!staff && authData.user.email) {
+    const fallback = await admin
+      .from("staff_users")
+      .select("id,staff_id,role,full_name,active")
+      .eq("auth_email", authData.user.email)
+      .single();
+    staff = fallback.data ?? null;
+  }
 
   if (!staff || !staff.active) return null;
   return staff as StaffUser;
