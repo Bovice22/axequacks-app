@@ -24,6 +24,13 @@ export function middleware(req: NextRequest) {
   }
 
   const { pathname } = req.nextUrl;
+  if (process.env.STAFF_LOGIN_BYPASS === "true") {
+    if (pathname === "/" || pathname === "/staff/login") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/staff/bookings";
+      return NextResponse.redirect(url);
+    }
+  }
   if (isAssetPath(pathname) || pathname.startsWith("/staff")) {
     return NextResponse.next();
   }
