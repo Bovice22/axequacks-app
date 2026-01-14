@@ -19,6 +19,7 @@ export default function StaffLoginPage() {
       const res = await fetch("/api/staff/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ staffId, pin }),
       });
       const json = await res.json().catch(() => ({}));
@@ -28,7 +29,7 @@ export default function StaffLoginPage() {
         return;
       }
 
-      router.push("/staff/bookings");
+      window.location.href = "/staff/bookings";
     } finally {
       setLoading(false);
     }
