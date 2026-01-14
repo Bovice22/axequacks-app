@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const STAFF_HOST_PREFIX = "staff.";
+const BOOK_HOST_PREFIX = "book.";
+const EVENTS_HOST_PREFIX = "events.";
 
 function isAssetPath(pathname: string) {
   return (
@@ -12,6 +14,21 @@ function isAssetPath(pathname: string) {
   );
 }
 
+function handleHostRewrite(req: NextRequest, destination: string) {
+  const { pathname } = req.nextUrl;
+  if (isAssetPath(pathname)) {
+    return NextResponse.next();
+  }
+  if (pathname === "/") {
+    const url = req.nextUrl.clone();
+    url.pathname = destination;
+    return NextResponse.redirect(url);
+  }
+  const url = req.nextUrl.clone();
+  url.pathname = destination;
+  return NextResponse.rewrite(url);
+}
+
 export function middleware(req: NextRequest) {
   const rawHost =
     req.headers.get("x-forwarded-host") ||
@@ -19,6 +36,13 @@ export function middleware(req: NextRequest) {
     req.nextUrl.hostname ||
     "";
   const host = rawHost.split(",")[0]?.trim().toLowerCase();
+
+  if (host.startsWith(BOOK_HOST_PREFIX)) {
+    return handleHostRewrite(req, "/book");
+  }
+  if (host.startsWith(EVENTS_HOST_PREFIX)) {
+    return handleHostRewrite(req, "/host-event");
+  }
   if (!host.startsWith(STAFF_HOST_PREFIX)) {
     return NextResponse.next();
   }
