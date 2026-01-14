@@ -1020,8 +1020,7 @@ export default function PosScreen() {
 
             <div className="flex flex-col gap-3">
               <div className="text-sm font-semibold text-zinc-700">Cart Items</div>
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_160px]">
-                <div className="flex min-w-0 flex-col gap-3">
+              <div className="flex min-w-0 flex-col gap-3">
                   <div className="max-h-[300px] overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                     {activeTabId ? (
                       tabLoading ? (
@@ -1112,22 +1111,6 @@ export default function PosScreen() {
                       <span>${(totalCents / 100).toFixed(2)}</span>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-2">
-                    {terminalLoading ? (
-                      <button
-                        type="button"
-                        onClick={handleCancelPayment}
-                        disabled={terminalPhase !== "collecting"}
-                        className="h-10 w-full rounded-xl border border-red-600 bg-white text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Cancel Payment
-                      </button>
-                    ) : null}
-                  </div>
-
                 </div>
               </div>
 
