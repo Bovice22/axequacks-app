@@ -1150,7 +1150,7 @@ export default function PosScreen() {
         </div>
 
         <div className="grid flex-1 grid-cols-2 items-start gap-4">
-          <div className="h-[240px] w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="h-[240px] w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-3 text-sm font-semibold text-zinc-700">Items</div>
             <input
               value={itemQuery}
@@ -1161,7 +1161,7 @@ export default function PosScreen() {
             {loading ? (
               <div className="text-sm text-zinc-600">Loading items…</div>
             ) : (
-              <div className="grid h-[180px] grid-cols-1 gap-3 overflow-y-auto pr-1">
+              <div className="grid h-[180px] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
                 {filteredItems.length === 0 ? (
                   <div className="text-sm text-zinc-500">No items found.</div>
                 ) : (
@@ -1170,17 +1170,17 @@ export default function PosScreen() {
                     key={item.id}
                     type="button"
                     onClick={() => addToCart(item)}
-                    className="flex h-[180px] w-full flex-col items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-5 text-center shadow-sm transition hover:border-teal-400 hover:bg-white"
+                    className="flex h-[120px] w-full flex-col items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-2 py-3 text-center text-xs shadow-sm transition hover:border-teal-400 hover:bg-white"
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 text-xs font-bold text-teal-700">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 text-[10px] font-bold text-teal-700">
                       {item.image_url ? (
                         <img src={item.image_url} alt={item.name} className="h-full w-full rounded-xl object-cover" />
                       ) : (
                         (item.name || "Item").slice(0, 2).toUpperCase()
                       )}
                     </div>
-                    <div className="px-2 text-sm font-semibold text-zinc-800">{item.name}</div>
-                    <div className="text-xs text-zinc-500">${(item.price_cents / 100).toFixed(2)}</div>
+                    <div className="line-clamp-2 px-1 text-xs font-semibold text-zinc-800">{item.name}</div>
+                    <div className="text-[11px] text-zinc-500">${(item.price_cents / 100).toFixed(2)}</div>
                   </button>
                   ))
                 )}
