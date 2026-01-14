@@ -180,9 +180,9 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_ROW_PX = 140;
 const PX_PER_MIN = HOUR_ROW_PX / 60;
 const RESOURCE_COL_WIDTH = 260;
-const MIN_RESOURCE_COL_WIDTH = 120;
-const TIME_GUTTER = 96;
-const HEADER_HEIGHT = 64;
+const MIN_RESOURCE_COL_WIDTH = 110;
+const TIME_GUTTER = 72;
+const HEADER_HEIGHT = 56;
 const BLOCK_INSET_PX = 0;
 const CLOSED_WEEKDAYS = new Set([1, 2, 3]);
 
@@ -1300,7 +1300,7 @@ export default function BookingsTable() {
           ) : (
             <div
               ref={scheduleWrapRef}
-              className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3"
+              className="w-full overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3"
               style={{ pointerEvents: "auto" }}
             >
               {resourceColumns.length === 0 ? (
@@ -1316,12 +1316,12 @@ export default function BookingsTable() {
                       height: HEADER_HEIGHT,
                     }}
                   >
-                    <div className="flex h-full items-center text-sm font-semibold text-zinc-600">
+                    <div className="flex h-full items-center text-xs font-semibold text-zinc-600">
                       <div style={{ width: TIME_GUTTER }} />
                       {resourceColumns.map((r) => (
                         <div
                           key={r.id}
-                          className="text-center"
+                          className="truncate text-center"
                           style={{ width: resourceColWidth, paddingLeft: 6, paddingRight: 6 }}
                         >
                           {r.label || r.name || r.id}
