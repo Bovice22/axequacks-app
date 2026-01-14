@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type BookingRow = {
   id: string;
@@ -180,6 +180,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_ROW_PX = 140;
 const PX_PER_MIN = HOUR_ROW_PX / 60;
 const RESOURCE_COL_WIDTH = 260;
+const MIN_RESOURCE_COL_WIDTH = 160;
 const TIME_GUTTER = 96;
 const HEADER_HEIGHT = 64;
 const BLOCK_INSET_PX = 0;
@@ -303,6 +304,8 @@ export default function BookingsTable() {
   const [order, setOrder] = useState<"upcoming" | "newest">("upcoming");
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayDateKeyNY());
   const [isClient, setIsClient] = useState(false);
+  const scheduleWrapRef = useRef<HTMLDivElement | null>(null);
+  const [scheduleWidth, setScheduleWidth] = useState<number | null>(null);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
   const [hoveredBookingId, setHoveredBookingId] = useState<string | null>(null);
@@ -503,6 +506,15 @@ export default function BookingsTable() {
   }, []);
 
   useEffect(() => {
+    if (!scheduleWrapRef.current) return;
+    const element = scheduleWrapRef.current;
+    const updateWidth = () => setScheduleWidth(element.clientWidth);
+    updateWidth();
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+
+  useEffect(() => {
     fetch("/api/staff/me")
       .then((res) => res.json())
       .then((json) => {
@@ -534,6 +546,12 @@ export default function BookingsTable() {
     for (const row of rows) m.set(row.id, row);
     return m;
   }, [rows]);
+
+  const resourceColWidth = useMemo(() => {
+    if (!scheduleWidth || resourceColumns.length === 0) return RESOURCE_COL_WIDTH;
+    const raw = Math.floor((scheduleWidth - TIME_GUTTER) / resourceColumns.length);
+    return Math.max(MIN_RESOURCE_COL_WIDTH, Math.min(RESOURCE_COL_WIDTH, raw));
+  }, [scheduleWidth, resourceColumns.length]);
 
   async function openEditForBooking(bookingId: string) {
     const booking = bookingById.get(bookingId);
@@ -1257,7 +1275,7 @@ export default function BookingsTable() {
           </div>
           <div className="mb-2 flex justify-center">
             <a
-              href="/book?mode=staff"
+              href="https://book.axequacks.com/book?mode=staff"
               target="_blank"
               rel="noreferrer"
               style={{ width: "auto" }}
@@ -1279,7 +1297,11 @@ export default function BookingsTable() {
           {!openWindow ? (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">Closed today.</div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3" style={{ pointerEvents: "auto" }}>
+            <div
+              ref={scheduleWrapRef}
+              className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3"
+              style={{ pointerEvents: "auto" }}
+            >
               {resourceColumns.length === 0 ? (
                 <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-600">
                   No active resources found. Add Axe bays, Duckpin lanes, and party areas in the resources table.
@@ -1289,7 +1311,7 @@ export default function BookingsTable() {
                   <div
                     className="sticky top-0 z-10 border-b border-zinc-100 bg-white"
                     style={{
-                      minWidth: TIME_GUTTER + resourceColumns.length * RESOURCE_COL_WIDTH,
+                      minWidth: TIME_GUTTER + resourceColumns.length * resourceColWidth,
                       height: HEADER_HEIGHT,
                     }}
                   >
@@ -1299,7 +1321,7 @@ export default function BookingsTable() {
                         <div
                           key={r.id}
                           className="text-center"
-                          style={{ width: RESOURCE_COL_WIDTH, paddingLeft: 10, paddingRight: 10 }}
+                          style={{ width: resourceColWidth, paddingLeft: 8, paddingRight: 8 }}
                         >
                           {r.label || r.name || r.id}
                         </div>
@@ -1311,7 +1333,7 @@ export default function BookingsTable() {
                     className="relative"
                     style={{
                       height: scheduleHeight,
-                      minWidth: TIME_GUTTER + resourceColumns.length * RESOURCE_COL_WIDTH,
+                      minWidth: TIME_GUTTER + resourceColumns.length * resourceColWidth,
                       position: "relative",
                       pointerEvents: "auto",
                       backgroundImage:
@@ -1374,7 +1396,7 @@ export default function BookingsTable() {
                       <div
                         key={r.id}
                         className="absolute top-0 bottom-0 border-l border-zinc-100"
-                        style={{ left: TIME_GUTTER + idx * RESOURCE_COL_WIDTH, top: HEADER_HEIGHT, pointerEvents: "none" }}
+                        style={{ left: TIME_GUTTER + idx * resourceColWidth, top: HEADER_HEIGHT, pointerEvents: "none" }}
                       />
                     ))}
 
@@ -1393,8 +1415,8 @@ export default function BookingsTable() {
                       const isCompact = durationMinutes <= 30;
 
                       const booking = bookingById.get(resv.booking_id);
-                      const left = TIME_GUTTER + colIndex * RESOURCE_COL_WIDTH + 6;
-                      const width = RESOURCE_COL_WIDTH - 12;
+                      const left = TIME_GUTTER + colIndex * resourceColWidth + 4;
+                      const width = resourceColWidth - 8;
                       const resourceLabel =
                         resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
                       const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
