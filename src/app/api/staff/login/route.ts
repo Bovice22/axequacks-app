@@ -94,17 +94,22 @@ export async function POST(req: Request) {
 
     const res = NextResponse.json({ ok: true, role: staff.role }, { status: 200 });
     const secure = process.env.NODE_ENV === "production";
+    const rawHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
+    const hostname = rawHost.split(",")[0]?.trim().toLowerCase();
+    const cookieDomain = hostname.endsWith(".axequacks.com") ? ".axequacks.com" : undefined;
     res.cookies.set("staff_access_token", authData.session.access_token, {
       httpOnly: true,
       sameSite: "lax",
       secure,
       path: "/",
+      domain: cookieDomain,
     });
     res.cookies.set("staff_refresh_token", authData.session.refresh_token, {
       httpOnly: true,
       sameSite: "lax",
       secure,
       path: "/",
+      domain: cookieDomain,
     });
 
     return res;
