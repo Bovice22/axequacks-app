@@ -1021,60 +1021,24 @@ export default function PosScreen() {
             <div className="flex flex-col gap-3">
               <div className="text-sm font-semibold text-zinc-700">Cart Items</div>
               <div className="flex min-w-0 flex-col gap-3">
-                  <div className="max-h-[300px] overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-3">
-                    {activeTabId ? (
-                      tabLoading ? (
-                        <div className="text-sm text-zinc-600">Loading tab…</div>
-                      ) : tabItems.length === 0 ? (
-                        <div className="text-sm text-zinc-600">No items on this tab yet.</div>
-                      ) : (
-                        <div className="space-y-3">
-                          {tabItems.map((row) => (
-                            <div key={row.id} className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold text-zinc-900">{row.name}</div>
-                                <div className="text-xs text-zinc-500">${(row.price_cents / 100).toFixed(2)} each</div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => updateTabQty(row.item_id, -1)}
-                                  className="h-7 w-7 rounded-full border border-zinc-200 text-sm"
-                                >
-                                  -
-                                </button>
-                                <div className="w-6 text-center text-sm">{row.quantity}</div>
-                                <button
-                                  type="button"
-                                  onClick={() => updateTabQty(row.item_id, 1)}
-                                  className="h-7 w-7 rounded-full border border-zinc-200 text-sm"
-                                >
-                                  +
-                                </button>
-                              </div>
-                              <div className="text-sm font-semibold text-zinc-900">
-                                ${(row.line_total_cents / 100).toFixed(2)}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    ) : !cartRows.length ? (
-                      <div className="text-sm text-zinc-600">No items added yet.</div>
+                <div className="max-h-[300px] overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                  {activeTabId ? (
+                    tabLoading ? (
+                      <div className="text-sm text-zinc-600">Loading tab…</div>
+                    ) : tabItems.length === 0 ? (
+                      <div className="text-sm text-zinc-600">No items on this tab yet.</div>
                     ) : (
                       <div className="space-y-3">
-                        {cartRows.map((row) => (
-                          <div key={row.item.id} className="flex items-center justify-between gap-3">
+                        {tabItems.map((row) => (
+                          <div key={row.id} className="flex items-center justify-between gap-3">
                             <div>
-                              <div className="text-sm font-semibold text-zinc-900">{row.item.name}</div>
-                              <div className="text-xs text-zinc-500">
-                                ${(row.item.price_cents / 100).toFixed(2)} each
-                              </div>
+                              <div className="text-sm font-semibold text-zinc-900">{row.name}</div>
+                              <div className="text-xs text-zinc-500">${(row.price_cents / 100).toFixed(2)} each</div>
                             </div>
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => updateQty(row.item.id, row.quantity - 1)}
+                                onClick={() => updateTabQty(row.item_id, -1)}
                                 className="h-7 w-7 rounded-full border border-zinc-200 text-sm"
                               >
                                 -
@@ -1082,34 +1046,69 @@ export default function PosScreen() {
                               <div className="w-6 text-center text-sm">{row.quantity}</div>
                               <button
                                 type="button"
-                                onClick={() => updateQty(row.item.id, row.quantity + 1)}
+                                onClick={() => updateTabQty(row.item_id, 1)}
                                 className="h-7 w-7 rounded-full border border-zinc-200 text-sm"
                               >
                                 +
                               </button>
                             </div>
                             <div className="text-sm font-semibold text-zinc-900">
-                              ${(row.item.price_cents * row.quantity / 100).toFixed(2)}
+                              ${(row.line_total_cents / 100).toFixed(2)}
                             </div>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
+                    )
+                  ) : !cartRows.length ? (
+                    <div className="text-sm text-zinc-600">No items added yet.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {cartRows.map((row) => (
+                        <div key={row.item.id} className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-zinc-900">{row.item.name}</div>
+                            <div className="text-xs text-zinc-500">
+                              ${(row.item.price_cents / 100).toFixed(2)} each
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateQty(row.item.id, row.quantity - 1)}
+                              className="h-7 w-7 rounded-full border border-zinc-200 text-sm"
+                            >
+                              -
+                            </button>
+                            <div className="w-6 text-center text-sm">{row.quantity}</div>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(row.item.id, row.quantity + 1)}
+                              className="h-7 w-7 rounded-full border border-zinc-200 text-sm"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className="text-sm font-semibold text-zinc-900">
+                            ${(row.item.price_cents * row.quantity / 100).toFixed(2)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-                  <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-600">Subtotal</span>
-                      <span className="font-semibold text-zinc-900">${(subtotalCents / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-zinc-600">Tax (7.25%)</span>
-                      <span className="font-semibold text-zinc-900">${(taxCents / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-base font-semibold text-zinc-900">
-                      <span>Total</span>
-                      <span>${(totalCents / 100).toFixed(2)}</span>
-                    </div>
+                <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-600">Subtotal</span>
+                    <span className="font-semibold text-zinc-900">${(subtotalCents / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-zinc-600">Tax (7.25%)</span>
+                    <span className="font-semibold text-zinc-900">${(taxCents / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-base font-semibold text-zinc-900">
+                    <span>Total</span>
+                    <span>${(totalCents / 100).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
