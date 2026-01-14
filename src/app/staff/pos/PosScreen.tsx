@@ -727,8 +727,14 @@ export default function PosScreen() {
   const displayItems = items.length ? items : sampleItems;
   const filteredItems = useMemo(() => {
     const q = itemQuery.trim().toLowerCase();
-    if (!q) return displayItems;
-    return displayItems.filter((item) => (item.name || "").toLowerCase().includes(q));
+    const itemsToFilter = !q
+      ? displayItems
+      : displayItems.filter((item) => (item.name || "").toLowerCase().includes(q));
+    return [...itemsToFilter].sort((a, b) => {
+      const aName = (a.name || "").toLowerCase();
+      const bName = (b.name || "").toLowerCase();
+      return aName.localeCompare(bName);
+    });
   }, [displayItems, itemQuery]);
 
   return (
@@ -1014,7 +1020,7 @@ export default function PosScreen() {
 
             <div className="flex flex-col gap-3">
               <div className="text-sm font-semibold text-zinc-700">Cart Items</div>
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_160px]">
                 <div className="flex min-w-0 flex-col gap-3">
                   <div className="max-h-[300px] overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                     {activeTabId ? (
