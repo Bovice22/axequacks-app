@@ -44,8 +44,9 @@ export async function POST(req: Request) {
     }
 
     const sb = anonClient();
+    const authEmail = staff.auth_email || `${staffId}@axequacks.local`;
     let { data: authData, error: authErr } = await sb.auth.signInWithPassword({
-      email: staff.auth_email,
+      email: authEmail,
       password: pinToPassword(pin, staffId),
     });
 
@@ -53,11 +54,12 @@ export async function POST(req: Request) {
       if (staff.auth_user_id) {
         const { error: resetErr } = await admin.auth.admin.updateUserById(String(staff.auth_user_id), {
           password: pinToPassword(pin, staffId),
+          email: authEmail,
           email_confirm: true,
         });
         if (!resetErr) {
           const retry = await sb.auth.signInWithPassword({
-            email: staff.auth_email,
+            email: authEmail,
             password: pinToPassword(pin, staffId),
           });
           authData = retry.data;

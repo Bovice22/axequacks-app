@@ -630,6 +630,18 @@ export default function BookingsTable() {
     return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [editingBookingId, openEditForBooking]);
 
+  useEffect(() => {
+    if (!editingBookingId && !refundBooking) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setEditingBookingId(null);
+        closeRefund();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editingBookingId, refundBooking]);
+
 
   async function saveBookingEdits() {
     if (!editingBookingId) return;
@@ -913,6 +925,11 @@ export default function BookingsTable() {
     <div
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 px-4"
       style={{ pointerEvents: "auto", zIndex: 2147483647 }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setEditingBookingId(null);
+        }
+      }}
     >
       <div className="pointer-events-auto relative z-[100000] w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
@@ -1127,6 +1144,11 @@ export default function BookingsTable() {
         justifyContent: "center",
         padding: "16px",
         zIndex: 2147483647,
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          closeRefund();
+        }
       }}
     >
       <div
