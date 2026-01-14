@@ -183,6 +183,9 @@ const RESOURCE_COL_WIDTH = 260;
 const MIN_RESOURCE_COL_WIDTH = 110;
 const TIME_GUTTER = 72;
 const HEADER_HEIGHT = 56;
+const COMPACT_MIN_COL_WIDTH = 90;
+const COMPACT_TIME_GUTTER = 56;
+const COMPACT_HEADER_HEIGHT = 48;
 const BLOCK_INSET_PX = 0;
 const CLOSED_WEEKDAYS = new Set([1, 2, 3]);
 
@@ -344,6 +347,7 @@ export default function BookingsTable() {
   const [refundManagerPin, setRefundManagerPin] = useState("");
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState("");
+  const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
 
   async function loadBookings(nextOrder: "upcoming" | "newest") {
@@ -822,11 +826,14 @@ export default function BookingsTable() {
     ];
   }, [resources]);
 
+  const timeGutter = compactMode ? COMPACT_TIME_GUTTER : TIME_GUTTER;
+  const headerHeight = compactMode ? COMPACT_HEADER_HEIGHT : HEADER_HEIGHT;
+  const minColWidth = compactMode ? COMPACT_MIN_COL_WIDTH : MIN_RESOURCE_COL_WIDTH;
   const resourceColWidth = useMemo(() => {
     if (!scheduleWidth || resourceColumns.length === 0) return RESOURCE_COL_WIDTH;
-    const raw = Math.floor((scheduleWidth - TIME_GUTTER) / resourceColumns.length);
-    return Math.max(MIN_RESOURCE_COL_WIDTH, Math.min(RESOURCE_COL_WIDTH, raw));
-  }, [scheduleWidth, resourceColumns.length]);
+    const raw = Math.floor((scheduleWidth - timeGutter) / resourceColumns.length);
+    return Math.max(minColWidth, Math.min(RESOURCE_COL_WIDTH, raw));
+  }, [scheduleWidth, resourceColumns.length, timeGutter, minColWidth]);
 
   const resourceIndexById = useMemo(() => {
     const m = new Map<string, number>();
@@ -1293,7 +1300,16 @@ export default function BookingsTable() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-semibold text-zinc-700">Day Schedule</div>
-            <div className="text-xs text-zinc-500">{prettyDate(selectedDateKey)}</div>
+            <div className="flex items-center gap-3 text-xs text-zinc-500">
+              <button
+                type="button"
+                onClick={() => setCompactMode((prev) => !prev)}
+                className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                {compactMode ? "Comfort view" : "Compact view"}
+              </button>
+              <span>{prettyDate(selectedDateKey)}</span>
+            </div>
           </div>
           {!openWindow ? (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">Closed today.</div>
@@ -1312,12 +1328,12 @@ export default function BookingsTable() {
                   <div
                     className="sticky top-0 z-10 border-b border-zinc-100 bg-white"
                     style={{
-                      minWidth: TIME_GUTTER + resourceColumns.length * resourceColWidth,
-                      height: HEADER_HEIGHT,
+                      minWidth: timeGutter + resourceColumns.length * resourceColWidth,
+                      height: headerHeight,
                     }}
                   >
                     <div className="flex h-full items-center text-xs font-semibold text-zinc-600">
-                      <div style={{ width: TIME_GUTTER }} />
+                      <div style={{ width: timeGutter }} />
                       {resourceColumns.map((r) => (
                         <div
                           key={r.id}
@@ -1334,7 +1350,7 @@ export default function BookingsTable() {
                     className="relative"
                     style={{
                       height: scheduleHeight,
-                      minWidth: TIME_GUTTER + resourceColumns.length * resourceColWidth,
+                      minWidth: timeGutter + resourceColumns.length * resourceColWidth,
                       position: "relative",
                       pointerEvents: "auto",
                       backgroundImage:
@@ -1376,7 +1392,7 @@ export default function BookingsTable() {
                       className="absolute left-0"
                       style={{
                         top: 0,
-                        width: TIME_GUTTER,
+                        width: timeGutter,
                         height: scheduleMinutes * PX_PER_MIN,
                         pointerEvents: "none",
                       }}
@@ -1386,7 +1402,7 @@ export default function BookingsTable() {
                         (_, i) => Math.floor(openStartMin / 60) + i
                       ).map((h, idx) => (
                         <div key={`${h}-${idx}`} className="relative" style={{ height: HOUR_ROW_PX }}>
-                          <div className="absolute left-0 top-0 text-sm text-zinc-500" style={{ paddingLeft: 8 }}>
+                          <div className="absolute left-0 top-0 text-sm text-zinc-500" style={{ paddingLeft: 6 }}>
                             {hourLabel(h)}
                           </div>
                         </div>
@@ -1397,7 +1413,7 @@ export default function BookingsTable() {
                       <div
                         key={r.id}
                         className="absolute top-0 bottom-0 border-l border-zinc-100"
-                        style={{ left: TIME_GUTTER + idx * resourceColWidth, top: HEADER_HEIGHT, pointerEvents: "none" }}
+                        style={{ left: timeGutter + idx * resourceColWidth, top: headerHeight, pointerEvents: "none" }}
                       />
                     ))}
 
@@ -1416,7 +1432,7 @@ export default function BookingsTable() {
                       const isCompact = durationMinutes <= 30;
 
                       const booking = bookingById.get(resv.booking_id);
-                      const left = TIME_GUTTER + colIndex * resourceColWidth + 4;
+                      const left = timeGutter + colIndex * resourceColWidth + 4;
                       const width = resourceColWidth - 8;
                       const resourceLabel =
                         resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
