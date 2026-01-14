@@ -349,7 +349,7 @@ export default function CustomersTable() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search name, email, phone..."
-          className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
         />
         <div className="flex items-center gap-2">
           {staffRole === "admin" ? (
@@ -448,7 +448,7 @@ export default function CustomersTable() {
                     </td>
                     <td className="px-2 py-2 text-center text-zinc-900">{r.phone || "—"}</td>
                     <td className="px-2 py-2 text-center text-zinc-900">{r.bookings_count}</td>
-                    <td className="px-2 py-2 text-center text-xs font-semibold">
+                    <td className="px-2 py-2 text-center text-xs font-semibold text-zinc-900">
                       {r.has_axe_booking ? (
                         r.waiver_on_file ? (
                           "WAIVER ON FILE"
@@ -552,11 +552,11 @@ export default function CustomersTable() {
                     <tr key={`${r.id}-detail`} className="border-t border-zinc-100 bg-zinc-50/60">
                       <td colSpan={6} className="py-3">
                         {detailLoadingId === r.id ? (
-                          <div className="text-sm text-zinc-600">Loading bookings…</div>
+                          <div className="text-sm text-zinc-900">Loading bookings…</div>
                         ) : detailErrorByCustomer[r.id] ? (
                           <div className="text-sm text-red-600">{detailErrorByCustomer[r.id]}</div>
                         ) : (bookingsByCustomer[r.id] || []).length === 0 ? (
-                          <div className="text-sm text-zinc-600">No bookings yet.</div>
+                          <div className="text-sm text-zinc-900">No bookings yet.</div>
                         ) : (
                           <div className="overflow-auto">
                             <table className="w-full text-sm">
@@ -571,7 +571,7 @@ export default function CustomersTable() {
                               </thead>
                               <tbody>
                                 {(bookingsByCustomer[r.id] || []).map((b) => (
-                                  <tr key={b.id} className="border-t border-zinc-100">
+                                  <tr key={b.id} className="border-t border-zinc-100 text-zinc-900">
                                     <td className="py-2 text-center">{formatDateTimeRange(b.start_ts, b.end_ts)}</td>
                                     <td className="py-2 text-center">{b.activity}</td>
                                     <td className="py-2 text-center">{b.party_size}</td>
