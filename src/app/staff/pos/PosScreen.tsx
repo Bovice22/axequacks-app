@@ -971,7 +971,7 @@ export default function PosScreen() {
       </div>
 
       <div className="flex flex-1 gap-4 overflow-hidden p-4">
-        <div className="flex w-[35%] flex-col gap-4">
+        <div className="flex w-[35%] min-w-0 flex-col gap-4">
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -1014,8 +1014,8 @@ export default function PosScreen() {
 
             <div className="flex flex-col gap-3">
               <div className="text-sm font-semibold text-zinc-700">Cart Items</div>
-              <div className="grid grid-cols-[1fr_220px] gap-4">
-                <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="flex min-w-0 flex-col gap-3">
                   <div className="max-h-[300px] overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                     {activeTabId ? (
                       tabLoading ? (
@@ -1149,8 +1149,9 @@ export default function PosScreen() {
           </div>
         </div>
 
-        <div className="grid flex-1 grid-cols-2 items-start gap-4">
-            <div className="h-[240px] w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-1 min-w-0 flex-col gap-4">
+          <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="flex min-h-0 w-full flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-3 text-sm font-semibold text-zinc-700">Items</div>
             <input
               value={itemQuery}
@@ -1161,7 +1162,7 @@ export default function PosScreen() {
             {loading ? (
               <div className="text-sm text-zinc-600">Loading items…</div>
             ) : (
-              <div className="grid h-[180px] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
+              <div className="grid flex-1 grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
                 {filteredItems.length === 0 ? (
                   <div className="text-sm text-zinc-500">No items found.</div>
                 ) : (
@@ -1188,7 +1189,7 @@ export default function PosScreen() {
             )}
           </div>
 
-          <div className="h-[240px] w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="text-xs font-semibold uppercase text-zinc-500">Terminal</div>
             <div className="mt-2 grid grid-cols-2 gap-3">
               <select
@@ -1213,6 +1214,7 @@ export default function PosScreen() {
               </button>
             </div>
             {terminalError ? <div className="mt-2 text-xs text-red-600">{terminalError}</div> : null}
+            </div>
           </div>
         </div>
       </div>
