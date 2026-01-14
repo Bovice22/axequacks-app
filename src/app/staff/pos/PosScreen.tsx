@@ -1117,84 +1117,82 @@ export default function PosScreen() {
               {success ? <div className="text-sm text-emerald-600">{success}</div> : null}
             </div>
           </div>
+
+          <div className="w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="text-xs font-semibold uppercase text-zinc-500">Terminal</div>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <select
+                value={selectedReaderId}
+                onChange={(e) => handleReaderChange(e.target.value)}
+                className="h-12 w-full rounded-xl border border-zinc-200 px-4 text-sm"
+              >
+                <option value="">Select a reader</option>
+                {terminalReaders.map((reader) => (
+                  <option key={reader.id} value={reader.id}>
+                    {reader.label || reader.device_type || reader.id}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handlePayment}
+                disabled={terminalLoading}
+                className="h-12 rounded-xl bg-teal-600 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {terminalLoading ? "Processing…" : "Pay"}
+              </button>
+            </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={openCashModal}
+                disabled={cashLoading}
+                className="h-11 w-full rounded-xl border border-black bg-black text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cashLoading ? "Recording…" : "Pay With Cash"}
+              </button>
+            </div>
+            {terminalError ? <div className="mt-2 text-xs text-red-600">{terminalError}</div> : null}
+          </div>
         </div>
 
         <div className="flex flex-1 min-w-0 flex-col gap-4">
-          <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="flex min-h-0 w-full flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 text-sm font-semibold text-zinc-700">Items</div>
-              <input
-                value={itemQuery}
-                onChange={(e) => setItemQuery(e.target.value)}
-                placeholder="Search items"
-                className="mb-3 h-9 w-full rounded-xl border border-zinc-200 px-3 text-sm"
-              />
-              {loading ? (
-                <div className="text-sm text-zinc-600">Loading items…</div>
-              ) : (
-                <div className="grid flex-1 grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
-                  {filteredItems.length === 0 ? (
-                    <div className="text-sm text-zinc-500">No items found.</div>
-                  ) : (
-                    filteredItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => addToCart(item)}
-                        className="flex h-[120px] w-full flex-col items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-2 py-3 text-center text-xs shadow-sm transition hover:border-teal-400 hover:bg-white"
-                      >
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 text-[10px] font-bold text-teal-700">
-                          {item.image_url ? (
-                            <img src={item.image_url} alt={item.name} className="h-full w-full rounded-xl object-cover" />
-                          ) : (
-                            (item.name || "Item").slice(0, 2).toUpperCase()
-                          )}
-                        </div>
-                        <div className="line-clamp-2 px-1 text-xs font-semibold text-zinc-800">{item.name}</div>
-                        <div className="text-[11px] text-zinc-500">${(item.price_cents / 100).toFixed(2)}</div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="w-full rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <div className="text-xs font-semibold uppercase text-zinc-500">Terminal</div>
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                <select
-                  value={selectedReaderId}
-                  onChange={(e) => handleReaderChange(e.target.value)}
-                  className="h-12 w-full rounded-xl border border-zinc-200 px-4 text-sm"
-                >
-                  <option value="">Select a reader</option>
-                  {terminalReaders.map((reader) => (
-                    <option key={reader.id} value={reader.id}>
-                      {reader.label || reader.device_type || reader.id}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handlePayment}
-                  disabled={terminalLoading}
-                  className="h-12 rounded-xl bg-teal-600 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {terminalLoading ? "Processing…" : "Pay"}
-                </button>
+          <div className="flex min-h-0 w-full flex-1 flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 text-sm font-semibold text-zinc-700">Items</div>
+            <input
+              value={itemQuery}
+              onChange={(e) => setItemQuery(e.target.value)}
+              placeholder="Search items"
+              className="mb-3 h-9 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+            />
+            {loading ? (
+              <div className="text-sm text-zinc-600">Loading items…</div>
+            ) : (
+              <div className="grid flex-1 grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-3">
+                {filteredItems.length === 0 ? (
+                  <div className="text-sm text-zinc-500">No items found.</div>
+                ) : (
+                  filteredItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      className="flex h-[120px] w-full flex-col items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-2 py-3 text-center text-xs shadow-sm transition hover:border-teal-400 hover:bg-white"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 text-[10px] font-bold text-teal-700">
+                        {item.image_url ? (
+                          <img src={item.image_url} alt={item.name} className="h-full w-full rounded-xl object-cover" />
+                        ) : (
+                          (item.name || "Item").slice(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <div className="line-clamp-2 px-1 text-xs font-semibold text-zinc-800">{item.name}</div>
+                      <div className="text-[11px] text-zinc-500">${(item.price_cents / 100).toFixed(2)}</div>
+                    </button>
+                  ))
+                )}
               </div>
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={openCashModal}
-                  disabled={cashLoading}
-                  className="h-11 w-full rounded-xl border border-black bg-black text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {cashLoading ? "Recording…" : "Pay With Cash"}
-                </button>
-              </div>
-              {terminalError ? <div className="mt-2 text-xs text-red-600">{terminalError}</div> : null}
-            </div>
+            )}
           </div>
         </div>
       </div>
