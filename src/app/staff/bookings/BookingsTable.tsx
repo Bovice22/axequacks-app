@@ -547,11 +547,6 @@ export default function BookingsTable() {
     return m;
   }, [rows]);
 
-  const resourceColWidth = useMemo(() => {
-    if (!scheduleWidth || resourceColumns.length === 0) return RESOURCE_COL_WIDTH;
-    const raw = Math.floor((scheduleWidth - TIME_GUTTER) / resourceColumns.length);
-    return Math.max(MIN_RESOURCE_COL_WIDTH, Math.min(RESOURCE_COL_WIDTH, raw));
-  }, [scheduleWidth, resourceColumns.length]);
 
   async function openEditForBooking(bookingId: string) {
     const booking = bookingById.get(bookingId);
@@ -826,6 +821,12 @@ export default function BookingsTable() {
       ...partyAreas.map((r, i) => ({ ...r, label: r.name || `Party Area ${i + 1}` })),
     ];
   }, [resources]);
+
+  const resourceColWidth = useMemo(() => {
+    if (!scheduleWidth || resourceColumns.length === 0) return RESOURCE_COL_WIDTH;
+    const raw = Math.floor((scheduleWidth - TIME_GUTTER) / resourceColumns.length);
+    return Math.max(MIN_RESOURCE_COL_WIDTH, Math.min(RESOURCE_COL_WIDTH, raw));
+  }, [scheduleWidth, resourceColumns.length]);
 
   const resourceIndexById = useMemo(() => {
     const m = new Map<string, number>();
