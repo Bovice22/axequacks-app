@@ -77,6 +77,21 @@ export async function POST(req: Request) {
       }
     }
 
+    if (authData?.user?.id && staff.auth_user_id !== authData.user.id) {
+      const { error: staffUpdateErr } = await admin
+        .from("staff_users")
+        .update({ auth_user_id: authData.user.id, auth_email: authEmail })
+        .eq("staff_id", staffId);
+      if (staffUpdateErr) {
+        console.error("staff login user sync failed", {
+          staffId,
+          authEmail,
+          authUserId: authData.user.id,
+          staffUpdateErr: staffUpdateErr?.message || staffUpdateErr,
+        });
+      }
+    }
+
     const res = NextResponse.json({ ok: true, role: staff.role }, { status: 200 });
     const secure = process.env.NODE_ENV === "production";
     res.cookies.set("staff_access_token", authData.session.access_token, {
