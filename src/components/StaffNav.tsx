@@ -20,7 +20,6 @@ const ADMIN_ITEMS: NavItem[] = [
 ];
 
 export default function StaffNav() {
-  const [showAdmin, setShowAdmin] = useState(false);
   const [role, setRole] = useState<"staff" | "admin" | null>(null);
 
   useEffect(() => {
@@ -55,24 +54,19 @@ export default function StaffNav() {
         ))}
         {role === "admin" ? (
           <li
-            className="relative flex items-center after:mx-3 after:text-zinc-300 after:content-['|'] last:after:content-['']"
-            onMouseEnter={() => setShowAdmin(true)}
-            onMouseLeave={() => setShowAdmin(false)}
+            className="group relative flex items-center pb-2 after:mx-3 after:text-zinc-300 after:content-['|'] last:after:content-['']"
           >
             <button
               type="button"
               className="inline-flex items-center gap-2 hover:underline"
               aria-haspopup="true"
-              aria-expanded={showAdmin}
-              onFocus={() => setShowAdmin(true)}
-              onBlur={() => setShowAdmin(false)}
             >
               Admin
               <span className="text-xs">▾</span>
             </button>
             <ul
-              className="absolute left-0 top-full z-20 mt-2 w-56 rounded-xl border border-zinc-200 bg-white py-2 text-sm shadow-lg"
-              style={{ display: showAdmin ? "block" : "none" }}
+              className="absolute z-20 mt-0 hidden w-56 rounded-xl border border-zinc-200 bg-white py-2 text-sm shadow-lg group-hover:block group-focus-within:block"
+              style={{ top: "100%", left: 0 }}
             >
               {ADMIN_ITEMS.map((item) => (
                 <li key={item.href}>
