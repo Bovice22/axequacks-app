@@ -3,7 +3,7 @@ export function getPinPepper() {
   if (!pepper) {
     throw new Error("Missing PIN_PEPPER");
   }
-  return pepper;
+  return String(pepper).trim();
 }
 
 export function pinToPassword(pin: string, staffId: string) {

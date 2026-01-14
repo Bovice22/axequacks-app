@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { pinToPassword } from "@/lib/pinAuth";
 
+export const runtime = "nodejs";
+
 function anonClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
