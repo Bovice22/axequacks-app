@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const admin = supabaseServer();
     const { data: staff, error: staffErr } = await admin
       .from("staff_users")
-      .select("auth_email,role,active")
+      .select("auth_email,auth_user_id,role,active")
       .eq("staff_id", staffId)
       .single();
 
@@ -44,19 +44,35 @@ export async function POST(req: Request) {
     }
 
     const sb = anonClient();
-    const { data: authData, error: authErr } = await sb.auth.signInWithPassword({
+    let { data: authData, error: authErr } = await sb.auth.signInWithPassword({
       email: staff.auth_email,
       password: pinToPassword(pin, staffId),
     });
 
     if (authErr || !authData.session) {
-      console.error("staff login auth failed", {
-        staffId,
-        authEmail: staff.auth_email,
-        authErr: authErr?.message || authErr,
-        session: Boolean(authData?.session),
-      });
-      return NextResponse.json({ error: "Invalid staff ID or PIN" }, { status: 401 });
+      if (staff.auth_user_id) {
+        const { error: resetErr } = await admin.auth.admin.updateUserById(String(staff.auth_user_id), {
+          password: pinToPassword(pin, staffId),
+          email_confirm: true,
+        });
+        if (!resetErr) {
+          const retry = await sb.auth.signInWithPassword({
+            email: staff.auth_email,
+            password: pinToPassword(pin, staffId),
+          });
+          authData = retry.data;
+          authErr = retry.error;
+        }
+      }
+      if (authErr || !authData.session) {
+        console.error("staff login auth failed", {
+          staffId,
+          authEmail: staff.auth_email,
+          authErr: authErr?.message || authErr,
+          session: Boolean(authData?.session),
+        });
+        return NextResponse.json({ error: "Invalid staff ID or PIN" }, { status: 401 });
+      }
     }
 
     const res = NextResponse.json({ ok: true, role: staff.role }, { status: 200 });
