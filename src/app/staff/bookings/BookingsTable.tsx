@@ -1441,6 +1441,8 @@ export default function BookingsTable() {
                       const width = resourceColWidth - 8;
                       const resourceLabel =
                         resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
+                      const isHovered =
+                        hoveredBookingId === resv.booking_id || hoveredNoteId === resv.booking_id;
                       const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
                       const actionBarColor = ACTION_BAR_COLOR;
                       const actionTextColor = "#111";
@@ -1448,7 +1450,7 @@ export default function BookingsTable() {
                       return (
                         <div
                           key={`${resv.booking_id}-${resv.resource_id}-${resv.start_ts}`}
-                          className="absolute z-50 cursor-pointer rounded-xl p-3 text-xs text-white shadow-sm"
+                          className="absolute cursor-pointer rounded-xl p-3 text-xs text-white shadow-sm"
                           style={{
                             top,
                             height,
@@ -1458,6 +1460,7 @@ export default function BookingsTable() {
                             backgroundColor: bgColor,
                             pointerEvents: "auto",
                             paddingTop: 26,
+                            zIndex: isHovered ? 999 : 50,
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
