@@ -28,10 +28,18 @@ export async function getStaffUserFromCookies(): Promise<StaffUser | null> {
       .from("staff_users")
       .select("id,staff_id,role,full_name,active")
       .eq("active", true)
-      .order("role", { ascending: false })
+      .eq("role", "admin")
       .limit(1)
       .single();
     if (staff) return staff as StaffUser;
+
+    const { data: fallbackStaff } = await admin
+      .from("staff_users")
+      .select("id,staff_id,role,full_name,active")
+      .eq("active", true)
+      .limit(1)
+      .single();
+    if (fallbackStaff) return fallbackStaff as StaffUser;
   }
 
   const cookieStore = await cookies();
