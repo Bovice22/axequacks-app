@@ -1110,15 +1110,6 @@ export default function PosScreen() {
 
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={handlePayment}
-                      disabled={terminalLoading}
-                      className="h-11 w-full rounded-xl border border-black bg-black text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {terminalLoading ? "Processing…" : "Pay With Card"}
-                    </button>
-
                     {terminalLoading ? (
                       <button
                         type="button"
@@ -1129,15 +1120,6 @@ export default function PosScreen() {
                         Cancel Payment
                       </button>
                     ) : null}
-
-                    <button
-                      type="button"
-                      onClick={openCashModal}
-                      disabled={cashLoading}
-                      className="h-11 w-full rounded-xl border border-black bg-black text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {cashLoading ? "Recording…" : "Pay With Cash"}
-                    </button>
                   </div>
 
                 </div>
@@ -1211,6 +1193,16 @@ export default function PosScreen() {
                 className="h-12 rounded-xl bg-teal-600 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {terminalLoading ? "Processing…" : "Pay"}
+              </button>
+            </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={openCashModal}
+                disabled={cashLoading}
+                className="h-11 w-full rounded-xl border border-black bg-black text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cashLoading ? "Recording…" : "Pay With Cash"}
               </button>
             </div>
             {terminalError ? <div className="mt-2 text-xs text-red-600">{terminalError}</div> : null}
