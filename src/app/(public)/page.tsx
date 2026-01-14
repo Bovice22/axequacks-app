@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-export default function Home() {
-  const headerList = headers();
+export default async function Home() {
+  const headerList = await headers();
   const host = (headerList.get("x-forwarded-host") || headerList.get("host") || "").toLowerCase();
   if (host.startsWith("staff.")) {
     redirect("/staff/login");
