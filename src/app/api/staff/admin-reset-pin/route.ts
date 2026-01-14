@@ -5,8 +5,9 @@ import { pinToPassword } from "@/lib/pinAuth";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const adminPassword = String(body?.adminPassword || "");
-    if (!process.env.ADMIN_PASSWORD || adminPassword !== process.env.ADMIN_PASSWORD) {
+    const adminPassword = String(body?.adminPassword || "").trim();
+    const envAdminPassword = String(process.env.ADMIN_PASSWORD || "").trim();
+    if (!envAdminPassword || adminPassword !== envAdminPassword) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
