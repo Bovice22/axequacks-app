@@ -32,6 +32,12 @@ export async function POST(req: Request) {
       .single();
 
     if (staffErr || !staff || !staff.active) {
+      console.error("staff login lookup failed", {
+        staffId,
+        staffErr: staffErr?.message || staffErr,
+        staffActive: staff?.active ?? null,
+        staffFound: Boolean(staff),
+      });
       return NextResponse.json({ error: "Invalid staff ID or PIN" }, { status: 401 });
     }
 
@@ -42,6 +48,12 @@ export async function POST(req: Request) {
     });
 
     if (authErr || !authData.session) {
+      console.error("staff login auth failed", {
+        staffId,
+        authEmail: staff.auth_email,
+        authErr: authErr?.message || authErr,
+        session: Boolean(authData?.session),
+      });
       return NextResponse.json({ error: "Invalid staff ID or PIN" }, { status: 401 });
     }
 
