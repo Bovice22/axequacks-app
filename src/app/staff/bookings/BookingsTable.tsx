@@ -180,7 +180,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_ROW_PX = 140;
 const PX_PER_MIN = HOUR_ROW_PX / 60;
 const RESOURCE_COL_WIDTH = 260;
-const MIN_RESOURCE_COL_WIDTH = 160;
+const MIN_RESOURCE_COL_WIDTH = 120;
 const TIME_GUTTER = 96;
 const HEADER_HEIGHT = 64;
 const BLOCK_INSET_PX = 0;
@@ -1322,7 +1322,7 @@ export default function BookingsTable() {
                         <div
                           key={r.id}
                           className="text-center"
-                          style={{ width: resourceColWidth, paddingLeft: 8, paddingRight: 8 }}
+                          style={{ width: resourceColWidth, paddingLeft: 6, paddingRight: 6 }}
                         >
                           {r.label || r.name || r.id}
                         </div>
