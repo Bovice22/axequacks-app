@@ -541,6 +541,7 @@ function BookPageContent() {
     return comboAxeDuration + comboDuckpinDuration;
   }, [comboAxeDuration, comboDuckpinDuration]);
   const effectiveDuration = activity === "Combo Package" ? comboTotalDuration : duration;
+  const maxPartyAreaMinutes = Math.max(60, Math.floor((effectiveDuration || 0) / 60) * 60);
 
   function chooseActivity(a: Activity) {
     setActivity(a);
@@ -1492,7 +1493,9 @@ function BookPageContent() {
                 <div className="mt-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Duration</div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {[60, 120, 180, 240, 300, 360, 420, 480].map((mins) => {
+                    {[60, 120, 180, 240, 300, 360, 420, 480]
+                      .filter((mins) => mins <= maxPartyAreaMinutes)
+                      .map((mins) => {
                       const selected = partyAreaMinutes === mins;
                       return (
                         <button

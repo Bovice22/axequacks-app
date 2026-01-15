@@ -217,6 +217,7 @@ export default function HostEventPage() {
     return selectedActivities.reduce((sum, a) => sum + (durationByActivity[a] || 0), 0);
   }, [selectedActivities, durationByActivity]);
   const partyAreaDuration = partyAreas.length ? partyAreaMinutes ?? 60 : 0;
+  const maxPartyAreaMinutes = Math.max(60, Math.floor(totalDuration / 60) * 60);
   const bookingWindowMinutes = Math.max(totalDuration, partyAreaDuration);
 
   const openWindow = useMemo(() => getOpenWindowForDateKey(dateKey), [dateKey]);
@@ -597,7 +598,9 @@ export default function HostEventPage() {
               <div className="mt-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Duration</div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {[60, 120, 180, 240, 300, 360, 420, 480].map((mins) => {
+                  {[60, 120, 180, 240, 300, 360, 420, 480]
+                    .filter((mins) => mins <= maxPartyAreaMinutes)
+                    .map((mins) => {
                     const selected = partyAreaMinutes === mins;
                     return (
                       <button

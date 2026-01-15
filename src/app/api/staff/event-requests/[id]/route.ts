@@ -193,6 +193,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
 
       const bookingPartySize = Math.min(24, Math.max(1, requestedPartySize));
+      const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
+      const partyAreaEndMin = startMin + (normalizedPartyAreaMinutes || totalDuration);
+      const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
       let offsetMinutes = 0;
 
       for (let i = 0; i < activities.length; i += 1) {
@@ -207,8 +210,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const segmentEndMin = segmentStartMin + durationMinutes;
         const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentStartMin);
         const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentEndMin);
-        const partyAreaEndMin = segmentStartMin + (normalizedPartyAreaMinutes || durationMinutes);
-        const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
         const activityTotalCents = totalCents(activity as any, requestedPartySize, durationMinutes);
 
         const startHour = Math.floor(segmentStartMin / 60);
@@ -251,18 +252,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           await sb.from("resource_reservations").insert(inserts);
         }
 
-        if (partyAreas.length) {
-          try {
-            await reservePartyAreasForBooking(sb, bookingId, partyAreas, startIso, partyAreaEndIso);
-          } catch (err: any) {
-            return NextResponse.json({ error: err?.message || "Selected party area is unavailable" }, { status: 400 });
-          }
-        }
-
         offsetMinutes += durationMinutes;
       }
 
-      const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
+      if (partyAreas.length && bookingIds.length) {
+        try {
+          await reservePartyAreasForBooking(sb, bookingIds[0], partyAreas, startIso, partyAreaEndIso);
+        } catch (err: any) {
+          return NextResponse.json({ error: err?.message || "Selected party area is unavailable" }, { status: 400 });
+        }
+      }
+
       const totalCentsValue = activities.reduce((sum: number, a: any) => {
         const activity = a?.activity as Activity | undefined;
         const durationMinutes = Number(a?.durationMinutes);
@@ -352,6 +352,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const bookingPartySize = Math.min(24, Math.max(1, requestedPartySize));
     const dateKey = String(requestRow.date_key || "");
     const startMin = Number(requestRow.start_min || 0);
+    const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
+    const partyAreaEndMin = startMin + (normalizedPartyAreaMinutes || totalDuration);
+    const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
     let offsetMinutes = 0;
     for (const item of activities) {
       const activity = item?.activity as Activity | undefined;
@@ -366,8 +369,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const activityDb = activity === "Axe Throwing" ? "AXE" : "DUCKPIN";
       const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentStartMin);
       const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, segmentEndMin);
-      const partyAreaEndMin = segmentStartMin + (normalizedPartyAreaMinutes || durationMinutes);
-      const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
       const activityTotalCents = totalCents(activity as any, requestedPartySize, durationMinutes);
       const startHour = Math.floor(segmentStartMin / 60);
       const startMinute = String(segmentStartMin % 60).padStart(2, "0");
@@ -465,17 +466,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
       }
 
-      if (partyAreas.length) {
-        try {
-          await reservePartyAreasForBooking(sb, bookingId, partyAreas, startIso, partyAreaEndIso);
-        } catch (err: any) {
-        return NextResponse.json(
-          { error: err?.message || "Selected party area is unavailable", detail: err?.message || "" },
-          { status: 400 }
-        );
-      }
-      }
-
       offsetMinutes += durationMinutes;
     }
 
@@ -527,3 +517,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
   }
 }
+    if (partyAreas.length && bookingIds.length) {
+      try {
+        await reservePartyAreasForBooking(sb, bookingIds[0], partyAreas, startIso, partyAreaEndIso);
+      } catch (err: any) {
+        return NextResponse.json(
+          { error: err?.message || "Selected party area is unavailable", detail: err?.message || "" },
+          { status: 400 }
+        );
+      }
+    }
