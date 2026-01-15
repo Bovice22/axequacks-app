@@ -133,19 +133,19 @@ export default function StaffUsersAdmin() {
             value={staffId}
             onChange={(e) => setStaffId(e.target.value)}
             placeholder="Staff ID (short username)"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             required
           />
           <input
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Full name"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as "staff" | "admin")}
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
           >
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
@@ -155,7 +155,7 @@ export default function StaffUsersAdmin() {
             onChange={(e) => setPin(e.target.value)}
             placeholder="4-digit PIN"
             inputMode="numeric"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             required
           />
           {formError ? <div className="text-sm text-red-600">{formError}</div> : null}
@@ -175,7 +175,7 @@ export default function StaffUsersAdmin() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search staff ID, name, role..."
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
           <button
             type="button"
@@ -193,7 +193,7 @@ export default function StaffUsersAdmin() {
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
-              <thead className="text-center text-zinc-600">
+              <thead className="text-center text-zinc-900">
                 <tr>
                   <th className="py-2 text-center">Staff ID</th>
                   <th className="py-2 text-center">Name</th>
@@ -204,7 +204,7 @@ export default function StaffUsersAdmin() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.id} className="border-t border-zinc-100">
+                  <tr key={r.id} className="border-t border-zinc-100 text-zinc-900">
                     <td className="py-2 text-center font-mono text-xs">{r.staff_id}</td>
                     <td className="py-2 text-center">{r.full_name || "—"}</td>
                     <td className="py-2 text-center">{r.role}</td>
