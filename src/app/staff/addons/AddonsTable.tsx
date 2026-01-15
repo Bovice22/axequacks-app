@@ -268,14 +268,14 @@ export default function AddonsTable() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             required
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
           <input
             type="number"
@@ -284,7 +284,7 @@ export default function AddonsTable() {
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             placeholder="Price (USD)"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             required
           />
           <select
@@ -299,7 +299,7 @@ export default function AddonsTable() {
               </option>
             ))}
           </select>
-          <label className="flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-700">
+          <label className="flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900">
             <input
               type="file"
               accept="image/*"
@@ -308,7 +308,7 @@ export default function AddonsTable() {
             />
             <span>Image</span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-zinc-700">
+          <label className="flex items-center gap-2 text-sm text-zinc-900">
             <input
               type="checkbox"
               checked={active}
@@ -326,7 +326,7 @@ export default function AddonsTable() {
                 className="block h-[100px] w-[100px] rounded-2xl object-contain"
                 style={{ width: 100, height: 100, maxWidth: 100, maxHeight: 100 }}
               />
-              <span className="text-xs text-zinc-500">Preview</span>
+              <span className="text-xs text-zinc-900">Preview</span>
             </div>
           ) : null}
           {error ? <div className="text-sm text-red-600 md:col-span-6">{error}</div> : null}
@@ -353,11 +353,11 @@ export default function AddonsTable() {
         </div>
         {actionError ? <div className="mb-2 text-sm text-red-600">{actionError}</div> : null}
         {loading ? (
-          <div className="text-sm text-zinc-600">Loading add-ons…</div>
+          <div className="text-sm text-zinc-900">Loading add-ons…</div>
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-zinc-600">
+              <thead className="text-left text-zinc-900">
                 <tr>
                   <th className="px-2 py-2 text-center">Product</th>
                   <th className="px-2 py-2 text-center">Description</th>
@@ -386,16 +386,18 @@ export default function AddonsTable() {
                               style={{ width: 100, height: 100, maxWidth: 100, maxHeight: 100 }}
                             />
                           ) : (
-                            <span className="text-[10px] text-zinc-400">No image</span>
+                            <span className="text-[10px] text-zinc-900">No image</span>
                           )}
                         </div>
                         <div className="font-medium text-zinc-900">{r.name}</div>
                       </div>
                     </td>
-                    <td className="px-2 py-2 text-center">{r.description || "—"}</td>
-                    <td className="px-2 py-2 text-center">${(r.price_cents / 100).toFixed(2)}</td>
-                    <td className="px-2 py-2 text-center">{r.category || "—"}</td>
-                    <td className="px-2 py-2 text-center">{r.active ? "Yes" : "No"}</td>
+                    <td className="px-2 py-2 text-center text-zinc-900">{r.description || "—"}</td>
+                    <td className="px-2 py-2 text-center text-zinc-900">
+                      ${(r.price_cents / 100).toFixed(2)}
+                    </td>
+                    <td className="px-2 py-2 text-center text-zinc-900">{r.category || "—"}</td>
+                    <td className="px-2 py-2 text-center text-zinc-900">{r.active ? "Yes" : "No"}</td>
                     <td className="px-2 py-2 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -442,29 +444,29 @@ export default function AddonsTable() {
         <div ref={editSectionRef} className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="mb-3 text-sm font-extrabold text-zinc-900">Edit Product</div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
-            <input
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder="Name"
-              className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
-              required
-            />
-            <input
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              placeholder="Description"
-              className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
-            />
+          <input
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Name"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+            required
+          />
+          <input
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            placeholder="Description"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+          />
             <input
               type="number"
               step="0.01"
-              min="0"
-              value={editPrice}
-              onChange={(e) => setEditPrice(e.target.value)}
-              placeholder="Price (USD)"
-              className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
-              required
-            />
+            min="0"
+            value={editPrice}
+            onChange={(e) => setEditPrice(e.target.value)}
+            placeholder="Price (USD)"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+            required
+          />
             <select
               value={editCategory}
               onChange={(e) => setEditCategory(e.target.value)}
@@ -477,7 +479,7 @@ export default function AddonsTable() {
                 </option>
               ))}
             </select>
-            <label className="flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-700">
+            <label className="flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900">
               <input
                 type="file"
                 accept="image/*"
@@ -514,7 +516,7 @@ export default function AddonsTable() {
                 className="block h-[100px] w-[100px] rounded-2xl object-contain"
                 style={{ width: 100, height: 100, maxWidth: 100, maxHeight: 100 }}
               />
-              <span className="text-xs text-zinc-500">Preview</span>
+              <span className="text-xs text-zinc-900">Preview</span>
             </div>
           ) : null}
           {editError ? <div className="mt-2 text-sm text-red-600">{editError}</div> : null}

@@ -16,7 +16,9 @@ export default async function BuffersPage() {
         </div>
 
         <form action="/staff/logout" method="post">
-          <button className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm">Log out</button>
+          <button className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+            Log out
+          </button>
         </form>
       </div>
 

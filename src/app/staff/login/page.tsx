@@ -48,7 +48,7 @@ export default function StaffLoginPage() {
               onChange={(e) => setStaffId(e.target.value)}
               placeholder="Staff ID"
               autoComplete="username"
-              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm font-semibold outline-none focus:border-zinc-900"
+              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm font-semibold text-zinc-900 outline-none placeholder:text-zinc-900 focus:border-zinc-900"
               required
             />
             <input
@@ -58,7 +58,7 @@ export default function StaffLoginPage() {
               autoComplete="current-password"
               inputMode="numeric"
               type="password"
-              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm font-semibold outline-none focus:border-zinc-900"
+              className="h-11 w-full rounded-xl border border-zinc-200 px-3 text-sm font-semibold text-zinc-900 outline-none placeholder:text-zinc-900 focus:border-zinc-900"
               required
             />
 
