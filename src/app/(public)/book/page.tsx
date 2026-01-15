@@ -135,6 +135,8 @@ function formatTimeFromMinutes(minsFromMidnight: number) {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+const BOOKING_DRAFT_KEY = "aq_public_booking_draft_v1";
+
 /**
  * Converts "4:00 PM" -> minutes-from-midnight
  */
@@ -451,6 +453,79 @@ function BookPageContent() {
   const [cashInput, setCashInput] = useState("0.00");
   const cashInputRef = useRef<HTMLInputElement | null>(null);
   const [cashError, setCashError] = useState("");
+
+  useEffect(() => {
+    if (isStaffMode) return;
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(BOOKING_DRAFT_KEY);
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as Record<string, any>;
+      const savedActivity = String(saved.activity || "");
+      const allowedActivities: Array<Activity | ""> = ["Axe Throwing", "Duckpin Bowling", "Combo Package", ""];
+      if (allowedActivities.includes(savedActivity as Activity)) {
+        setActivity(savedActivity as Activity | "");
+      }
+      if (Number.isFinite(saved.duration)) setDuration(Number(saved.duration));
+      if (Number.isFinite(saved.comboAxeDuration)) setComboAxeDuration(Number(saved.comboAxeDuration));
+      if (Number.isFinite(saved.comboDuckpinDuration)) setComboDuckpinDuration(Number(saved.comboDuckpinDuration));
+      if (Number.isFinite(saved.partySize)) setPartySize(Math.max(1, Number(saved.partySize)));
+      if (Array.isArray(saved.partyAreas)) setPartyAreas(saved.partyAreas as PartyAreaName[]);
+      if (Number.isFinite(saved.partyAreaMinutes)) setPartyAreaMinutes(Number(saved.partyAreaMinutes));
+      if (saved.comboSlot1 === "Axe Throwing" || saved.comboSlot1 === "Duckpin Bowling") {
+        setComboSlot1(saved.comboSlot1);
+      }
+      if (typeof saved.dateKey === "string") setDateKey(saved.dateKey);
+      if (typeof saved.time === "string") setTime(saved.time);
+      if (typeof saved.name === "string") setName(saved.name);
+      if (typeof saved.email === "string") setEmail(saved.email);
+      if (typeof saved.phone === "string") setPhone(saved.phone);
+      if (typeof saved.consentChecked === "boolean") setConsentChecked(saved.consentChecked);
+      if (typeof saved.promoCode === "string") setPromoCode(saved.promoCode);
+    } catch {
+      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+    }
+  }, [isStaffMode]);
+
+  useEffect(() => {
+    if (isStaffMode) return;
+    if (typeof window === "undefined") return;
+    const payload = {
+      activity,
+      duration,
+      comboAxeDuration,
+      comboDuckpinDuration,
+      partySize,
+      partyAreas,
+      partyAreaMinutes,
+      comboSlot1,
+      dateKey,
+      time,
+      name,
+      email,
+      phone,
+      consentChecked,
+      promoCode,
+    };
+    window.localStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify(payload));
+  }, [
+    isStaffMode,
+    activity,
+    duration,
+    comboAxeDuration,
+    comboDuckpinDuration,
+    partySize,
+    partyAreas,
+    partyAreaMinutes,
+    comboSlot1,
+    dateKey,
+    time,
+    name,
+    email,
+    phone,
+    consentChecked,
+    promoCode,
+  ]);
 
   useEffect(() => {
     if (!partyAreas.length) {
@@ -1068,6 +1143,9 @@ function BookPageContent() {
   }
 
   function resetBookingState() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+    }
     setActivity("");
     setDuration(null);
     setComboAxeDuration(null);
