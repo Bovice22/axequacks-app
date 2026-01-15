@@ -457,6 +457,12 @@ function BookPageContent() {
   useEffect(() => {
     if (isStaffMode) return;
     if (typeof window === "undefined") return;
+    const shouldRestore = window.sessionStorage.getItem(`${BOOKING_DRAFT_KEY}:restore`) === "true";
+    if (!shouldRestore) {
+      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+      return;
+    }
+    window.sessionStorage.removeItem(`${BOOKING_DRAFT_KEY}:restore`);
     const raw = window.localStorage.getItem(BOOKING_DRAFT_KEY);
     if (!raw) return;
     try {
@@ -1014,6 +1020,9 @@ function BookPageContent() {
       }
 
       if (json?.url) {
+        if (!isStaffMode && typeof window !== "undefined") {
+          window.sessionStorage.setItem(`${BOOKING_DRAFT_KEY}:restore`, "true");
+        }
         window.location.href = json.url;
       } else {
         setSubmitError("Checkout session did not return a URL.");
