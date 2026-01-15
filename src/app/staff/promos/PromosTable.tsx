@@ -115,13 +115,13 @@ export default function PromosTable() {
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="CODE10"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             required
           />
           <select
             value={discountType}
             onChange={(e) => setDiscountType(e.target.value)}
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
           >
             <option value="PERCENT">Percent</option>
             <option value="AMOUNT">Amount (cents)</option>
@@ -130,9 +130,9 @@ export default function PromosTable() {
             type="number"
             value={discountValue}
             onChange={(e) => setDiscountValue(Number(e.target.value))}
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
-          <label className="flex items-center gap-2 text-sm text-zinc-700">
+          <label className="flex items-center gap-2 text-sm text-zinc-900">
             <input
               type="checkbox"
               checked={active}
@@ -164,11 +164,11 @@ export default function PromosTable() {
         </div>
         {actionError ? <div className="mb-2 text-sm text-red-600">{actionError}</div> : null}
         {loading ? (
-          <div className="text-sm text-zinc-600">Loading promos…</div>
+          <div className="text-sm text-zinc-900">Loading promos…</div>
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm">
-              <thead className="text-center text-zinc-600">
+              <thead className="text-center text-zinc-900">
                 <tr>
                   <th className="py-2 text-center">Code</th>
                   <th className="py-2 text-center">Type</th>
@@ -180,7 +180,7 @@ export default function PromosTable() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.id} className="border-t border-zinc-100">
+                  <tr key={r.id} className="border-t border-zinc-100 text-zinc-900">
                     <td className="py-2 text-center font-mono text-xs">{r.code}</td>
                     <td className="py-2 text-center">{r.discount_type}</td>
                     <td className="py-2 text-center">{r.discount_value}</td>
