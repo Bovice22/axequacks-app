@@ -24,8 +24,8 @@ export default function PublicLayout({
       <header className="relative z-10">
         <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-5">
           <a href="/" className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 p-1.5">
-              <img src="/logo.png?v=2" alt="Axe Quacks" className="h-9 w-9 object-contain" />
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
+              <img src="/logo.png?v=2" alt="Axe Quacks" className="h-10 w-10 object-contain" />
             </span>
             <span className="public-display text-lg tracking-[0.2em] text-white">Axe Quacks</span>
           </a>

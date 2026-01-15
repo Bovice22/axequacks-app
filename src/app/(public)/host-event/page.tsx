@@ -462,8 +462,8 @@ export default function HostEventPage() {
     <div className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-10">
       <div className="mb-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 p-2">
-            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-full w-full object-contain" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
+            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-12 w-12 object-contain" />
           </div>
           <div>
             <div className="public-display text-xs text-[#00AEEF]">Axe Quacks</div>
