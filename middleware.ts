@@ -10,7 +10,8 @@ function isAssetPath(pathname: string) {
     pathname.startsWith("/api") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/robots.txt") ||
-    pathname.startsWith("/sitemap")
+    pathname.startsWith("/sitemap") ||
+    /\.[a-z0-9]+$/i.test(pathname)
   );
 }
 
