@@ -8,20 +8,33 @@ export default function PublicOverlayCleanup() {
 
   useEffect(() => {
     if (pathname === "/book") return;
-    const overlays = document.querySelectorAll("[data-booking-overlay]");
-    overlays.forEach((node) => node.remove());
+    const clearOverlays = () => {
+      const overlays = document.querySelectorAll("[data-booking-overlay]");
+      overlays.forEach((node) => node.remove());
 
-    const candidates = Array.from(document.querySelectorAll("div"));
-    candidates.forEach((node) => {
-      const style = window.getComputedStyle(node);
-      if (style.position !== "fixed") return;
-      if (style.top !== "0px" || style.left !== "0px" || style.right !== "0px" || style.bottom !== "0px") return;
-      if (style.backgroundColor === "rgba(0, 0, 0, 0)" || style.backgroundColor === "transparent") return;
-      node.remove();
-    });
+      const candidates = Array.from(document.querySelectorAll("div"));
+      candidates.forEach((node) => {
+        const style = window.getComputedStyle(node);
+        if (style.position !== "fixed") return;
+        if (style.top !== "0px" || style.left !== "0px" || style.right !== "0px" || style.bottom !== "0px") return;
+        if (style.backgroundColor === "rgba(0, 0, 0, 0)" || style.backgroundColor === "transparent") return;
+        node.remove();
+      });
 
-    document.body.style.overflow = "";
-    document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+
+    clearOverlays();
+    const intervalId = window.setInterval(clearOverlays, 500);
+    const timeoutId = window.setTimeout(() => {
+      window.clearInterval(intervalId);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
   }, [pathname]);
 
   return null;
