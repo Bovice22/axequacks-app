@@ -20,6 +20,9 @@ function handleHostRewrite(req: NextRequest, destination: string) {
   if (isAssetPath(pathname)) {
     return NextResponse.next();
   }
+  if (pathname === "/waiver" || pathname.startsWith("/waiver/")) {
+    return NextResponse.next();
+  }
   if (pathname === destination || pathname.startsWith(`${destination}/`)) {
     return NextResponse.next();
   }
