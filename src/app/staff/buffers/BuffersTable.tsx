@@ -98,14 +98,14 @@ export default function BuffersTable() {
             value={beforeMin}
             onChange={(e) => setBeforeMin(Number(e.target.value))}
             placeholder="Before (min)"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
           <input
             type="number"
             value={afterMin}
             onChange={(e) => setAfterMin(Number(e.target.value))}
             placeholder="After (min)"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
           <label className="flex items-center gap-2 text-sm text-zinc-700">
             <input
