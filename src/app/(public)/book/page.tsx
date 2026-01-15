@@ -2012,7 +2012,7 @@ function BookPageContent() {
                       setPromoStatus("");
                     }}
                     placeholder="Enter code"
-                    className="h-11 flex-1 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold outline-none focus:border-zinc-900"
+                    className="h-11 flex-1 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-black outline-none focus:border-zinc-900"
                     autoCapitalize="characters"
                   />
                   {promoApplied ? (

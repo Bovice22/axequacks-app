@@ -1,5 +1,6 @@
 import { League_Spartan } from "next/font/google";
 import PublicOverlayCleanup from "@/components/PublicOverlayCleanup";
+import PublicNav from "@/components/PublicNav";
 
 const leagueSpartan = League_Spartan({
   subsets: ["latin"],
@@ -29,20 +30,7 @@ export default function PublicLayout({
             </span>
             <span className="public-display text-lg tracking-[0.2em] text-white">Axe Quacks</span>
           </a>
-          <nav className="flex items-center gap-3 text-sm font-semibold text-white">
-            <a
-              href="/book"
-              className="rounded-full border border-white/20 px-4 py-2 transition hover:border-white/50 hover:bg-white/10"
-            >
-              Book
-            </a>
-            <a
-              href="/host-event"
-              className="rounded-full bg-[#F7941D] px-4 py-2 text-black shadow-[0_8px_20px_rgba(247,148,29,0.35)] transition hover:bg-[#ffb055]"
-            >
-              Events
-            </a>
-          </nav>
+          <PublicNav />
         </div>
       </header>
       <main className="relative z-10 min-h-[calc(100vh-72px)]">{children}</main>
