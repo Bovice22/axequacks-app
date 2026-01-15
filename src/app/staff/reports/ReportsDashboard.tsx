@@ -33,6 +33,7 @@ type PosItemRow = {
 type ViewMode = "day" | "week" | "month" | "year";
 
 const INVESTMENT_CENTS = 160_000 * 100;
+const PAYMENT_LOG_STORAGE_KEY = "axequacks:payment-log";
 
 function toNYDateParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -356,6 +357,25 @@ export default function ReportsDashboard() {
   const [paymentLogNote, setPaymentLogNote] = useState("");
   const [paymentLogEntries, setPaymentLogEntries] = useState<string[]>([]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(PAYMENT_LOG_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setPaymentLogEntries(parsed.filter((item) => typeof item === "string"));
+      }
+    } catch {
+      // Ignore bad storage data.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(PAYMENT_LOG_STORAGE_KEY, JSON.stringify(paymentLogEntries));
+  }, [paymentLogEntries]);
+
   function downloadSummaryCsv() {
     const lines: string[] = [];
     lines.push("Metric,Value");
@@ -549,21 +569,21 @@ export default function ReportsDashboard() {
         <div className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="text-sm font-extrabold text-zinc-900">Revenue Share (Duckpin Only)</div>
           {loading ? (
-            <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
           ) : (
-            <div className="mt-3 space-y-2 text-sm">
+            <div className="mt-3 space-y-2 text-sm text-zinc-900">
               <div>Duckpin Bowling Revenue: {formatMoney(duckpinRevenueCents)}</div>
               <div>Rick's Share (50%): {formatMoney(rickShareCents)}</div>
               <div>Jason's Share (50%): {formatMoney(jasonShareCents)}</div>
               <div>Total Pay-Off Amount: {formatMoney(payoffAmountCents)}</div>
               <div className="pt-2">
-                <div className="text-xs font-semibold text-zinc-500">Payment Log</div>
+                <div className="text-xs font-semibold text-zinc-900">Payment Log</div>
                 <div className="mt-1 flex gap-2">
                   <input
                     value={paymentLogNote}
                     onChange={(e) => setPaymentLogNote(e.target.value)}
                     placeholder="Paid $2,000 1/12/26"
-                    className="h-9 flex-1 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-900"
+                    className="h-9 flex-1 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-900 placeholder:text-zinc-900 outline-none focus:border-zinc-900"
                   />
                   <button
                     type="button"
@@ -579,9 +599,20 @@ export default function ReportsDashboard() {
                   </button>
                 </div>
                 {paymentLogEntries.length ? (
-                  <div className="mt-2 space-y-1 text-xs text-zinc-600">
+                  <div className="mt-2 space-y-1 text-xs text-zinc-900">
                     {paymentLogEntries.map((entry, idx) => (
-                      <div key={`${entry}-${idx}`}>• {entry}</div>
+                      <div key={`${entry}-${idx}`} className="flex items-center justify-between gap-2">
+                        <span>• {entry}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPaymentLogEntries((prev) => prev.filter((_, index) => index !== idx))
+                          }
+                          className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-900 hover:bg-zinc-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     ))}
                   </div>
                 ) : null}
@@ -593,11 +624,11 @@ export default function ReportsDashboard() {
         <div className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="text-sm font-extrabold text-zinc-900">Revenue by Activity</div>
           {loading ? (
-            <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
           ) : (
             <div className="mt-3 overflow-auto">
               <table className="w-full text-sm">
-                <thead className="text-center text-zinc-600">
+                <thead className="text-center text-zinc-900">
                   <tr>
                     <th className="px-3 py-2">Activity</th>
                     <th className="px-3 py-2">Revenue</th>
@@ -609,14 +640,14 @@ export default function ReportsDashboard() {
                     <td className="px-3 py-2 text-center">{formatMoney(totalRevenueCents)}</td>
                   </tr>
                   {revenueByActivity.map(([name, cents]) => (
-                    <tr key={name} className="border-t border-zinc-100">
+                    <tr key={name} className="border-t border-zinc-100 text-zinc-900">
                       <td className="px-3 py-2 text-center">{name}</td>
                       <td className="px-3 py-2 text-center">{formatMoney(cents)}</td>
                     </tr>
                   ))}
                   {!revenueByActivity.length ? (
                     <tr>
-                      <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={2}>
+                      <td className="px-3 py-3 text-center text-sm text-zinc-900" colSpan={2}>
                         No activity revenue in this range.
                       </td>
                     </tr>
@@ -628,26 +659,26 @@ export default function ReportsDashboard() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="text-sm font-extrabold text-zinc-900">Combo Package Breakdown</div>
-        {loading ? (
-          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
-        ) : (
-          <div className="mt-3 space-y-2 text-sm">
-            <div>Combo Axe Throwing Revenue: {formatMoney(comboBreakdown.axe)}</div>
-            <div>Combo Duckpin Bowling Revenue: {formatMoney(comboBreakdown.duckpin)}</div>
-          </div>
-        )}
-      </div>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">Combo Package Breakdown</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm text-zinc-900">
+              <div>Combo Axe Throwing Revenue: {formatMoney(comboBreakdown.axe)}</div>
+              <div>Combo Duckpin Bowling Revenue: {formatMoney(comboBreakdown.duckpin)}</div>
+            </div>
+          )}
+        </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="text-sm font-extrabold text-zinc-900">Category Summary</div>
-        {loading ? (
-          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
-        ) : (
-          <div className="mt-3 overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="text-center text-zinc-600">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">Category Summary</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
+          ) : (
+            <div className="mt-3 overflow-auto">
+              <table className="w-full text-sm">
+              <thead className="text-center text-zinc-900">
                 <tr>
                   <th className="px-3 py-2">Category</th>
                   <th className="px-3 py-2">Revenue</th>
@@ -659,14 +690,14 @@ export default function ReportsDashboard() {
                     <td className="px-3 py-2 text-center">{formatMoney(totalRevenueCents)}</td>
                   </tr>
                   {revenueByCategory.map(([name, cents]) => (
-                    <tr key={name} className="border-t border-zinc-100">
+                    <tr key={name} className="border-t border-zinc-100 text-zinc-900">
                       <td className="px-3 py-2 text-center">{name}</td>
                       <td className="px-3 py-2 text-center">{formatMoney(cents)}</td>
                   </tr>
                 ))}
                 {!revenueByCategory.length ? (
                   <tr>
-                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={2}>
+                    <td className="px-3 py-3 text-center text-sm text-zinc-900" colSpan={2}>
                       No category revenue in this range.
                     </td>
                   </tr>
@@ -677,14 +708,14 @@ export default function ReportsDashboard() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="text-sm font-extrabold text-zinc-900">POS Items Sold</div>
-        {loading ? (
-          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
-        ) : (
-          <div className="mt-3 overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="text-center text-zinc-600">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">POS Items Sold</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
+          ) : (
+            <div className="mt-3 overflow-auto">
+              <table className="w-full text-sm">
+              <thead className="text-center text-zinc-900">
                 <tr>
                   <th className="px-3 py-2">Item</th>
                   <th className="px-3 py-2">Quantity Sold</th>
@@ -693,7 +724,7 @@ export default function ReportsDashboard() {
               </thead>
               <tbody>
                 {itemsSold.map((row) => (
-                  <tr key={row.name} className="border-t border-zinc-100">
+                  <tr key={row.name} className="border-t border-zinc-100 text-zinc-900">
                     <td className="px-3 py-2 text-center">{row.name}</td>
                     <td className="px-3 py-2 text-center">{row.quantity}</td>
                     <td className="px-3 py-2 text-center">{formatMoney(row.revenue)}</td>
@@ -701,7 +732,7 @@ export default function ReportsDashboard() {
                 ))}
                 {!itemsSold.length ? (
                   <tr>
-                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={3}>
+                    <td className="px-3 py-3 text-center text-sm text-zinc-900" colSpan={3}>
                       No POS items sold in this range.
                     </td>
                   </tr>
@@ -759,16 +790,16 @@ export default function ReportsDashboard() {
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="text-sm font-extrabold text-zinc-900">
-          {viewMode === "month" ? "Revenue by Month" : `Revenue by ${viewMode}`}
-        </div>
-        {loading ? (
-          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
-        ) : (
-          <div className="mt-3 overflow-auto">
-            <table className="w-auto text-sm">
-              <thead className="text-center text-zinc-600">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">
+            {viewMode === "month" ? "Revenue by Month" : `Revenue by ${viewMode}`}
+          </div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
+          ) : (
+            <div className="mt-3 overflow-auto">
+              <table className="w-auto text-sm">
+              <thead className="text-center text-zinc-900">
                 <tr>
                   <th className="px-4 py-2 text-center">{viewMode === "month" ? "Month" : viewMode}</th>
                   <th className="px-4 py-2 text-center" style={{ paddingLeft: "120px" }}>
@@ -778,7 +809,7 @@ export default function ReportsDashboard() {
               </thead>
               <tbody>
                 {revenueByPeriod.map((row) => (
-                  <tr key={row.label} className="border-t border-zinc-100">
+                  <tr key={row.label} className="border-t border-zinc-100 text-zinc-900">
                     <td className="px-4 py-2 text-center">{row.label}</td>
                     <td className="px-4 py-2 text-center" style={{ paddingLeft: "120px" }}>
                       {formatMoney(row.total)}
@@ -787,7 +818,7 @@ export default function ReportsDashboard() {
                 ))}
                 {!revenueByPeriod.length && (
                   <tr>
-                    <td className="px-4 py-3 text-center text-sm text-zinc-600" colSpan={2}>
+                    <td className="px-4 py-3 text-center text-sm text-zinc-900" colSpan={2}>
                       No data for the selected range.
                     </td>
                   </tr>
