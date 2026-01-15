@@ -195,7 +195,7 @@ function BookingConfirmationContent() {
       <div className="mx-auto max-w-xl px-4 py-12">
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
           <div className="mb-4 flex justify-center">
-            <img src="/logo.png" alt="Axe Quacks" className="h-20 w-auto" />
+            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-20 w-auto" />
           </div>
           <div className="text-2xl font-extrabold text-white">Thanks for booking at Axe Quacks!</div>
           <div className="public-muted mt-2 text-sm">Here are your booking details:</div>

@@ -1321,7 +1321,7 @@ function BookPageContent() {
         <div className="mb-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 p-2">
-              <img src="/logo.png" alt="Axe Quacks" className="h-full w-full object-contain" />
+            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-full w-full object-contain" />
             </div>
             <div>
               <div className="public-display text-xs text-[#FFD700]">Axe Quacks</div>
