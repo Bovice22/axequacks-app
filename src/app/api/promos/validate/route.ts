@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     if (data.discount_type === "PERCENT") {
       amountOffCents = Math.round((amountCents * Number(data.discount_value || 0)) / 100);
     } else {
-      amountOffCents = Number(data.discount_value || 0);
+      amountOffCents = Math.round(Number(data.discount_value || 0) * 100);
     }
     amountOffCents = Math.max(0, Math.min(amountOffCents, amountCents));
     const totalCents = amountCents - amountOffCents;

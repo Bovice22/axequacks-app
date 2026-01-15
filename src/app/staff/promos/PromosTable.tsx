@@ -185,12 +185,13 @@ export default function PromosTable() {
             className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
           >
             <option value="PERCENT">Percent</option>
-            <option value="AMOUNT">Amount (cents)</option>
+            <option value="AMOUNT">Amount (USD)</option>
           </select>
           <input
             type="number"
             value={discountValue}
             onChange={(e) => setDiscountValue(Number(e.target.value))}
+            step="0.01"
             className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
           />
           <label className="flex items-center gap-2 text-sm text-zinc-900">
@@ -287,10 +288,13 @@ export default function PromosTable() {
                               prev ? { ...prev, discountValue: Number(e.target.value) } : prev
                             )
                           }
+                          step="0.01"
                           className="h-8 w-24 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
                         />
                       ) : (
-                        r.discount_value
+                        r.discount_type === "AMOUNT"
+                          ? `$${Number(r.discount_value || 0).toFixed(2)}`
+                          : r.discount_value
                       )}
                     </td>
                     <td className="py-2 text-center">

@@ -127,7 +127,7 @@ export async function POST(req: Request) {
       if (promo.discount_type === "PERCENT") {
         amountOff = Math.round((totalCents * Number(promo.discount_value || 0)) / 100);
       } else {
-        amountOff = Number(promo.discount_value || 0);
+        amountOff = Math.round(Number(promo.discount_value || 0) * 100);
       }
       amountOff = Math.max(0, Math.min(amountOff, totalCents));
       const discounted = totalCents - amountOff;
