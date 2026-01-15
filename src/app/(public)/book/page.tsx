@@ -2145,6 +2145,7 @@ function BookPageContent() {
       {cashModalOpen && typeof document !== "undefined"
         ? createPortal(
             <div
+              data-booking-overlay
               style={{
                 position: "fixed",
                 inset: 0,
@@ -2253,7 +2254,7 @@ function BookPageContent() {
 
       {overrideTarget && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" data-booking-overlay>
               <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
                 <div className="text-sm font-semibold text-zinc-900">Admin Override Required</div>
                 <div className="mt-1 text-xs text-zinc-500">
@@ -2309,7 +2310,7 @@ function BookPageContent() {
         : null}
 
       {showConfirmation && confirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-booking-overlay>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="text-lg font-extrabold text-zinc-900">Thanks For Booking At Axe Quacks</div>
             <div className="mt-2 text-sm text-zinc-600">Here are your booking details:</div>
@@ -2368,7 +2369,7 @@ function BookPageContent() {
       )}
 
       {showTerminalPanel ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" data-booking-overlay>
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-lg">
             <div className="text-lg font-extrabold text-zinc-900">Stripe Terminal</div>
             <div className="mt-2 text-sm text-zinc-600">Select a reader, then collect payment.</div>
