@@ -1374,7 +1374,18 @@ function BookPageContent() {
         const finalizeJson = await finalizeRes.json().catch(() => ({}));
         const waiverUrl = String(finalizeJson?.waiverUrl || "");
         if (waiverUrl) {
-          window.location.href = waiverUrl;
+          try {
+            const url = new URL(waiverUrl);
+            const returnTo = `${window.location.origin}/book/confirmation?session_id=${encodeURIComponent(
+              checkoutSessionId
+            )}`;
+            url.searchParams.set("return", returnTo);
+            window.sessionStorage.removeItem(`${BOOKING_DRAFT_KEY}:restore`);
+            window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+            window.location.href = url.toString();
+          } catch {
+            window.location.href = waiverUrl;
+          }
           return;
         }
 
