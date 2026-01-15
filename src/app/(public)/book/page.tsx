@@ -300,7 +300,7 @@ function MonthCalendar(props: {
       <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-black hover:bg-zinc-50"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
         >
           ←
@@ -310,7 +310,7 @@ function MonthCalendar(props: {
 
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-black hover:bg-zinc-50"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
         >
           →
@@ -1285,6 +1285,11 @@ function BookPageContent() {
           method: "POST",
         });
         const finalizeJson = await finalizeRes.json().catch(() => ({}));
+        const waiverUrl = String(finalizeJson?.waiverUrl || "");
+        if (waiverUrl) {
+          window.location.href = waiverUrl;
+          return;
+        }
 
         const res = await fetch(`/api/stripe/checkout/session?session_id=${checkoutSessionId}`);
         const json = await res.json().catch(() => ({}));
@@ -1555,7 +1560,7 @@ function BookPageContent() {
                   }}
                   disabled={!activity}
                   className={cx(
-                    "h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold hover:bg-zinc-50",
+                    "h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold text-black hover:bg-zinc-50",
                     !activity && "cursor-not-allowed opacity-40"
                   )}
                 >
@@ -1590,7 +1595,7 @@ function BookPageContent() {
                   }}
                   disabled={!activity}
                   className={cx(
-                    "h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold hover:bg-zinc-50",
+                    "h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold text-black hover:bg-zinc-50",
                     !activity && "cursor-not-allowed opacity-40"
                   )}
                 >
@@ -1978,7 +1983,7 @@ function BookPageContent() {
                     setSubmitSuccess("");
                   }}
                   placeholder="Full Name"
-                  className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold outline-none focus:border-zinc-900"
+                  className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-black outline-none focus:border-zinc-900"
                   name="full_name"
                   id="full_name"
                 />
@@ -1990,7 +1995,7 @@ function BookPageContent() {
                     setSubmitSuccess("");
                   }}
                   placeholder="Email"
-                  className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold outline-none focus:border-zinc-900"
+                  className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-black outline-none focus:border-zinc-900"
                   name="email"
                   id="email"
                 />
@@ -2002,7 +2007,7 @@ function BookPageContent() {
                     setSubmitSuccess("");
                   }}
                   placeholder="Phone Number"
-                  className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold outline-none focus:border-zinc-900"
+                  className="h-11 rounded-2xl border border-zinc-200 px-4 text-sm font-semibold text-black outline-none focus:border-zinc-900"
                   name="phone"
                   id="phone"
                   inputMode="tel"
