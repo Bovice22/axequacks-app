@@ -474,6 +474,28 @@ function BookPageContent() {
   }, [confirmation]);
 
   useEffect(() => {
+    if (isStaffMode) return;
+    setCashModalOpen(false);
+    setShowTerminalPanel(false);
+    setShowPaymentOptions(false);
+    setOverrideTarget(null);
+    setShowConfirmation(false);
+  }, [isStaffMode]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setCashModalOpen(false);
+      setShowTerminalPanel(false);
+      setShowPaymentOptions(false);
+      setOverrideTarget(null);
+      setShowConfirmation(false);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
     if (!cashModalOpen) return;
     const timer = window.setTimeout(() => {
       cashInputRef.current?.focus();
