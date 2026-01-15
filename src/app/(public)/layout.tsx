@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { League_Spartan } from "next/font/google";
 import PublicOverlayCleanup from "@/components/PublicOverlayCleanup";
 
@@ -26,7 +25,7 @@ export default function PublicLayout({
         <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-5">
           <a href="/" className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 p-1.5">
-              <Image src="/logo.png?v=2" alt="Axe Quacks" width={48} height={48} className="h-9 w-9 object-contain" />
+              <img src="/logo.png?v=2" alt="Axe Quacks" className="h-9 w-9 object-contain" />
             </span>
             <span className="public-display text-lg tracking-[0.2em] text-white">Axe Quacks</span>
           </a>
