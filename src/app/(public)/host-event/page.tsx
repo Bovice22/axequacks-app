@@ -459,17 +459,25 @@ export default function HostEventPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-8">
-      <div className="mb-8">
-        <div className="text-2xl font-extrabold text-zinc-900">Events</div>
-        <div className="mt-2 text-sm text-zinc-600">
-          Build a custom event with multiple activities and see pricing update in real time.
-        </div>
-        {requestStatus === "success" ? (
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {requestMessage}
+    <div className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-10">
+      <div className="mb-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 p-2">
+            <img src="/logo.png" alt="Axe Quacks" className="h-full w-full object-contain" />
           </div>
-        ) : null}
+          <div>
+            <div className="public-display text-xs text-[#00AEEF]">Axe Quacks</div>
+            <div className="mt-1 text-3xl font-extrabold text-white">Group Events</div>
+            <div className="public-muted mt-2 text-sm">
+              Build a custom event with multiple activities and see pricing update in real time.
+            </div>
+          </div>
+          {requestStatus === "success" ? (
+            <div className="ml-auto inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              {requestMessage}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-8">

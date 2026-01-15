@@ -1316,18 +1316,19 @@ function BookPageContent() {
   }, [checkoutSessionId]);
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm">
-            <span className="text-sm font-extrabold">AQ</span>
-          </div>
-
-          <div>
-            <div className="text-2xl font-extrabold text-zinc-900">Axe Quacks Booking</div>
-            <div className="text-sm text-zinc-600">
-              Choose an activity, duration, date, and time — pricing updates in real time.
+    <div className="min-h-screen pb-12">
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        <div className="mb-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 p-2">
+              <img src="/logo.png" alt="Axe Quacks" className="h-full w-full object-contain" />
+            </div>
+            <div>
+              <div className="public-display text-xs text-[#FFD700]">Axe Quacks</div>
+              <div className="mt-1 text-3xl font-extrabold text-white">Book Your Session</div>
+              <div className="public-muted mt-2 text-sm">
+                Choose your activity, duration, and time. Pricing updates instantly as you build your visit.
+              </div>
             </div>
           </div>
         </div>
@@ -2436,10 +2437,10 @@ export default function BookPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-zinc-50">
+        <div className="min-h-screen">
           <div className="mx-auto max-w-5xl px-4 py-12">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <div className="text-sm font-semibold text-zinc-600">Loading booking…</div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
+              <div className="public-muted text-sm font-semibold">Loading booking…</div>
             </div>
           </div>
         </div>

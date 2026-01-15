@@ -191,16 +191,16 @@ function BookingConfirmationContent() {
   }, [confirmation?.waiverUrl]);
 
   return (
-    <div className="min-h-screen bg-zinc-50">
+    <div className="min-h-screen pb-12">
       <div className="mx-auto max-w-xl px-4 py-12">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
           <div className="mb-4 flex justify-center">
-            <img src="/logo-email.png" alt="Axe Quacks" className="h-20 w-auto" />
+            <img src="/logo.png" alt="Axe Quacks" className="h-20 w-auto" />
           </div>
-          <div className="text-2xl font-extrabold text-zinc-900">Thanks for booking at Axe Quacks!</div>
-          <div className="mt-2 text-sm text-zinc-600">Here are your booking details:</div>
+          <div className="text-2xl font-extrabold text-white">Thanks for booking at Axe Quacks!</div>
+          <div className="public-muted mt-2 text-sm">Here are your booking details:</div>
 
-          {loading && <div className="mt-6 text-sm font-semibold text-zinc-600">Loading confirmation…</div>}
+          {loading && <div className="public-muted mt-6 text-sm font-semibold">Loading confirmation…</div>}
 
           {!loading && error && (
             <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -209,39 +209,39 @@ function BookingConfirmationContent() {
           )}
 
           {!loading && confirmation && (
-            <div className="mt-6 space-y-2 text-sm">
+            <div className="mt-6 space-y-2 text-sm text-white">
               <div>
-                <span className="font-semibold text-zinc-700">Name:</span> {confirmation.customerName || "—"}
+                <span className="font-semibold text-white/80">Name:</span> {confirmation.customerName || "—"}
               </div>
               {confirmation.activity === "Combo Package" && confirmation.comboOrder ? (
                 <div>
-                  <span className="font-semibold text-zinc-700">Combo Order:</span>{" "}
+                  <span className="font-semibold text-white/80">Combo Order:</span>{" "}
                   {confirmation.comboOrder === "DUCKPIN_FIRST"
                     ? "First: Duckpin Bowling, Second: Axe Throwing"
                     : "First: Axe Throwing, Second: Duckpin Bowling"}
                 </div>
               ) : null}
               <div>
-                <span className="font-semibold text-zinc-700">Activity:</span> {confirmation.activity}
+                <span className="font-semibold text-white/80">Activity:</span> {confirmation.activity}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Date:</span> {prettyDate(confirmation.dateKey)}
+                <span className="font-semibold text-white/80">Date:</span> {prettyDate(confirmation.dateKey)}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Start/End Time:</span> {confirmation.timeLabel}
+                <span className="font-semibold text-white/80">Start/End Time:</span> {confirmation.timeLabel}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Resource:</span>{" "}
+                <span className="font-semibold text-white/80">Resource:</span>{" "}
                 {confirmation.resourceNames.length ? confirmation.resourceNames.join(", ") : "TBD"}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Amount:</span>{" "}
+                <span className="font-semibold text-white/80">Amount:</span>{" "}
                 {typeof confirmation.totalCents === "number"
                   ? `$${(confirmation.totalCents / 100).toFixed(2)} PAID`
                   : "—"}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Email:</span> {confirmation.customerEmail || "—"}
+                <span className="font-semibold text-white/80">Email:</span> {confirmation.customerEmail || "—"}
               </div>
               {confirmation.waiverUrl ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -259,7 +259,7 @@ function BookingConfirmationContent() {
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link href="/book" className="inline-flex">
               <div
-                className="bg-zinc-900 px-5 text-sm font-extrabold text-white hover:bg-zinc-800"
+                className="bg-[#FFD700] px-5 text-sm font-extrabold text-black hover:bg-[#ffe24a]"
                 style={{ width: "160px", height: "44px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}
               >
                 Done
@@ -268,12 +268,12 @@ function BookingConfirmationContent() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex bg-zinc-900 px-5 text-sm font-extrabold text-white hover:bg-zinc-800"
+              className="inline-flex border border-white/30 bg-white/10 px-5 text-sm font-extrabold text-white hover:bg-white/20"
               style={{ width: "160px", height: "44px", borderRadius: "16px", alignItems: "center", justifyContent: "center" }}
             >
               Print Receipt
             </button>
-            {redirecting ? <div className="mt-2 text-xs text-zinc-500">Redirecting to waiver…</div> : null}
+            {redirecting ? <div className="public-muted mt-2 text-xs">Redirecting to waiver…</div> : null}
           </div>
         </div>
       </div>
@@ -285,10 +285,10 @@ export default function BookingConfirmationPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-zinc-50">
+        <div className="min-h-screen">
           <div className="mx-auto max-w-xl px-4 py-12">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <div className="text-sm font-semibold text-zinc-600">Loading confirmation…</div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
+              <div className="public-muted text-sm font-semibold">Loading confirmation…</div>
             </div>
           </div>
         </div>

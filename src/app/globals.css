@@ -25,6 +25,30 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.public-shell {
+  --aq-black: #000000;
+  --aq-white: #f5f5f5;
+  --aq-gray: #b2b2b2;
+  --aq-orange: #f7941d;
+  --aq-blue: #00aeef;
+  --aq-brown: #8b5e3c;
+  --aq-steel: #a7a9ac;
+  --aq-yellow: #ffd700;
+  background: var(--aq-black);
+  color: var(--aq-white);
+  font-family: var(--font-league), "League Spartan", Arial, sans-serif;
+}
+
+.public-display {
+  font-family: "Horizon", var(--font-league), "League Spartan", Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.public-muted {
+  color: rgba(245, 245, 245, 0.74);
+}
+
 input::placeholder,
 textarea::placeholder {
   color: #000000;
