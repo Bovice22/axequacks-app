@@ -194,6 +194,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
       const bookingPartySize = Math.min(24, Math.max(1, requestedPartySize));
       const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
+      const partyAreaStartIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, startMin);
       const partyAreaEndMin = startMin + (normalizedPartyAreaMinutes || totalDuration);
       const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
       let offsetMinutes = 0;
@@ -257,7 +258,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
       if (partyAreas.length && bookingIds.length) {
         try {
-          await reservePartyAreasForBooking(sb, bookingIds[0], partyAreas, startIso, partyAreaEndIso);
+          await reservePartyAreasForBooking(sb, bookingIds[0], partyAreas, partyAreaStartIso, partyAreaEndIso);
         } catch (err: any) {
           return NextResponse.json({ error: err?.message || "Selected party area is unavailable" }, { status: 400 });
         }
