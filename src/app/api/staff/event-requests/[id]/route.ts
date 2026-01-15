@@ -469,6 +469,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       offsetMinutes += durationMinutes;
     }
 
+    if (partyAreas.length && bookingIds.length) {
+      try {
+        await reservePartyAreasForBooking(sb, bookingIds[0], partyAreas, startIso, partyAreaEndIso);
+      } catch (err: any) {
+        return NextResponse.json(
+          { error: err?.message || "Selected party area is unavailable", detail: err?.message || "" },
+          { status: 400 }
+        );
+      }
+    }
+
     if (!bookingIds.length) {
       return NextResponse.json({ error: "No bookings created" }, { status: 500 });
     }
@@ -517,13 +528,3 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
   }
 }
-    if (partyAreas.length && bookingIds.length) {
-      try {
-        await reservePartyAreasForBooking(sb, bookingIds[0], partyAreas, startIso, partyAreaEndIso);
-      } catch (err: any) {
-        return NextResponse.json(
-          { error: err?.message || "Selected party area is unavailable", detail: err?.message || "" },
-          { status: 400 }
-        );
-      }
-    }
