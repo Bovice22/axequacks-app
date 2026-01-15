@@ -4,6 +4,7 @@ import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode, recordPromoRedemption } from "@/lib/server/promoRedemptions";
+import { validatePromoUsage } from "@/lib/server/promoRules";
 
 export async function POST(req: Request) {
   try {
@@ -47,6 +48,14 @@ export async function POST(req: Request) {
 
     if (promoCode) {
       const normalizedCode = normalizePromoCode(promoCode);
+      const promoRuleError = validatePromoUsage({
+        code: normalizedCode,
+        activity,
+        durationMinutes,
+      });
+      if (promoRuleError) {
+        return NextResponse.json({ error: promoRuleError }, { status: 400 });
+      }
       const normalizedEmail = normalizeEmail(customerEmail || "");
       if (normalizedEmail) {
         const alreadyUsed = await hasPromoRedemption(normalizedCode, normalizedEmail);

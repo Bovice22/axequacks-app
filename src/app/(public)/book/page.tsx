@@ -674,7 +674,13 @@ function BookPageContent() {
       const res = await fetch("/api/promos/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: codeToApply, amount_cents: pricing.cents, customer_email: email.trim() }),
+        body: JSON.stringify({
+          code: codeToApply,
+          amount_cents: pricing.cents,
+          customer_email: email.trim(),
+          activity,
+          duration_minutes: effectiveDuration,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.promo) {

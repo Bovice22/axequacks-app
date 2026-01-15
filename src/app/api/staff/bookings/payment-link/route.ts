@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/server/stripe";
 import { PARTY_AREA_OPTIONS, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
+import { validatePromoUsage } from "@/lib/server/promoRules";
 import { sendBookingPaymentLinkEmail } from "@/lib/server/mailer";
 import type { ActivityUI, ComboOrder } from "@/lib/server/bookingService";
 
@@ -84,6 +85,14 @@ export async function POST(req: Request) {
     let promoMeta: { code: string; amountOff: number; discountType: string; discountValue: number } | null = null;
 
     if (promoCode) {
+      const promoRuleError = validatePromoUsage({
+        code: promoCode,
+        activity,
+        durationMinutes,
+      });
+      if (promoRuleError) {
+        return NextResponse.json({ error: promoRuleError }, { status: 400 });
+      }
       const sb = supabaseServer();
       const normalized = normalizePromoCode(promoCode);
       const customerEmailNormalized = normalizeEmail(customerEmail || "");

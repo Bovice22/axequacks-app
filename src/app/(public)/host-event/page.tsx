@@ -372,6 +372,15 @@ export default function HostEventPage() {
           code: codeToApply,
           amount_cents: baseTotalCents,
           customer_email: contactEmail.trim(),
+          activity: selectedActivities.length === 1 ? selectedActivities[0] : undefined,
+          duration_minutes:
+            selectedActivities.length === 1
+              ? durationByActivity[selectedActivities[0]] || undefined
+              : undefined,
+          activities: selectedActivities.map((activity) => ({
+            activity,
+            durationMinutes: durationByActivity[activity] || 0,
+          })),
         }),
       });
       const json = await res.json().catch(() => ({}));

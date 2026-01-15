@@ -19,6 +19,15 @@ export default function PromosTable() {
   const [rows, setRows] = useState<Promo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editError, setEditError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    code: string;
+    discountType: string;
+    discountValue: number;
+    active: boolean;
+  } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const [code, setCode] = useState("");
   const [discountType, setDiscountType] = useState("PERCENT");
@@ -106,6 +115,58 @@ export default function PromosTable() {
     }
   }
 
+  function beginEdit(promo: Promo) {
+    setEditingId(promo.id || promo.code);
+    setEditValues({
+      code: promo.code || "",
+      discountType: promo.discount_type || "PERCENT",
+      discountValue: Number(promo.discount_value || 0),
+      active: !!promo.active,
+    });
+    setEditError("");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditValues(null);
+    setEditError("");
+  }
+
+  async function saveEdit(promo: Promo) {
+    const promoId = promo.id || promo.code;
+    if (!promoId || !editValues) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const normalizedCode = editValues.code.replace(/\s+/g, "").toUpperCase();
+      const res = await fetch(`/api/staff/promos/${promoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: normalizedCode,
+          discount_type: editValues.discountType,
+          discount_value: editValues.discountValue,
+          active: editValues.active,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEditError(json?.error || "Failed to update promo");
+        return;
+      }
+      if (json?.promo) {
+        setRows((prev) =>
+          prev.map((r) => (r.id === promoId || r.code === promo.code ? json.promo : r))
+        );
+      } else {
+        await loadPromos();
+      }
+      cancelEdit();
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -163,6 +224,7 @@ export default function PromosTable() {
           </button>
         </div>
         {actionError ? <div className="mb-2 text-sm text-red-600">{actionError}</div> : null}
+        {editError ? <div className="mb-2 text-sm text-red-600">{editError}</div> : null}
         {loading ? (
           <div className="text-sm text-zinc-900">Loading promos…</div>
         ) : (
@@ -179,36 +241,136 @@ export default function PromosTable() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => (
-                  <tr key={r.id} className="border-t border-zinc-100 text-zinc-900">
-                    <td className="py-2 text-center font-mono text-xs">{r.code}</td>
-                    <td className="py-2 text-center">{r.discount_type}</td>
-                    <td className="py-2 text-center">{r.discount_value}</td>
-                    <td className="py-2 text-center">{r.active ? "Yes" : "No"}</td>
+                {filtered.map((r) => {
+                  const rowId = r.id || r.code;
+                  const isEditing = editingId === rowId;
+                  return (
+                  <tr key={rowId} className="border-t border-zinc-100 text-zinc-900">
+                    <td className="py-2 text-center font-mono text-xs">
+                      {isEditing ? (
+                        <input
+                          value={editValues?.code || ""}
+                          onChange={(e) =>
+                            setEditValues((prev) => (prev ? { ...prev, code: e.target.value } : prev))
+                          }
+                          className="h-8 w-full rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                        />
+                      ) : (
+                        r.code
+                      )}
+                    </td>
+                    <td className="py-2 text-center">
+                      {isEditing ? (
+                        <select
+                          value={editValues?.discountType || "PERCENT"}
+                          onChange={(e) =>
+                            setEditValues((prev) =>
+                              prev ? { ...prev, discountType: e.target.value } : prev
+                            )
+                          }
+                          className="h-8 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                        >
+                          <option value="PERCENT">Percent</option>
+                          <option value="AMOUNT">Amount (cents)</option>
+                        </select>
+                      ) : (
+                        r.discount_type
+                      )}
+                    </td>
+                    <td className="py-2 text-center">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editValues?.discountValue ?? 0}
+                          onChange={(e) =>
+                            setEditValues((prev) =>
+                              prev ? { ...prev, discountValue: Number(e.target.value) } : prev
+                            )
+                          }
+                          className="h-8 w-24 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                        />
+                      ) : (
+                        r.discount_value
+                      )}
+                    </td>
+                    <td className="py-2 text-center">
+                      {isEditing ? (
+                        <label className="inline-flex items-center gap-2 text-xs text-zinc-900">
+                          <input
+                            type="checkbox"
+                            checked={!!editValues?.active}
+                            onChange={(e) =>
+                              setEditValues((prev) =>
+                                prev ? { ...prev, active: e.target.checked } : prev
+                              )
+                            }
+                          />
+                          Active
+                        </label>
+                      ) : r.active ? (
+                        "Yes"
+                      ) : (
+                        "No"
+                      )}
+                    </td>
                     <td className="py-2 text-center">
                       {r.redemptions_count}
                       {r.max_redemptions != null ? ` / ${r.max_redemptions}` : ""}
                     </td>
                     <td className="py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const promoId = r.id || r.code || "";
-                          toggleActive(promoId, !r.active, r.code || "");
-                        }}
-                        disabled={actionLoadingId === (r.id || r.code)}
-                        className="inline-flex h-8 min-w-[92px] items-center justify-center rounded-lg border px-3 text-xs font-semibold disabled:opacity-60"
-                        style={
-                          r.active
-                            ? { backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#ffffff" }
-                            : { backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#ffffff" }
-                        }
-                      >
-                        {actionLoadingId === (r.id || r.code) ? "Working..." : r.active ? "Deactivate" : "Activate"}
-                      </button>
+                      {isEditing ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(r)}
+                            disabled={editSaving}
+                            className="inline-flex h-8 min-w-[70px] items-center justify-center rounded-lg bg-zinc-900 px-3 text-xs font-semibold text-white disabled:opacity-60"
+                          >
+                            {editSaving ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="inline-flex h-8 min-w-[70px] items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => beginEdit(r)}
+                            className="inline-flex h-8 min-w-[70px] items-center justify-center rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const promoId = r.id || r.code || "";
+                              toggleActive(promoId, !r.active, r.code || "");
+                            }}
+                            disabled={actionLoadingId === (r.id || r.code)}
+                            className="inline-flex h-8 min-w-[92px] items-center justify-center rounded-lg border px-3 text-xs font-semibold disabled:opacity-60"
+                            style={
+                              r.active
+                                ? { backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#ffffff" }
+                                : { backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#ffffff" }
+                            }
+                          >
+                            {actionLoadingId === (r.id || r.code)
+                              ? "Working..."
+                              : r.active
+                              ? "Deactivate"
+                              : "Activate"}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>

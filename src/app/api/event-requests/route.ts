@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
+import { validatePromoUsage } from "@/lib/server/promoRules";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
@@ -83,6 +84,13 @@ export async function POST(req: Request) {
     let finalTotalCents = totalCents;
     const promoCode = promoCodeRaw ? normalizePromoCode(promoCodeRaw) : "";
     if (promoCode) {
+      const promoRuleError = validatePromoUsage({
+        code: promoCode,
+        activities: cleanActivities,
+      });
+      if (promoRuleError) {
+        return NextResponse.json({ error: promoRuleError }, { status: 400 });
+      }
       const customerEmailNorm = normalizeEmail(customerEmail || "");
       if (customerEmailNorm) {
         const alreadyUsed = await hasPromoRedemption(promoCode, customerEmailNorm);

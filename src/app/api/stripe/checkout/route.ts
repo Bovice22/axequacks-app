@@ -11,6 +11,7 @@ import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/
 import { getStripe } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
+import { validatePromoUsage } from "@/lib/server/promoRules";
 
 type CheckoutRequest = {
   activity: ActivityUI;
@@ -107,6 +108,14 @@ export async function POST(req: Request) {
 
     const promoCode = body.promoCode ? normalizePromoCode(body.promoCode) : "";
     if (promoCode) {
+      const promoRuleError = validatePromoUsage({
+        code: promoCode,
+        activity: body.activity,
+        durationMinutes: body.durationMinutes,
+      });
+      if (promoRuleError) {
+        return NextResponse.json({ error: promoRuleError }, { status: 400 });
+      }
       const sb = supabaseServer();
       const customerEmail = normalizeEmail(body.customerEmail || "");
       if (customerEmail) {

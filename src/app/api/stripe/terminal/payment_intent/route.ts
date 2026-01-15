@@ -10,6 +10,7 @@ import {
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
+import { validatePromoUsage } from "@/lib/server/promoRules";
 import type { ActivityUI, ComboOrder } from "@/lib/server/bookingService";
 
 type TerminalIntentRequest = {
@@ -95,6 +96,14 @@ export async function POST(req: Request) {
 
     const promoCode = body.promoCode ? normalizePromoCode(body.promoCode) : "";
     if (promoCode) {
+      const promoRuleError = validatePromoUsage({
+        code: promoCode,
+        activity: body.activity,
+        durationMinutes: body.durationMinutes,
+      });
+      if (promoRuleError) {
+        return NextResponse.json({ error: promoRuleError }, { status: 400 });
+      }
       const sb = supabaseServer();
       const customerEmail = normalizeEmail(body.customerEmail || "");
       if (customerEmail) {

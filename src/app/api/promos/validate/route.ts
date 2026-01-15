@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
+import { validatePromoUsage } from "@/lib/server/promoRules";
 
 type ValidateBody = {
   code?: string;
   amount_cents?: number;
   customer_email?: string;
+  activity?: string;
+  duration_minutes?: number;
+  activities?: Array<{ activity?: string; durationMinutes?: number }>;
 };
 
 export async function POST(req: Request) {
@@ -15,6 +19,9 @@ export async function POST(req: Request) {
     const code = normalizePromoCode(codeRaw);
     const amountCents = Number(body?.amount_cents ?? NaN);
     const customerEmail = normalizeEmail(String(body?.customer_email || ""));
+    const activity = body?.activity != null ? String(body.activity) : undefined;
+    const durationMinutes = Number(body?.duration_minutes ?? NaN);
+    const activities = Array.isArray(body?.activities) ? body.activities : undefined;
 
     if (!code) return NextResponse.json({ error: "Missing promo code." }, { status: 400 });
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
@@ -51,6 +58,16 @@ export async function POST(req: Request) {
       if (alreadyUsed) {
         return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
       }
+    }
+
+    const promoRuleError = validatePromoUsage({
+      code,
+      activity,
+      durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
+      activities,
+    });
+    if (promoRuleError) {
+      return NextResponse.json({ error: promoRuleError }, { status: 400 });
     }
 
     let amountOffCents = 0;
