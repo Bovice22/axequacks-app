@@ -16,13 +16,13 @@ export default function PublicNav() {
   }, [host, pathname]);
 
   return (
-    <nav className="flex items-center gap-3 text-sm font-semibold text-white">
+    <nav className="flex w-full flex-col items-center gap-3 text-sm font-semibold text-white sm:w-auto sm:flex-row sm:justify-end">
       <a
         href="https://book.axequacks.com"
         className={
           active === "book"
-            ? "rounded-full bg-[#F7941D] px-4 py-2 text-black shadow-[0_8px_20px_rgba(247,148,29,0.35)]"
-            : "rounded-full border border-white/20 px-4 py-2 transition hover:border-white/50 hover:bg-white/10"
+            ? "w-full rounded-full bg-[#F7941D] px-4 py-2 text-center text-black shadow-[0_8px_20px_rgba(247,148,29,0.35)] sm:w-auto"
+            : "w-full rounded-full border border-white/20 px-4 py-2 text-center transition hover:border-white/50 hover:bg-white/10 sm:w-auto"
         }
       >
         Book
@@ -31,8 +31,8 @@ export default function PublicNav() {
         href="https://events.axequacks.com"
         className={
           active === "events"
-            ? "rounded-full bg-[#F7941D] px-4 py-2 text-black shadow-[0_8px_20px_rgba(247,148,29,0.35)]"
-            : "rounded-full border border-white/20 px-4 py-2 transition hover:border-white/50 hover:bg-white/10"
+            ? "w-full rounded-full bg-[#F7941D] px-4 py-2 text-center text-black shadow-[0_8px_20px_rgba(247,148,29,0.35)] sm:w-auto"
+            : "w-full rounded-full border border-white/20 px-4 py-2 text-center transition hover:border-white/50 hover:bg-white/10 sm:w-auto"
         }
       >
         Events

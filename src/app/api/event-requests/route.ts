@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     const customerName = String(body?.customerName || "").trim();
     const customerEmail = String(body?.customerEmail || "").trim().toLowerCase();
     const customerPhone = String(body?.customerPhone || "").trim();
+    const notes = String(body?.notes || "").trim();
     const partySize = Number(body?.partySize);
     const dateKey = String(body?.dateKey || "");
     const startMin = Number(body?.startMin);
@@ -163,6 +164,7 @@ export async function POST(req: Request) {
         total_cents: finalTotalCents,
         activities: cleanActivities,
         pay_in_person: payInPerson,
+        notes: notes ? notes.slice(0, 1000) : null,
         status: "PENDING",
       })
       .select("id")

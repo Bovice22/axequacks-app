@@ -1441,15 +1441,15 @@ function BookPageContent() {
 
   return (
     <div className="min-h-screen pb-12">
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
+        <div className="mb-6 rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur sm:mb-8 sm:p-6">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
-            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-12 w-12 object-contain" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-2 shadow-[0_10px_24px_rgba(0,0,0,0.35)] sm:h-16 sm:w-16">
+            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-10 w-10 object-contain sm:h-12 sm:w-12" />
             </div>
             <div>
               <div className="public-display text-xs text-[#FFD700]">Axe Quacks</div>
-              <div className="mt-1 text-3xl font-extrabold text-white">Book Your Session</div>
+              <div className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">Book Your Session</div>
               <div className="public-muted mt-2 text-sm">
                 Choose your activity, duration, and time. Pricing updates instantly as you build your visit.
               </div>

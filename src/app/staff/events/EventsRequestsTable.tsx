@@ -26,6 +26,7 @@ type EventRequest = {
   paid_at?: string | null;
   declined_at?: string | null;
   pay_in_person?: boolean | null;
+  notes?: string | null;
 };
 
 function todayDateKeyNY(): string {
@@ -470,6 +471,11 @@ export default function EventsRequestsTable() {
                             <div className="text-[10px] font-semibold text-emerald-700">
                               Party areas: {req.party_areas.join(", ")}
                               {req.party_area_minutes ? ` · ${Math.round(req.party_area_minutes / 60)} hr` : ""}
+                            </div>
+                          ) : null}
+                          {req.notes ? (
+                            <div className="text-[10px] text-zinc-500">
+                              Notes: {req.notes}
                             </div>
                           ) : null}
                         </div>

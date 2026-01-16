@@ -187,6 +187,7 @@ export default function HostEventPage() {
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [eventNotes, setEventNotes] = useState("");
   const [requestStatus, setRequestStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [requestMessage, setRequestMessage] = useState("");
   const [promoCode, setPromoCode] = useState("");
@@ -216,6 +217,7 @@ export default function HostEventPage() {
     contactName: string;
     contactEmail: string;
     contactPhone: string;
+    notes?: string;
     totalCents: number;
     promoCode?: string;
   } | null>(null);
@@ -466,6 +468,7 @@ export default function HostEventPage() {
           customerName: contactName.trim(),
           customerEmail: contactEmail.trim(),
           customerPhone: contactPhone.trim(),
+          notes: eventNotes.trim(),
           partySize,
           partyAreas,
           partyAreaMinutes: partyAreas.length ? partyAreaMinutes ?? 60 : undefined,
@@ -508,6 +511,7 @@ export default function HostEventPage() {
         contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         contactPhone: contactPhone.trim(),
+        notes: eventNotes.trim(),
         totalCents: discountedTotalCents,
         promoCode: promoApplied?.code,
       });
@@ -522,6 +526,7 @@ export default function HostEventPage() {
       setContactName("");
       setContactEmail("");
       setContactPhone("");
+      setEventNotes("");
       setPromoCode("");
       setPromoApplied(null);
       setPromoStatus("");
@@ -535,14 +540,14 @@ export default function HostEventPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-10">
-      <div className="mb-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
+      <div className="mb-6 rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur sm:mb-8 sm:p-6">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
-            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-12 w-12 object-contain" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-2 shadow-[0_10px_24px_rgba(0,0,0,0.35)] sm:h-16 sm:w-16">
+            <img src="/logo.png?v=2" alt="Axe Quacks" className="h-10 w-10 object-contain sm:h-12 sm:w-12" />
           </div>
           <div>
             <div className="public-display text-xs text-[#00AEEF]">Axe Quacks</div>
-            <div className="mt-1 text-3xl font-extrabold text-white">Group Events</div>
+            <div className="mt-1 text-2xl font-extrabold text-white sm:text-3xl">Group Events</div>
             <div className="public-muted mt-2 text-sm">
               Build a custom event with multiple activities and see pricing update in real time.
             </div>
@@ -626,6 +631,11 @@ export default function HostEventPage() {
                 {requestSummary?.contactName || "—"} • {requestSummary?.contactEmail || "—"} •{" "}
                 {requestSummary?.contactPhone || "—"}
               </div>
+              {requestSummary?.notes ? (
+                <div>
+                  <span className="font-semibold text-zinc-700">Notes:</span> {requestSummary.notes}
+                </div>
+              ) : null}
               <div>
                 <span className="font-semibold text-zinc-700">Total (est):</span>{" "}
                 {requestSummary ? (requestSummary.totalCents / 100).toFixed(2) : "0.00"}
@@ -884,6 +894,13 @@ export default function HostEventPage() {
                 onChange={(e) => setContactPhone(e.target.value)}
                 placeholder="Phone (optional)"
                 className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-900 md:col-span-2"
+              />
+              <textarea
+                value={eventNotes}
+                onChange={(e) => setEventNotes(e.target.value)}
+                placeholder="Notes (birthday, food/drink questions, special requests)"
+                rows={3}
+                className="min-h-[96px] rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-900 md:col-span-2"
               />
             </div>
             <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-zinc-700">
