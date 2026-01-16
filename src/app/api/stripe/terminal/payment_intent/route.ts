@@ -28,6 +28,7 @@ type TerminalIntentRequest = {
   promoCode?: string;
   partyAreas?: string[];
   partyAreaMinutes?: number;
+  partyAreaTiming?: "BEFORE" | "DURING" | "AFTER";
 };
 
 function validate(body: TerminalIntentRequest) {
