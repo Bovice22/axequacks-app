@@ -573,6 +573,19 @@ export default function HostEventPage() {
                   ? timeRangeLabel(requestSummary.startMin, requestSummary.bookingWindowMinutes)
                   : "—"}
               </div>
+              {requestSummary?.partyAreas?.length ? (
+                <div>
+                  <span className="font-semibold text-zinc-700">Private Party Area:</span>{" "}
+                  {requestSummary.partyAreaStartMin != null &&
+                  requestSummary.partyAreaEndMin != null &&
+                  requestSummary.partyAreaStartMin >= 0
+                    ? timeRangeLabel(
+                        requestSummary.partyAreaStartMin,
+                        requestSummary.partyAreaEndMin - requestSummary.partyAreaStartMin
+                      )
+                    : "—"}
+                </div>
+              ) : null}
               <div>
                 <span className="font-semibold text-zinc-700">Party Size:</span>{" "}
                 {requestSummary?.partySize ?? partySize}
@@ -606,19 +619,6 @@ export default function HostEventPage() {
                     : requestSummary.partyAreaTiming === "AFTER"
                     ? "After Activities"
                     : "During Activities"}
-                </div>
-              ) : null}
-              {requestSummary?.partyAreas?.length ? (
-                <div>
-                  <span className="font-semibold text-zinc-700">Private Party Area:</span>{" "}
-                  {requestSummary.partyAreaStartMin != null &&
-                  requestSummary.partyAreaEndMin != null &&
-                  requestSummary.partyAreaStartMin >= 0
-                    ? timeRangeLabel(
-                        requestSummary.partyAreaStartMin,
-                        requestSummary.partyAreaEndMin - requestSummary.partyAreaStartMin
-                      )
-                    : "—"}
                 </div>
               ) : null}
               <div>
