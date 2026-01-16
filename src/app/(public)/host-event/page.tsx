@@ -178,6 +178,7 @@ export default function HostEventPage() {
   const [partySize, setPartySize] = useState(10);
   const [partyAreas, setPartyAreas] = useState<PartyAreaName[]>([]);
   const [partyAreaMinutes, setPartyAreaMinutes] = useState<number | null>(null);
+  const [partyAreaTiming, setPartyAreaTiming] = useState<"BEFORE" | "DURING" | "AFTER">("DURING");
   const [dateKey, setDateKey] = useState(() => todayDateKeyNY());
   const [startMin, setStartMin] = useState<number | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
@@ -208,6 +209,7 @@ export default function HostEventPage() {
     activities: Array<{ activity: string; durationMinutes: number }>;
     partyAreas: string[];
     partyAreaDuration: number;
+    partyAreaTiming: "BEFORE" | "DURING" | "AFTER";
     contactName: string;
     contactEmail: string;
     contactPhone: string;
@@ -218,6 +220,7 @@ export default function HostEventPage() {
   useEffect(() => {
     if (!partyAreas.length) {
       if (partyAreaMinutes != null) setPartyAreaMinutes(null);
+      setPartyAreaTiming("DURING");
       return;
     }
     if (partyAreaMinutes == null || !Number.isFinite(partyAreaMinutes)) {
@@ -265,12 +268,13 @@ export default function HostEventPage() {
               partySize,
               partyAreas,
               partyAreaMinutes: partyAreas.length ? partyAreaMinutes ?? 60 : undefined,
+              partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
               dateKey,
               durationMinutes,
               openStartMin: openWindow.openMin,
-            openEndMin: openWindow.closeMin,
-            slotIntervalMin: 30,
-          }),
+              openEndMin: openWindow.closeMin,
+              slotIntervalMin: 30,
+            }),
         })
           .then(async (res) => {
             const json = await res.json().catch(() => ({}));
@@ -307,7 +311,17 @@ export default function HostEventPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [selectedActivities, durationByActivity, partySize, partyAreas, partyAreaMinutes, dateKey, openWindow, totalDuration]);
+  }, [
+    selectedActivities,
+    durationByActivity,
+    partySize,
+    partyAreas,
+    partyAreaMinutes,
+    partyAreaTiming,
+    dateKey,
+    openWindow,
+    totalDuration,
+  ]);
 
   const timeSlots = useMemo(() => {
     if (!openWindow || bookingWindowMinutes <= 0) return [];
@@ -442,6 +456,7 @@ export default function HostEventPage() {
           partySize,
           partyAreas,
           partyAreaMinutes: partyAreas.length ? partyAreaMinutes ?? 60 : undefined,
+          partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
           dateKey,
           startMin,
           durationMinutes: totalDuration,
@@ -473,6 +488,7 @@ export default function HostEventPage() {
         })),
         partyAreas,
         partyAreaDuration,
+        partyAreaTiming,
         contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         contactPhone: contactPhone.trim(),
@@ -564,6 +580,16 @@ export default function HostEventPage() {
                 <div>
                   <span className="font-semibold text-zinc-700">Party Area Duration:</span>{" "}
                   {requestSummary.partyAreaDuration ? `${requestSummary.partyAreaDuration / 60} hr` : "—"}
+                </div>
+              ) : null}
+              {requestSummary?.partyAreas?.length ? (
+                <div>
+                  <span className="font-semibold text-zinc-700">Party Area Timing:</span>{" "}
+                  {requestSummary.partyAreaTiming === "BEFORE"
+                    ? "Before Activities"
+                    : requestSummary.partyAreaTiming === "AFTER"
+                    ? "After Activities"
+                    : "During Activities"}
                 </div>
               ) : null}
               <div>
@@ -735,6 +761,32 @@ export default function HostEventPage() {
                   })}
                 </div>
                 <div className="mt-1 text-xs text-zinc-500">$50 per hour • up to 8 hours</div>
+                <div className="mt-4">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Timing</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {([
+                      { value: "BEFORE", label: "Before Activities" },
+                      { value: "DURING", label: "During Activities" },
+                      { value: "AFTER", label: "After Activities" },
+                    ] as const).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setPartyAreaTiming(option.value);
+                          setStartMin(null);
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                          partyAreaTiming === option.value
+                            ? "border-zinc-900 bg-zinc-900 text-white"
+                            : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : null}
             <div className="mt-2 text-xs text-zinc-500">Add-on only. Event requests can proceed without a party area.</div>

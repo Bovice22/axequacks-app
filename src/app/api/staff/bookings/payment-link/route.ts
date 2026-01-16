@@ -43,6 +43,7 @@ export async function POST(req: Request) {
     const promoCode = String(body?.promoCode || "");
     const partyAreas = Array.isArray(body?.partyAreas) ? body.partyAreas : [];
     const partyAreaMinutes = Number(body?.partyAreaMinutes);
+    const partyAreaTiming = (String(body?.partyAreaTiming || "DURING").toUpperCase() as "BEFORE" | "DURING" | "AFTER");
 
     if (!activity || !dateKey || !Number.isFinite(partySize) || !Number.isFinite(startMin) || !Number.isFinite(durationMinutes)) {
       return NextResponse.json({ error: "Missing booking fields" }, { status: 400 });
@@ -189,6 +190,7 @@ export async function POST(req: Request) {
             combo_duckpin_minutes: Number.isFinite(comboDuckpinMinutes) ? String(comboDuckpinMinutes) : "",
             party_areas: partyAreasMeta,
             party_area_minutes: normalizedPartyAreaMinutes ? String(normalizedPartyAreaMinutes) : "",
+            party_area_timing: partyAreaTiming,
             customer_name: customerName.trim(),
           customer_email: customerEmail.trim(),
           customer_phone: customerPhone.trim(),

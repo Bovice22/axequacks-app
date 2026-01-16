@@ -79,6 +79,7 @@ export async function POST(req: Request) {
       partyAreas.length && Number.isFinite(Number(body.partyAreaMinutes))
         ? Math.min(480, Math.max(60, Math.round(Number(body.partyAreaMinutes) / 60) * 60))
         : 0;
+    const partyAreaTiming = (String(body?.partyAreaTiming || "DURING").toUpperCase() as "BEFORE" | "DURING" | "AFTER");
     if (partyAreas.length && !partyAreaMinutes) {
       return NextResponse.json({ error: "Invalid party area duration" }, { status: 400 });
     }
@@ -173,6 +174,7 @@ export async function POST(req: Request) {
         combo_duckpin_minutes: body.comboDuckpinMinutes != null ? String(body.comboDuckpinMinutes) : "",
         party_areas: serializePartyAreas(partyAreas),
         party_area_minutes: partyAreaMinutes ? String(partyAreaMinutes) : "",
+        party_area_timing: partyAreaTiming,
         customer_name: body.customerName.trim(),
         customer_email: body.customerEmail.trim(),
         customer_phone: body.customerPhone?.trim() || "",

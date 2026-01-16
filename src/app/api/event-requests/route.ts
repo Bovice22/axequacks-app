@@ -34,6 +34,10 @@ export async function POST(req: Request) {
         )
       : [];
     const partyAreaMinutes = Number(body?.partyAreaMinutes);
+    const partyAreaTiming = (String(body?.partyAreaTiming || "DURING").toUpperCase() as
+      | "BEFORE"
+      | "DURING"
+      | "AFTER");
 
     if (!customerName || !customerEmail) {
       return NextResponse.json({ error: "Missing contact info" }, { status: 400 });
@@ -78,6 +82,12 @@ export async function POST(req: Request) {
         : null;
     if (partyAreas.length && !normalizedPartyAreaMinutes) {
       return NextResponse.json({ error: "Invalid party area duration" }, { status: 400 });
+    }
+    if (partyAreas.length && partyAreaTiming === "BEFORE") {
+      const startMinBefore = startMin - (normalizedPartyAreaMinutes || 0);
+      if (startMinBefore < 0) {
+        return NextResponse.json({ error: "Party area must start after opening." }, { status: 400 });
+      }
     }
 
     const sb = supabaseServer();
@@ -145,6 +155,7 @@ export async function POST(req: Request) {
         party_size: partySize,
         party_areas: partyAreas,
         party_area_minutes: normalizedPartyAreaMinutes,
+        party_area_timing: partyAreas.length ? partyAreaTiming : null,
         date_key: dateKey,
         start_min: startMin,
         duration_minutes: durationMinutes,

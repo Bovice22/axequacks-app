@@ -42,6 +42,7 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
   const comboDuckpinMinutes = Number(metadata.combo_duckpin_minutes);
   const partyAreas = parsePartyAreas(metadata.party_areas);
   const partyAreaMinutes = Number(metadata.party_area_minutes);
+  const partyAreaTiming = (metadata.party_area_timing as "BEFORE" | "DURING" | "AFTER" | undefined) ?? "DURING";
   const customerName = String(metadata.customer_name || "");
   const customerEmail = String(metadata.customer_email || "");
   const customerPhone = String(metadata.customer_phone || "");
@@ -65,6 +66,7 @@ function parseBookingMetadata(metadata: Record<string, string | null | undefined
     comboDuckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
     partyAreas,
     partyAreaMinutes: Number.isFinite(partyAreaMinutes) ? partyAreaMinutes : undefined,
+    partyAreaTiming,
     customerName,
     customerEmail,
     customerPhone,

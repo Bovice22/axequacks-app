@@ -27,6 +27,7 @@ type CheckoutRequest = {
   comboOrder?: ComboOrder;
   partyAreas?: string[];
   partyAreaMinutes?: number;
+  partyAreaTiming?: "BEFORE" | "DURING" | "AFTER";
   successPath?: string;
   cancelPath?: string;
   uiMode?: "customer" | "staff";
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
     const err = validate(body);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
     const partyAreas = normalizePartyAreas(body.partyAreas);
+    const partyAreaTiming = (body.partyAreaTiming as "BEFORE" | "DURING" | "AFTER" | undefined) ?? "DURING";
 
     const stripe = getStripe();
     const partyAreaMinutes =
@@ -208,8 +210,9 @@ export async function POST(req: Request) {
             duration_minutes: String(comboTotalMinutes),
             combo_axe_minutes: body.comboAxeMinutes != null ? String(body.comboAxeMinutes) : "",
             combo_duckpin_minutes: body.comboDuckpinMinutes != null ? String(body.comboDuckpinMinutes) : "",
-            party_areas: serializePartyAreas(partyAreas),
-            party_area_minutes: partyAreaMinutes ? String(partyAreaMinutes) : "",
+        party_areas: serializePartyAreas(partyAreas),
+        party_area_minutes: partyAreaMinutes ? String(partyAreaMinutes) : "",
+        party_area_timing: partyAreaTiming,
             customer_name: body.customerName.trim(),
             customer_email: body.customerEmail.trim(),
             customer_phone: body.customerPhone?.trim() || "",

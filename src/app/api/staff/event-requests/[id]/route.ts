@@ -13,6 +13,7 @@ import {
 import { sendEventRequestAcceptedEmail } from "@/lib/server/mailer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
+type PartyAreaTiming = "BEFORE" | "DURING" | "AFTER";
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
   PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
 );
@@ -34,6 +35,23 @@ function normalizePartyAreas(input: unknown) {
 
 function overlaps(startA: number, endA: number, startB: number, endB: number) {
   return startA < endB && startB < endA;
+}
+
+function computePartyAreaWindow(input: {
+  startMin: number;
+  totalDuration: number;
+  partyAreaMinutes: number;
+  timing: PartyAreaTiming;
+}) {
+  const partyWindowMinutes = input.partyAreaMinutes || input.totalDuration;
+  const startMin =
+    input.timing === "BEFORE"
+      ? input.startMin - partyWindowMinutes
+      : input.timing === "AFTER"
+      ? input.startMin + input.totalDuration
+      : input.startMin;
+  const endMin = startMin + partyWindowMinutes;
+  return { startMin, endMin };
 }
 
 async function reservePartyAreasForBooking(
@@ -139,6 +157,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       partyAreas.length && Number.isFinite(partyAreaMinutes)
         ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
         : 0;
+    const partyAreaTiming = (String(requestRow.party_area_timing || "DURING").toUpperCase() as PartyAreaTiming);
 
     if (action !== "reschedule" && requestRow.status && requestRow.status !== "PENDING") {
       return NextResponse.json({ error: "Request already processed" }, { status: 400 });
@@ -194,9 +213,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
       const bookingPartySize = Math.min(24, Math.max(1, requestedPartySize));
       const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
-      const partyAreaStartIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, startMin);
-      const partyAreaEndMin = startMin + (normalizedPartyAreaMinutes || totalDuration);
-      const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
+      const partyWindow = computePartyAreaWindow({
+        startMin,
+        totalDuration,
+        partyAreaMinutes: normalizedPartyAreaMinutes || totalDuration,
+        timing: partyAreaTiming,
+      });
+      if (partyAreaTiming === "BEFORE" && partyWindow.startMin < 0) {
+        return NextResponse.json({ error: "Party area must start after opening." }, { status: 400 });
+      }
+      const partyAreaStartIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyWindow.startMin);
+      const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyWindow.endMin);
       let offsetMinutes = 0;
 
       for (let i = 0; i < activities.length; i += 1) {
@@ -354,9 +381,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const dateKey = String(requestRow.date_key || "");
     const startMin = Number(requestRow.start_min || 0);
     const totalDuration = activities.reduce((sum: number, a: any) => sum + (Number(a?.durationMinutes) || 0), 0);
-    const partyAreaStartIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, startMin);
-    const partyAreaEndMin = startMin + (normalizedPartyAreaMinutes || totalDuration);
-    const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyAreaEndMin);
+    const partyWindow = computePartyAreaWindow({
+      startMin,
+      totalDuration,
+      partyAreaMinutes: normalizedPartyAreaMinutes || totalDuration,
+      timing: partyAreaTiming,
+    });
+    if (partyAreaTiming === "BEFORE" && partyWindow.startMin < 0) {
+      return NextResponse.json({ error: "Party area must start after opening." }, { status: 400 });
+    }
+    const partyAreaStartIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyWindow.startMin);
+    const partyAreaEndIso = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, partyWindow.endMin);
     let offsetMinutes = 0;
     for (const item of activities) {
       const activity = item?.activity as Activity | undefined;

@@ -52,6 +52,10 @@ export async function POST(req: Request) {
     const comboAxeMinutes = Number(body?.comboAxeMinutes);
     const comboDuckpinMinutes = Number(body?.comboDuckpinMinutes);
     const partyAreaMinutes = Number(body?.partyAreaMinutes);
+    const partyAreaTiming = (String(body?.partyAreaTiming || "DURING").toUpperCase() as
+      | "BEFORE"
+      | "DURING"
+      | "AFTER");
     const openStartMin = Number(body?.openStartMin);
     const openEndMin = Number(body?.openEndMin);
     const slotIntervalMin = Number(body?.slotIntervalMin);
@@ -410,15 +414,26 @@ export async function POST(req: Request) {
 
       if (!blocked && partyResourceIds.length) {
         const partyWindowMinutes = partyDurationMinutes || comboTotalMinutes;
-        const partyStartISO = nyLocalDateKeyPlusMinutesToUTCISOString(
-          dateKey,
-          Math.max(openStartMin, startMin - bufferBefore)
-        );
-        const partyEndISO = nyLocalDateKeyPlusMinutesToUTCISOString(
-          dateKey,
-          Math.min(openEndMin, startMin + partyWindowMinutes + bufferAfter)
-        );
-        if (partyBlocked(partyStartISO, partyEndISO)) blocked = true;
+        const partyStartMin =
+          partyAreaTiming === "BEFORE"
+            ? startMin - partyWindowMinutes
+            : partyAreaTiming === "AFTER"
+            ? startMin + comboTotalMinutes
+            : startMin;
+        const partyEndMin = partyStartMin + partyWindowMinutes;
+        if (partyStartMin < openStartMin || partyEndMin > openEndMin) {
+          blocked = true;
+        } else {
+          const partyStartISO = nyLocalDateKeyPlusMinutesToUTCISOString(
+            dateKey,
+            Math.max(openStartMin, partyStartMin - bufferBefore)
+          );
+          const partyEndISO = nyLocalDateKeyPlusMinutesToUTCISOString(
+            dateKey,
+            Math.min(openEndMin, partyEndMin + bufferAfter)
+          );
+          if (partyBlocked(partyStartISO, partyEndISO)) blocked = true;
+        }
       }
 
       if (blocked) blockedStartMins.push(startMin);

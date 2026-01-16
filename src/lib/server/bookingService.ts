@@ -11,6 +11,7 @@ import {
 
 export type ActivityUI = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 export type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
+export type PartyAreaTiming = "BEFORE" | "DURING" | "AFTER";
 type ActivityDB = "AXE" | "DUCKPIN" | "COMBO";
 
 export type BookingInput = {
@@ -28,6 +29,7 @@ export type BookingInput = {
   comboOrder?: ComboOrder;
   totalCentsOverride?: number;
   partyAreas?: PartyAreaName[];
+  partyAreaTiming?: PartyAreaTiming;
 };
 
 function supabaseAdmin() {
@@ -189,11 +191,22 @@ export async function createBookingWithResources(input: BookingInput) {
   const comboTotalMinutes = comboAxeMinutes + comboDuckpinMinutes;
   const effectiveDuration = input.activity === "Combo Package" ? comboTotalMinutes : input.durationMinutes;
   const endMin = input.startMin + effectiveDuration;
-  const partyAreaEndMin = input.startMin + (partyAreaMinutes || effectiveDuration);
+  const partyAreaTiming: PartyAreaTiming = input.partyAreaTiming ?? "DURING";
+  const partyWindowMinutes = partyAreaMinutes || effectiveDuration;
+  const partyAreaStartMin =
+    partyAreaTiming === "BEFORE"
+      ? input.startMin - partyWindowMinutes
+      : partyAreaTiming === "AFTER"
+      ? input.startMin + effectiveDuration
+      : input.startMin;
+  if (partyAreaTiming === "BEFORE" && partyAreaStartMin < 0) {
+    throw new Error("Party area cannot start before opening hours.");
+  }
+  const partyAreaEndMin = partyAreaStartMin + partyWindowMinutes;
 
   const startTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, input.startMin);
   const endTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, endMin);
-  const partyAreaStartTsUtc = startTsUtc;
+  const partyAreaStartTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, partyAreaStartMin);
   const partyAreaEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, partyAreaEndMin);
 
   const totalCentsValue =

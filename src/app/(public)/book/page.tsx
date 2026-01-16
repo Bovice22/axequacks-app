@@ -394,6 +394,7 @@ function BookPageContent() {
   const [partySize, setPartySize] = useState(2);
   const [partyAreas, setPartyAreas] = useState<PartyAreaName[]>([]);
   const [partyAreaMinutes, setPartyAreaMinutes] = useState<number | null>(null);
+  const [partyAreaTiming, setPartyAreaTiming] = useState<"BEFORE" | "DURING" | "AFTER">("DURING");
   const [comboSlot1, setComboSlot1] = useState<"Axe Throwing" | "Duckpin Bowling">("Duckpin Bowling");
   const [dateKey, setDateKey] = useState(""); // yyyy-mm-dd
   const [time, setTime] = useState(""); // stores START label (ex: "4:00 PM")
@@ -478,6 +479,9 @@ function BookPageContent() {
       if (Number.isFinite(saved.partySize)) setPartySize(Math.max(1, Number(saved.partySize)));
       if (Array.isArray(saved.partyAreas)) setPartyAreas(saved.partyAreas as PartyAreaName[]);
       if (Number.isFinite(saved.partyAreaMinutes)) setPartyAreaMinutes(Number(saved.partyAreaMinutes));
+      if (saved.partyAreaTiming === "BEFORE" || saved.partyAreaTiming === "DURING" || saved.partyAreaTiming === "AFTER") {
+        setPartyAreaTiming(saved.partyAreaTiming);
+      }
       if (saved.comboSlot1 === "Axe Throwing" || saved.comboSlot1 === "Duckpin Bowling") {
         setComboSlot1(saved.comboSlot1);
       }
@@ -504,6 +508,7 @@ function BookPageContent() {
       partySize,
       partyAreas,
       partyAreaMinutes,
+      partyAreaTiming,
       comboSlot1,
       dateKey,
       time,
@@ -523,6 +528,7 @@ function BookPageContent() {
     partySize,
     partyAreas,
     partyAreaMinutes,
+    partyAreaTiming,
     comboSlot1,
     dateKey,
     time,
@@ -536,6 +542,7 @@ function BookPageContent() {
   useEffect(() => {
     if (!partyAreas.length) {
       if (partyAreaMinutes != null) setPartyAreaMinutes(null);
+      setPartyAreaTiming("DURING");
       return;
     }
     if (partyAreaMinutes == null || !Number.isFinite(partyAreaMinutes)) {
@@ -827,6 +834,7 @@ function BookPageContent() {
     partySize: number;
     partyAreas?: PartyAreaName[];
     partyAreaMinutes?: number;
+    partyAreaTiming?: "BEFORE" | "DURING" | "AFTER";
     dateKey: string;
     durationMinutes: number;
     comboAxeMinutes?: number;
@@ -916,6 +924,7 @@ function BookPageContent() {
         partySize,
         partyAreas,
         partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+        partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
         dateKey,
         durationMinutes: effectiveDuration,
         comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
@@ -938,6 +947,7 @@ function BookPageContent() {
     partySize,
     partyAreas,
     partyAreaDuration,
+    partyAreaTiming,
     dateKey,
     closed,
     closedForStaff,
@@ -1000,6 +1010,7 @@ function BookPageContent() {
           startMin,
           partyAreas,
           partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+          partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
@@ -1109,6 +1120,7 @@ function BookPageContent() {
           startMin,
           partyAreas,
           partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+          partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
@@ -1162,6 +1174,7 @@ function BookPageContent() {
     setPartySize(2);
     setPartyAreas([]);
     setPartyAreaMinutes(null);
+    setPartyAreaTiming("DURING");
     setComboSlot1("Duckpin Bowling");
     setDateKey("");
     setTime("");
@@ -1237,6 +1250,7 @@ function BookPageContent() {
           startMin,
           partyAreas,
           partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+          partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
@@ -1629,6 +1643,37 @@ function BookPageContent() {
                     })}
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">$50 per hour • up to 8 hours</div>
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Timing</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {([
+                        { value: "BEFORE", label: "Before Activities" },
+                        { value: "DURING", label: "During Activities" },
+                        { value: "AFTER", label: "After Activities" },
+                      ] as const).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            setPartyAreaTiming(option.value);
+                            setSubmitError("");
+                            setSubmitSuccess("");
+                          }}
+                          className={cx(
+                            "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                            partyAreaTiming === option.value
+                              ? "border-zinc-900 bg-zinc-900 text-white"
+                              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      Choose when the party area is reserved relative to your activities.
+                    </div>
+                  </div>
                 </div>
               )}
               <div className="mt-2 text-xs text-zinc-500">
@@ -2199,6 +2244,7 @@ function BookPageContent() {
                           startMin,
                           partyAreas,
                           partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+                          partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
                           customerName: name.trim(),
                           customerEmail: email.trim(),
                           customerPhone: phone.trim(),
