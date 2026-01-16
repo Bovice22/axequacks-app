@@ -205,11 +205,14 @@ export default function HostEventPage() {
     dateKey: string;
     startMin: number | null;
     bookingWindowMinutes: number;
+    activityDurationMinutes: number;
     partySize: number;
     activities: Array<{ activity: string; durationMinutes: number }>;
     partyAreas: string[];
     partyAreaDuration: number;
     partyAreaTiming: "BEFORE" | "DURING" | "AFTER";
+    partyAreaStartMin?: number | null;
+    partyAreaEndMin?: number | null;
     contactName: string;
     contactEmail: string;
     contactPhone: string;
@@ -239,6 +242,16 @@ export default function HostEventPage() {
   const bookingWindowMinutes = Math.max(totalDuration, partyAreaDuration);
 
   const openWindow = useMemo(() => getOpenWindowForDateKey(dateKey), [dateKey]);
+  const partyAreaWindow = useMemo(() => {
+    if (!partyAreas.length || partyAreaDuration <= 0 || startMin == null) return null;
+    const partyStart =
+      partyAreaTiming === "BEFORE"
+        ? startMin - partyAreaDuration
+        : partyAreaTiming === "AFTER"
+        ? startMin + totalDuration
+        : startMin;
+    return { startMin: partyStart, endMin: partyStart + partyAreaDuration };
+  }, [partyAreas.length, partyAreaDuration, partyAreaTiming, startMin, totalDuration]);
 
   useEffect(() => {
     if (!openWindow || selectedActivities.length === 0 || totalDuration <= 0) {
@@ -481,6 +494,7 @@ export default function HostEventPage() {
         dateKey,
         startMin,
         bookingWindowMinutes,
+        activityDurationMinutes: totalDuration,
         partySize,
         activities: selectedActivities.map((activity) => ({
           activity,
@@ -489,6 +503,8 @@ export default function HostEventPage() {
         partyAreas,
         partyAreaDuration,
         partyAreaTiming,
+        partyAreaStartMin: partyAreaWindow?.startMin ?? null,
+        partyAreaEndMin: partyAreaWindow?.endMin ?? null,
         contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         contactPhone: contactPhone.trim(),
@@ -590,6 +606,19 @@ export default function HostEventPage() {
                     : requestSummary.partyAreaTiming === "AFTER"
                     ? "After Activities"
                     : "During Activities"}
+                </div>
+              ) : null}
+              {requestSummary?.partyAreas?.length ? (
+                <div>
+                  <span className="font-semibold text-zinc-700">Private Party Area:</span>{" "}
+                  {requestSummary.partyAreaStartMin != null &&
+                  requestSummary.partyAreaEndMin != null &&
+                  requestSummary.partyAreaStartMin >= 0
+                    ? timeRangeLabel(
+                        requestSummary.partyAreaStartMin,
+                        requestSummary.partyAreaEndMin - requestSummary.partyAreaStartMin
+                      )
+                    : "—"}
                 </div>
               ) : null}
               <div>
@@ -786,6 +815,14 @@ export default function HostEventPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="mt-3 text-xs text-zinc-500">
+                  {partyAreaWindow && partyAreaWindow.startMin >= 0
+                    ? `Party area will be reserved ${timeRangeLabel(
+                        partyAreaWindow.startMin,
+                        partyAreaDuration
+                      )}.`
+                    : "Choose a start time that leaves room for the party area."}
                 </div>
               </div>
             ) : null}
