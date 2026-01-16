@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 type NavItem = { href: string; label: string };
 
@@ -21,6 +21,8 @@ const ADMIN_ITEMS: NavItem[] = [
 
 export default function StaffNav() {
   const [role, setRole] = useState<"staff" | "admin" | null>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const adminMenuRef = useRef<HTMLLIElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +41,26 @@ export default function StaffNav() {
     };
   }, []);
 
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target || !adminMenuRef.current?.contains(target)) {
+        setAdminOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setAdminOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
   return (
     <nav className="mt-2">
       <ul className="flex flex-nowrap items-center justify-center gap-4 text-sm font-semibold text-zinc-700">
@@ -54,18 +76,23 @@ export default function StaffNav() {
         ))}
         {role === "admin" ? (
           <li
-            className="group relative flex items-center pb-2 after:mx-3 after:text-zinc-300 after:content-['|'] last:after:content-['']"
+            ref={adminMenuRef}
+            className="relative flex items-center pb-2 after:mx-3 after:text-zinc-300 after:content-['|'] last:after:content-['']"
           >
             <button
               type="button"
               className="inline-flex items-center gap-2 hover:underline"
               aria-haspopup="true"
+              aria-expanded={adminOpen}
+              onClick={() => setAdminOpen((prev) => !prev)}
             >
               Admin
               <span className="text-xs">▾</span>
             </button>
             <ul
-              className="absolute z-20 mt-0 hidden w-56 rounded-xl border border-zinc-200 bg-white py-2 text-sm shadow-lg group-hover:block group-focus-within:block"
+              className={`absolute z-20 mt-0 w-56 rounded-xl border border-zinc-200 bg-white py-2 text-sm shadow-lg ${
+                adminOpen ? "block" : "hidden"
+              }`}
               style={{ top: "100%", left: 0 }}
             >
               {ADMIN_ITEMS.map((item) => (
@@ -73,6 +100,7 @@ export default function StaffNav() {
                   <a
                     href={item.href}
                     className="block px-4 py-2 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
+                    onClick={() => setAdminOpen(false)}
                   >
                     {item.label}
                   </a>
