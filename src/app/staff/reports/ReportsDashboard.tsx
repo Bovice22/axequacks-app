@@ -29,6 +29,15 @@ type PosItemRow = {
   line_total_cents: number | null;
   created_at: string;
 };
+type TipRow = {
+  staff_id: string | null;
+  tip_cents: number | null;
+  created_at: string;
+};
+type StaffUserRow = {
+  staff_id: string;
+  full_name: string | null;
+};
 
 type ViewMode = "day" | "week" | "month" | "year";
 
@@ -99,6 +108,8 @@ export default function ReportsDashboard() {
   const [cashSales, setCashSales] = useState<CashSaleRow[]>([]);
   const [allCashSales, setAllCashSales] = useState<CashSaleRow[]>([]);
   const [posItems, setPosItems] = useState<PosItemRow[]>([]);
+  const [tips, setTips] = useState<TipRow[]>([]);
+  const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("month");
@@ -135,6 +146,8 @@ export default function ReportsDashboard() {
     setBookings(json.bookings || []);
     setCashSales(json.cashSales || []);
     setPosItems(json.posItems || []);
+    setTips(json.tips || []);
+    setStaffUsers(json.staffUsers || []);
     setLoading(false);
   }
 
@@ -267,6 +280,33 @@ export default function ReportsDashboard() {
       cashPct,
     };
   }, [bookings, posItems, cashSales]);
+
+  const tipsByStaff = useMemo(() => {
+    const nameById = new Map<string, string>();
+    for (const staff of staffUsers) {
+      if (staff.staff_id) {
+        nameById.set(staff.staff_id, staff.full_name || staff.staff_id);
+      }
+    }
+    const totals = new Map<string, number>();
+    for (const row of tips) {
+      const staffId = row.staff_id || "unknown";
+      const cents = Number(row.tip_cents || 0);
+      if (cents <= 0) continue;
+      totals.set(staffId, (totals.get(staffId) || 0) + cents);
+    }
+    const entries = Array.from(totals.entries()).map(([staffId, cents]) => ({
+      staffId,
+      name: nameById.get(staffId) || (staffId === "unknown" ? "Unknown" : staffId),
+      cents,
+    }));
+    entries.sort((a, b) => b.cents - a.cents);
+    return entries;
+  }, [staffUsers, tips]);
+
+  const totalTipsCents = useMemo(() => {
+    return tipsByStaff.reduce((sum, row) => sum + row.cents, 0);
+  }, [tipsByStaff]);
 
   const totalRevenueCents = useMemo(() => {
     return filteredByCategory.reduce((sum, row) => sum + (row.total_cents || 0), 0);
@@ -562,6 +602,29 @@ export default function ReportsDashboard() {
               <div className="text-xs font-semibold text-zinc-600 md:col-span-2">
                 Total processed: {formatMoney(paymentBreakdown.grandTotal)}
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">Tips by Employee</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm text-zinc-900">
+              <div className="text-xs text-zinc-600">Total tips: {formatMoney(totalTipsCents)}</div>
+              {tipsByStaff.length ? (
+                <div className="space-y-1">
+                  {tipsByStaff.map((row) => (
+                    <div key={row.staffId} className="flex items-center justify-between gap-2">
+                      <span>{row.name}</span>
+                      <span className="font-semibold">{formatMoney(row.cents)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-zinc-600">No tips in this range.</div>
+              )}
             </div>
           )}
         </div>

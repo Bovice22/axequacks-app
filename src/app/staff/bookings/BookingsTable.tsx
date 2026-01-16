@@ -1441,6 +1441,10 @@ export default function BookingsTable() {
                       const width = resourceColWidth - 8;
                       const resourceLabel =
                         resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
+                      const isPartyArea = resourceColumns[colIndex]?.type === "PARTY";
+                      const displayActivity = isPartyArea
+                        ? "Private Party Area"
+                        : activityLabel(booking?.activity) || "Booking";
                       const isHovered =
                         hoveredBookingId === resv.booking_id || hoveredNoteId === resv.booking_id;
                       const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
@@ -1557,7 +1561,7 @@ export default function BookingsTable() {
                               <div className="font-semibold">
                                 {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
                               </div>
-                              <div>{activityLabel(booking?.activity) || "Booking"}</div>
+                              <div>{displayActivity}</div>
                               <div className="text-[10px] text-zinc-600">{resourceLabel}</div>
                               <div className="text-[10px] text-zinc-600">
                                 {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
@@ -1568,7 +1572,7 @@ export default function BookingsTable() {
                           <div className="font-semibold">
                             {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
                           </div>
-                          <div>{activityLabel(booking?.activity) || "Booking"}</div>
+                          <div>{displayActivity}</div>
                           <div className="text-[10px] text-zinc-300">{resourceLabel}</div>
                           <div className="text-[10px] text-zinc-200">
                             {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl

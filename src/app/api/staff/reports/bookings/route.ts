@@ -103,13 +103,56 @@ export async function GET(req: Request) {
       console.error("reports pos items error:", posItemsErr);
       // Allow reports to load even if POS items table isn't available yet.
       return NextResponse.json(
-        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: [] },
+        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: [], tips: [], staffUsers: [] },
+        { status: 200 }
+      );
+    }
+
+    let tipsQuery = sb
+      .from("pos_sales")
+      .select("staff_id,tip_cents,created_at")
+      .order("created_at", { ascending: true })
+      .limit(5000);
+
+    if (startDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+      tipsQuery = tipsQuery.gte("created_at", startIso);
+    }
+    if (endDate) {
+      const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(endDate, 24 * 60 - 1);
+      tipsQuery = tipsQuery.lte("created_at", endIso);
+    }
+
+    const { data: tips, error: tipsErr } = await tipsQuery;
+    if (tipsErr) {
+      console.error("reports tips error:", tipsErr);
+      return NextResponse.json(
+        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [], tips: [], staffUsers: [] },
+        { status: 200 }
+      );
+    }
+
+    const { data: staffUsers, error: staffErr } = await sb
+      .from("staff_users")
+      .select("staff_id,full_name")
+      .order("full_name", { ascending: true })
+      .limit(5000);
+    if (staffErr) {
+      console.error("reports staff users error:", staffErr);
+      return NextResponse.json(
+        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [], tips: tips ?? [], staffUsers: [] },
         { status: 200 }
       );
     }
 
     return NextResponse.json(
-      { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [] },
+      {
+        bookings: data ?? [],
+        cashSales: cashSales ?? [],
+        posItems: posItems ?? [],
+        tips: tips ?? [],
+        staffUsers: staffUsers ?? [],
+      },
       { status: 200 }
     );
   } catch (err: any) {
