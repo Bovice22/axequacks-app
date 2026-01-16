@@ -22,7 +22,8 @@ export async function POST(req: Request) {
     const totalCents = Number(body?.totalCents);
     const promoCodeRaw = String(body?.promoCode || "");
     const activities = Array.isArray(body?.activities) ? body.activities : [];
-    const payInPerson = Boolean(body?.payInPerson);
+    const payInPersonRaw = body?.payInPerson;
+    const payInPerson = payInPersonRaw === true || payInPersonRaw === "true";
     const partyAreas = Array.isArray(body?.partyAreas)
       ? Array.from(
           new Set(
