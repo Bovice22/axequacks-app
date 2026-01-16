@@ -199,6 +199,7 @@ export default function HostEventPage() {
   const [promoStatus, setPromoStatus] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [payInPerson, setPayInPerson] = useState(false);
+  const [showRequestConfirmation, setShowRequestConfirmation] = useState(false);
 
   useEffect(() => {
     if (!partyAreas.length) {
@@ -447,6 +448,7 @@ export default function HostEventPage() {
 
       setRequestStatus("success");
       setRequestMessage("Your Request Has Been Sent");
+      setShowRequestConfirmation(true);
       setSelectedActivities([]);
       setDurationByActivity({});
       setPartySize(10);
@@ -489,6 +491,75 @@ export default function HostEventPage() {
           ) : null}
         </div>
       </div>
+
+      {showRequestConfirmation && requestStatus === "success" ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 text-zinc-900 shadow-xl">
+            <div className="text-lg font-extrabold">Event Request Sent</div>
+            <div className="mt-1 text-sm text-zinc-600">
+              We received your request and will follow up with payment and confirmation details.
+            </div>
+            <div className="mt-4 grid gap-3 text-sm">
+              <div>
+                <span className="font-semibold text-zinc-700">Date:</span>{" "}
+                {dateKey ? prettyDate(dateKey) : "—"}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Start/End:</span>{" "}
+                {startMin != null && bookingWindowMinutes
+                  ? timeRangeLabel(startMin, bookingWindowMinutes)
+                  : "—"}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Party Size:</span> {partySize}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Activities:</span>{" "}
+                {selectedActivities.length
+                  ? selectedActivities
+                      .map((activity) => {
+                        const mins = durationByActivity[activity] || 0;
+                        return `${activity} (${mins ? `${mins} min` : "—"})`;
+                      })
+                      .join(", ")
+                  : "—"}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Party Areas:</span>{" "}
+                {partyAreas.length ? partyAreas.join(", ") : "None"}
+              </div>
+              {partyAreas.length ? (
+                <div>
+                  <span className="font-semibold text-zinc-700">Party Area Duration:</span>{" "}
+                  {partyAreaDuration ? `${partyAreaDuration / 60} hr` : "—"}
+                </div>
+              ) : null}
+              <div>
+                <span className="font-semibold text-zinc-700">Contact:</span>{" "}
+                {contactName || "—"} • {contactEmail || "—"} • {contactPhone || "—"}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Total (est):</span>{" "}
+                {(discountedTotalCents / 100).toFixed(2)}
+              </div>
+              {promoApplied?.code ? (
+                <div>
+                  <span className="font-semibold text-zinc-700">Promo:</span> {promoApplied.code}
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRequestConfirmation(false)}
+                className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-8">
         <div className="space-y-8">
