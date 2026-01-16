@@ -116,7 +116,7 @@ function MonthCalendar(props: {
       <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-black hover:bg-zinc-50"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
         >
           ←
@@ -126,7 +126,7 @@ function MonthCalendar(props: {
 
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold text-black hover:bg-zinc-50"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
         >
           →
@@ -200,6 +200,20 @@ export default function HostEventPage() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [payInPerson, setPayInPerson] = useState(false);
   const [showRequestConfirmation, setShowRequestConfirmation] = useState(false);
+  const [requestSummary, setRequestSummary] = useState<{
+    dateKey: string;
+    startMin: number | null;
+    bookingWindowMinutes: number;
+    partySize: number;
+    activities: Array<{ activity: string; durationMinutes: number }>;
+    partyAreas: string[];
+    partyAreaDuration: number;
+    contactName: string;
+    contactEmail: string;
+    contactPhone: string;
+    totalCents: number;
+    promoCode?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!partyAreas.length) {
@@ -448,6 +462,23 @@ export default function HostEventPage() {
 
       setRequestStatus("success");
       setRequestMessage("Your Request Has Been Sent");
+      setRequestSummary({
+        dateKey,
+        startMin,
+        bookingWindowMinutes,
+        partySize,
+        activities: selectedActivities.map((activity) => ({
+          activity,
+          durationMinutes: durationByActivity[activity] || 0,
+        })),
+        partyAreas,
+        partyAreaDuration,
+        contactName: contactName.trim(),
+        contactEmail: contactEmail.trim(),
+        contactPhone: contactPhone.trim(),
+        totalCents: discountedTotalCents,
+        promoCode: promoApplied?.code,
+      });
       setShowRequestConfirmation(true);
       setSelectedActivities([]);
       setDurationByActivity({});
@@ -502,49 +533,51 @@ export default function HostEventPage() {
             <div className="mt-4 grid gap-3 text-sm">
               <div>
                 <span className="font-semibold text-zinc-700">Date:</span>{" "}
-                {dateKey ? prettyDate(dateKey) : "—"}
+                {requestSummary?.dateKey ? prettyDate(requestSummary.dateKey) : "—"}
               </div>
               <div>
                 <span className="font-semibold text-zinc-700">Start/End:</span>{" "}
-                {startMin != null && bookingWindowMinutes
-                  ? timeRangeLabel(startMin, bookingWindowMinutes)
+                {requestSummary?.startMin != null && requestSummary.bookingWindowMinutes
+                  ? timeRangeLabel(requestSummary.startMin, requestSummary.bookingWindowMinutes)
                   : "—"}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Party Size:</span> {partySize}
+                <span className="font-semibold text-zinc-700">Party Size:</span>{" "}
+                {requestSummary?.partySize ?? partySize}
               </div>
               <div>
                 <span className="font-semibold text-zinc-700">Activities:</span>{" "}
-                {selectedActivities.length
-                  ? selectedActivities
-                      .map((activity) => {
-                        const mins = durationByActivity[activity] || 0;
-                        return `${activity} (${mins ? `${mins} min` : "—"})`;
+                {requestSummary?.activities?.length
+                  ? requestSummary.activities
+                      .map((item) => {
+                        const mins = item.durationMinutes || 0;
+                        return `${item.activity} (${mins ? `${mins} min` : "—"})`;
                       })
                       .join(", ")
                   : "—"}
               </div>
               <div>
                 <span className="font-semibold text-zinc-700">Party Areas:</span>{" "}
-                {partyAreas.length ? partyAreas.join(", ") : "None"}
+                {requestSummary?.partyAreas?.length ? requestSummary.partyAreas.join(", ") : "None"}
               </div>
-              {partyAreas.length ? (
+              {requestSummary?.partyAreas?.length ? (
                 <div>
                   <span className="font-semibold text-zinc-700">Party Area Duration:</span>{" "}
-                  {partyAreaDuration ? `${partyAreaDuration / 60} hr` : "—"}
+                  {requestSummary.partyAreaDuration ? `${requestSummary.partyAreaDuration / 60} hr` : "—"}
                 </div>
               ) : null}
               <div>
                 <span className="font-semibold text-zinc-700">Contact:</span>{" "}
-                {contactName || "—"} • {contactEmail || "—"} • {contactPhone || "—"}
+                {requestSummary?.contactName || "—"} • {requestSummary?.contactEmail || "—"} •{" "}
+                {requestSummary?.contactPhone || "—"}
               </div>
               <div>
                 <span className="font-semibold text-zinc-700">Total (est):</span>{" "}
-                {(discountedTotalCents / 100).toFixed(2)}
+                {requestSummary ? (requestSummary.totalCents / 100).toFixed(2) : "0.00"}
               </div>
-              {promoApplied?.code ? (
+              {requestSummary?.promoCode ? (
                 <div>
-                  <span className="font-semibold text-zinc-700">Promo:</span> {promoApplied.code}
+                  <span className="font-semibold text-zinc-700">Promo:</span> {requestSummary.promoCode}
                 </div>
               ) : null}
             </div>
@@ -713,7 +746,7 @@ export default function HostEventPage() {
               <button
                 type="button"
                 onClick={() => setPartySize((p) => Math.max(1, p - 1))}
-                className="h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold hover:bg-zinc-50"
+                className="h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold text-black hover:bg-zinc-50"
               >
                 −
               </button>
@@ -731,7 +764,7 @@ export default function HostEventPage() {
               <button
                 type="button"
                 onClick={() => setPartySize((p) => Math.min(100, p + 1))}
-                className="h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold hover:bg-zinc-50"
+                className="h-10 w-10 rounded-2xl border border-zinc-200 bg-white text-lg font-extrabold text-black hover:bg-zinc-50"
               >
                 +
               </button>
