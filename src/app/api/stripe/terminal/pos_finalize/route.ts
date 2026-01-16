@@ -46,7 +46,8 @@ export async function POST(req: Request) {
     const subtotalCents = Number(intent.metadata?.pos_subtotal || 0);
     const taxCents = Number(intent.metadata?.pos_tax || 0);
     const totalCents = Number(intent.metadata?.pos_total || 0);
-    const tipCents = Number(intent.charges?.data?.[0]?.amount_details?.tip || 0);
+    const tipDetails = (intent.charges?.data?.[0] as any)?.amount_details;
+    const tipCents = Number(tipDetails?.tip || 0);
 
     const sb = supabaseServer();
     const { data: existing } = await sb
