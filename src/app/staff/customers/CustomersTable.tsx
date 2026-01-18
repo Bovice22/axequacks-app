@@ -298,10 +298,20 @@ export default function CustomersTable() {
         return;
       }
       const header = rows[0].map((cell) => normalizeHeader(cell));
-      const firstIdx = header.findIndex((h) => h === "firstname");
-      const lastIdx = header.findIndex((h) => h === "lastname");
-      const emailIdx = header.findIndex((h) => h === "email");
-      const phoneIdx = header.findIndex((h) => h === "phonenumber" || h === "phone");
+      const firstIdx = header.findIndex((h) => h === "firstname" || h === "givenname");
+      const lastIdx = header.findIndex((h) => h === "lastname" || h === "familyname");
+      const emailIdx = header.findIndex(
+        (h) => h === "email" || h === "emailaddress" || h === "emailaddr" || h === "emailaddress1"
+      );
+      const phoneIdx = header.findIndex(
+        (h) =>
+          h === "phonenumber" ||
+          h === "phone" ||
+          h === "phone1" ||
+          h === "phonenumber1" ||
+          h === "mobile" ||
+          h === "mobilephone"
+      );
 
       if (emailIdx === -1) {
         setImportError("CSV must include an Email column.");
