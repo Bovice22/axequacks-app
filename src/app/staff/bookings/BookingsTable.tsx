@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
 
 type BookingRow = {
   id: string;
@@ -365,6 +366,12 @@ export default function BookingsTable() {
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
   const actionBarClickRef = useRef(false);
   const editIntentRef = useRef(false);
+  const [terminalReaders, setTerminalReaders] = useState<Reader[]>([]);
+  const [selectedReaderId, setSelectedReaderId] = useState("");
+  const [terminalError, setTerminalError] = useState("");
+  const [terminalPhase, setTerminalPhase] = useState<"idle" | "connecting" | "collecting" | "processing">("idle");
+  const terminalRef = useRef<Terminal | null>(null);
+  const terminalReadyRef = useRef(false);
   const staffNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const user of staffUsers) {
@@ -444,12 +451,19 @@ export default function BookingsTable() {
   function openPayModal(bookingId: string) {
     setPayModalBookingId(bookingId);
     setPayError("");
+    setTerminalError("");
+    setTerminalPhase("idle");
+    if (!terminalReaders.length) {
+      void loadReaders();
+    }
   }
 
   function closePayModal() {
     setPayModalBookingId(null);
     setPayLoading(null);
     setPayError("");
+    setTerminalError("");
+    setTerminalPhase("idle");
   }
 
   async function payWithCash(bookingId: string) {
@@ -478,23 +492,96 @@ export default function BookingsTable() {
   async function payWithCard(bookingId: string) {
     setPayLoading("card");
     setPayError("");
+    setTerminalError("");
+    setTerminalPhase("connecting");
     try {
-      const res = await fetch(`/api/staff/bookings/${bookingId}/payment-link`, { method: "POST" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setPayError(json?.error || "Failed to create payment link.");
+      if (!terminalRef.current) {
+        setTerminalError("Stripe Terminal not initialized.");
         return;
       }
-      if (json?.paymentUrl) {
-        window.open(json.paymentUrl, "_blank", "noopener,noreferrer");
-        closePayModal();
-      } else {
-        setPayError("Payment link unavailable.");
+      if (!selectedReaderId) {
+        setTerminalError("Select a reader to continue.");
+        return;
       }
+      const reader = terminalReaders.find((r) => r.id === selectedReaderId);
+      if (!reader) {
+        setTerminalError("Reader not found.");
+        return;
+      }
+
+      const connectResult = await terminalRef.current.connectReader(reader);
+      if ("error" in connectResult && connectResult.error) {
+        setTerminalError(connectResult.error.message || "Failed to connect reader.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      setTerminalPhase("collecting");
+      const intentRes = await fetch("/api/stripe/terminal/booking_payment_intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId }),
+      });
+      const intentJson = await intentRes.json().catch(() => ({}));
+      if (!intentRes.ok || !intentJson?.client_secret) {
+        setTerminalError(intentJson?.error || "Failed to create payment intent.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      const collectResult = await terminalRef.current.collectPaymentMethod(intentJson.client_secret);
+      if ("error" in collectResult && collectResult.error) {
+        setTerminalError(collectResult.error.message || "Payment collection failed.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      if (!("paymentIntent" in collectResult) || !collectResult.paymentIntent) {
+        setTerminalError("Payment collection failed.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      setTerminalPhase("processing");
+      const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
+      if ("error" in processResult && processResult.error) {
+        setTerminalError(processResult.error.message || "Payment failed.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      if (!("paymentIntent" in processResult) || !processResult.paymentIntent) {
+        setTerminalError("Payment completed, but no payment intent returned.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      const paymentIntentId = processResult.paymentIntent?.id;
+      if (!paymentIntentId) {
+        setTerminalError("Payment completed, but no payment intent returned.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      const finalizeRes = await fetch("/api/stripe/terminal/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_intent_id: paymentIntentId }),
+      });
+      const finalizeJson = await finalizeRes.json().catch(() => ({}));
+      if (!finalizeRes.ok) {
+        setTerminalError(finalizeJson?.error || "Payment succeeded but booking update failed.");
+        setTerminalPhase("idle");
+        return;
+      }
+
+      setRows((prev) => prev.map((row) => (row.id === bookingId ? { ...row, paid: true } : row)));
+      closePayModal();
     } catch (err: any) {
-      setPayError(err?.message || "Failed to create payment link.");
+      setTerminalError(err?.message || "Terminal payment failed.");
     } finally {
       setPayLoading(null);
+      setTerminalPhase("idle");
     }
   }
 
@@ -635,6 +722,47 @@ export default function BookingsTable() {
         setStaffUsers([]);
       });
   }, [staffRole]);
+
+  useEffect(() => {
+    if (terminalReadyRef.current) return;
+    terminalReadyRef.current = true;
+    loadStripeTerminal().then((StripeTerminal) => {
+      if (!StripeTerminal) {
+        setTerminalError("Stripe Terminal failed to load. Please refresh.");
+        return;
+      }
+      terminalRef.current = StripeTerminal.create({
+        onFetchConnectionToken: async () => {
+          const res = await fetch("/api/stripe/terminal/connection_token", { method: "POST" });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.secret) {
+            throw new Error(json?.error || "Failed to fetch connection token.");
+          }
+          return json.secret as string;
+        },
+        onUnexpectedReaderDisconnect: () => {
+          setTerminalError("Reader disconnected. Please reconnect.");
+        },
+      });
+    });
+  }, []);
+
+  async function loadReaders() {
+    try {
+      const res = await fetch("/api/stripe/terminal/readers");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTerminalError(json?.error || "Failed to load card readers.");
+        return;
+      }
+      setTerminalReaders(json.readers || []);
+      if (!selectedReaderId && json.readers?.length) {
+        setSelectedReaderId(json.readers[0].id);
+      }
+    } catch (e: any) {
+      setTerminalError(e?.message || "Failed to load card readers.");
+    }
+  }
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -1459,10 +1587,37 @@ export default function BookingsTable() {
             disabled={payLoading !== null}
             className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
-            {payLoading === "card" ? "Opening..." : "Pay With Card"}
+            {payLoading === "card" ? "Charging..." : "Pay With Card"}
           </button>
         </div>
+        <div className="mt-3">
+          <label className="text-xs font-semibold text-zinc-600">
+            Card Reader
+            <select
+              value={selectedReaderId}
+              onChange={(e) => setSelectedReaderId(e.target.value)}
+              className="mt-1 h-9 w-full rounded-lg border border-zinc-200 px-2 text-xs"
+            >
+              <option value="">Select a reader</option>
+              {terminalReaders.map((reader) => (
+                <option key={reader.id} value={reader.id}>
+                  {reader.label || reader.device_type || reader.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          {terminalPhase !== "idle" ? (
+            <div className="mt-2 text-[11px] text-zinc-500">
+              {terminalPhase === "connecting"
+                ? "Connecting reader..."
+                : terminalPhase === "collecting"
+                ? "Collecting payment..."
+                : "Processing payment..."}
+            </div>
+          ) : null}
+        </div>
         {payError ? <div className="mt-3 text-xs font-semibold text-red-600">{payError}</div> : null}
+        {terminalError ? <div className="mt-2 text-xs font-semibold text-red-600">{terminalError}</div> : null}
         <div className="mt-4 flex items-center justify-end">
           <button
             type="button"
