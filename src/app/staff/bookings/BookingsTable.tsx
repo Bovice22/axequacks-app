@@ -1690,10 +1690,18 @@ export default function BookingsTable() {
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
+                            const target = e.target as HTMLElement | null;
+                            if (target?.closest("[data-action-button='true']")) {
+                              return;
+                            }
                             openEditForBooking(resv.booking_id);
                           }}
                           onMouseDown={(e) => {
                             e.stopPropagation();
+                            const target = e.target as HTMLElement | null;
+                            if (target?.closest("[data-action-button='true']")) {
+                              return;
+                            }
                             openEditForBooking(resv.booking_id);
                           }}
                           onMouseEnter={() => {
@@ -1709,6 +1717,10 @@ export default function BookingsTable() {
                           }}
                           onTouchStart={(e) => {
                             e.stopPropagation();
+                            const target = e.target as HTMLElement | null;
+                            if (target?.closest("[data-action-button='true']")) {
+                              return;
+                            }
                             openEditForBooking(resv.booking_id);
                           }}
                           data-booking-id={resv.booking_id}
