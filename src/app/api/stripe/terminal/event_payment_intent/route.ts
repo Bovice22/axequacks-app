@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStripeTerminal } from "@/lib/server/stripe";
+import { cardFeeCents } from "@/lib/bookingLogic";
 
 export async function POST(req: Request) {
   try {
@@ -38,9 +39,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid total" }, { status: 400 });
     }
 
+    const cardFee = cardFeeCents(totalCents);
+    const totalWithFee = totalCents + cardFee;
     const stripe = getStripeTerminal();
     const intent = await stripe.paymentIntents.create({
-      amount: totalCents,
+      amount: totalWithFee,
       currency: "usd",
       capture_method: "automatic",
       payment_method_types: ["card_present"],
@@ -55,6 +58,8 @@ export async function POST(req: Request) {
         customer_phone: String(requestRow.customer_phone || ""),
         ui_mode: "staff",
         pay_in_person: "true",
+        card_fee_cents: String(cardFee),
+        total_with_fee: String(totalWithFee),
       },
     });
 

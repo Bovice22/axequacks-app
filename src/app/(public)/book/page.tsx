@@ -11,6 +11,7 @@ import {
   partyAreaCostCents,
   comboAxePersonCents,
   comboDuckpinLaneCents,
+  cardFeeCents,
   neededResources,
   PRICING,
   totalCents,
@@ -736,6 +737,8 @@ function BookPageContent() {
 
   const totalCents = pricing?.cents ?? 0;
   const discountedTotalCents = promoApplied?.totalCents ?? totalCents;
+  const cardFee = cardFeeCents(discountedTotalCents);
+  const cardTotalCents = discountedTotalCents + cardFee;
   const discountCents = promoApplied?.amountOffCents ?? 0;
   const cashProvidedCents = useMemo(() => {
     const value = Number(cashInput || "0");
@@ -2037,9 +2040,9 @@ function BookPageContent() {
               <div className="my-4 border-t border-zinc-200" />
 
               <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-zinc-600">Total</div>
+                <div className="text-sm font-semibold text-zinc-600">Total (Card)</div>
                 <div className="text-lg font-extrabold text-zinc-900">
-                  {pricing ? formatMoney(discountedTotalCents) : "—"}
+                  {pricing ? formatMoney(cardTotalCents) : "—"}
                 </div>
               </div>
 
@@ -2052,6 +2055,18 @@ function BookPageContent() {
                   <div className="flex items-center justify-between text-emerald-700">
                     <span>Promo {promoApplied.code}</span>
                     <span className="font-semibold">-{formatMoney(discountCents)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Card Processing Fee (3%)</span>
+                    <span className="font-semibold text-zinc-800">{formatMoney(cardFee)}</span>
+                  </div>
+                </div>
+              ) : null}
+              {!promoApplied ? (
+                <div className="mt-2 space-y-1 text-xs text-zinc-600">
+                  <div className="flex items-center justify-between">
+                    <span>Card Processing Fee (3%)</span>
+                    <span className="font-semibold text-zinc-800">{formatMoney(cardFee)}</span>
                   </div>
                 </div>
               ) : null}

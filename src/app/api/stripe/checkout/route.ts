@@ -5,6 +5,7 @@ import {
   normalizePartyAreaName,
   partyAreaCostCents,
   totalCents,
+  cardFeeCents,
   type PartyAreaName,
 } from "@/lib/bookingLogic";
 import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
@@ -182,6 +183,7 @@ export async function POST(req: Request) {
         ? Number(body.comboAxeMinutes || 0) + Number(body.comboDuckpinMinutes || 0)
         : body.durationMinutes;
 
+    const cardFee = cardFeeCents(amount);
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -191,14 +193,24 @@ export async function POST(req: Request) {
           price_data: {
             currency: "usd",
             unit_amount: amount,
-          product_data: {
-            name: body.activity,
-            description: `${body.partySize} guests • ${comboTotalMinutes} mins`,
+            product_data: {
+              name: body.activity,
+              description: `${body.partySize} guests • ${comboTotalMinutes} mins`,
+            },
           },
+          quantity: 1,
         },
-        quantity: 1,
-      },
-    ],
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: cardFee,
+            product_data: {
+              name: "Card Processing Fee (3%)",
+            },
+          },
+          quantity: 1,
+        },
+      ],
     success_url: `${origin}${successPath}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}${cancelPath}`,
         payment_intent_data: {
@@ -222,10 +234,11 @@ export async function POST(req: Request) {
         discount_amount: promoMeta ? String(promoMeta.amountOff) : "",
         discount_type: promoMeta?.discountType || "",
         discount_value: promoMeta ? String(promoMeta.discountValue) : "",
-        total_before_discount: String(baseAmount),
-      },
-    },
-  });
+            total_before_discount: String(baseAmount),
+            card_fee_cents: String(cardFee),
+          },
+        },
+      });
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (e: any) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { getStripe } from "@/lib/server/stripe";
-import { PARTY_AREA_OPTIONS, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, partyAreaCostCents, totalCents, cardFeeCents } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
@@ -160,6 +160,7 @@ export async function POST(req: Request) {
       normalizeBaseUrl(process.env.NEXT_PUBLIC_BOOK_URL) ||
       normalizeBaseUrl(process.env.NEXT_PUBLIC_APP_URL) ||
       "http://localhost:3000";
+    const cardFee = cardFeeCents(amount);
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -172,6 +173,16 @@ export async function POST(req: Request) {
             product_data: {
               name: activity,
               description: `${partySize} guests • ${comboTotalMinutes} mins`,
+            },
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: cardFee,
+            product_data: {
+              name: "Card Processing Fee (3%)",
             },
           },
           quantity: 1,
@@ -202,6 +213,7 @@ export async function POST(req: Request) {
           discount_type: promoMeta?.discountType || "",
           discount_value: promoMeta ? String(promoMeta.discountValue) : "",
           total_before_discount: String(baseAmount),
+          card_fee_cents: String(cardFee),
         },
       },
     });

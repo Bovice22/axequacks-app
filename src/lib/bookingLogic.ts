@@ -152,6 +152,11 @@ export function totalCents(
   return Math.round((duckpinPortion + axePortion) * 100);
 }
 
+export function cardFeeCents(amountCents: number): number {
+  if (!Number.isFinite(amountCents) || amountCents <= 0) return 0;
+  return Math.round(amountCents * 0.03);
+}
+
 // --- TIME HELPERS ---
 
 export function toUtcRange(dateISO: string, startTimeHHmm: string, durationMinutes: number, tz: string) {

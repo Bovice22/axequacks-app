@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     const subtotalCents = Number(intent.metadata?.pos_subtotal || 0);
     const taxCents = Number(intent.metadata?.pos_tax || 0);
-    const totalCents = Number(intent.metadata?.pos_total || 0);
+    const totalCents = Number(intent.metadata?.pos_total_with_fee || intent.metadata?.pos_total || 0);
     const tipDetails = (intent.charges?.data?.[0] as any)?.amount_details;
     const tipCents = Number(tipDetails?.tip || 0);
 

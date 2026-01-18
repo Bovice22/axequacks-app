@@ -5,6 +5,7 @@ import {
   normalizePartyAreaName,
   partyAreaCostCents,
   totalCents,
+  cardFeeCents,
   type PartyAreaName,
 } from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
@@ -162,8 +163,10 @@ export async function POST(req: Request) {
     }
 
     const staff = await getStaffUserFromCookies().catch(() => null);
+    const cardFee = cardFeeCents(amount);
+    const amountWithFee = amount + cardFee;
     const intent = await stripe.paymentIntents.create({
-      amount,
+      amount: amountWithFee,
       currency: "usd",
       capture_method: "automatic",
       payment_method_types: ["card_present"],
@@ -189,6 +192,8 @@ export async function POST(req: Request) {
         discount_type: promoMeta?.discountType || "",
         discount_value: promoMeta ? String(promoMeta.discountValue) : "",
         total_before_discount: String(baseAmount),
+        card_fee_cents: String(cardFee),
+        total_with_fee: String(amountWithFee),
       },
     });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
+import { cardFeeCents } from "@/lib/bookingLogic";
 
 const TAX_RATE = 0.0725;
 
@@ -63,6 +64,8 @@ export async function POST(req: Request) {
     const subtotalCents = lineItems.reduce((sum, item) => sum + item.line_total_cents, 0);
     const taxCents = Math.round(subtotalCents * TAX_RATE);
     const totalCents = subtotalCents + taxCents;
+    const cardFee = cardFeeCents(totalCents);
+    const totalWithFee = totalCents + cardFee;
 
     const stripe = getStripeTerminal();
     const metadata: Record<string, string> = {
@@ -71,12 +74,14 @@ export async function POST(req: Request) {
       pos_subtotal: String(subtotalCents),
       pos_tax: String(taxCents),
       pos_total: String(totalCents),
+      pos_card_fee: String(cardFee),
+      pos_total_with_fee: String(totalWithFee),
       pos_staff_id: staff.staff_id,
     };
     if (tabId) metadata.tab_id = tabId;
 
     const intent = await stripe.paymentIntents.create({
-      amount: totalCents,
+      amount: totalWithFee,
       currency: "usd",
       capture_method: "automatic",
       payment_method_types: ["card_present"],
@@ -86,7 +91,13 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         client_secret: intent.client_secret,
-        totals: { subtotal_cents: subtotalCents, tax_cents: taxCents, total_cents: totalCents },
+        totals: {
+          subtotal_cents: subtotalCents,
+          tax_cents: taxCents,
+          total_cents: totalCents,
+          card_fee_cents: cardFee,
+          total_with_fee_cents: totalWithFee,
+        },
       },
       { status: 200 }
     );
