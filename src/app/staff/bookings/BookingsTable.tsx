@@ -1603,6 +1603,23 @@ export default function BookingsTable() {
                             >
                               Edit
                             </button>
+                            <button
+                              type="button"
+                              aria-label="Assign staff"
+                              className="rounded-full px-3 py-1 text-[10px] font-bold"
+                              style={{
+                                border: "1px solid rgba(0,0,0,0.35)",
+                                color: "#111",
+                                backgroundColor: "#fff",
+                              }}
+                              data-booking-id={resv.booking_id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditForBooking(resv.booking_id);
+                              }}
+                            >
+                              Assign Staff
+                            </button>
                           </div>
                           {hoveredNoteId === resv.booking_id &&
                           (booking?.notes || "").trim() &&
