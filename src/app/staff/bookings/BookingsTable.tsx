@@ -1689,28 +1689,6 @@ export default function BookingsTable() {
                             paddingTop: 26,
                             zIndex: isHovered ? 999 : 50,
                           }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const target = e.target as HTMLElement | null;
-                            if (target?.closest("[data-action-button='true']")) {
-                              return;
-                            }
-                            if (actionBarClickRef.current) {
-                              return;
-                            }
-                            openEditForBooking(resv.booking_id);
-                          }}
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            const target = e.target as HTMLElement | null;
-                            if (target?.closest("[data-action-button='true']")) {
-                              return;
-                            }
-                            if (actionBarClickRef.current) {
-                              return;
-                            }
-                            openEditForBooking(resv.booking_id);
-                          }}
                           onMouseEnter={() => {
                             if (isCompact) setHoveredBookingId(resv.booking_id);
                             const note = (booking?.notes || "").trim();
@@ -1722,26 +1700,8 @@ export default function BookingsTable() {
                             if (hoveredBookingId === resv.booking_id) setHoveredBookingId(null);
                             if (hoveredNoteId === resv.booking_id) setHoveredNoteId(null);
                           }}
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                            const target = e.target as HTMLElement | null;
-                            if (target?.closest("[data-action-button='true']")) {
-                              return;
-                            }
-                            if (actionBarClickRef.current) {
-                              return;
-                            }
-                            openEditForBooking(resv.booking_id);
-                          }}
                           data-booking-id={resv.booking_id}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              openEditForBooking(resv.booking_id);
-                            }
-                          }}
+                          role="group"
                         >
                           <div
                             className="absolute left-0 right-0 top-0 z-20 flex h-[22px] items-center justify-end gap-2 rounded-t-xl px-2"
