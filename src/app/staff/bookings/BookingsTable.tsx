@@ -1737,6 +1737,7 @@ export default function BookingsTable() {
                             className="absolute left-0 right-0 top-0 z-20 flex h-[22px] items-center justify-end gap-2 rounded-t-xl px-2"
                             style={{ backgroundColor: actionBarColor, color: actionTextColor }}
                             onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <button
@@ -1754,6 +1755,7 @@ export default function BookingsTable() {
                                 openTabForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
                               data-action-button="true"
                             >
                               Tab
@@ -1773,6 +1775,7 @@ export default function BookingsTable() {
                                 openEditForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
                               data-action-button="true"
                             >
                               Edit
@@ -1792,6 +1795,7 @@ export default function BookingsTable() {
                                 openEditForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
                               data-action-button="true"
                             >
                               Assign Staff
@@ -1812,6 +1816,7 @@ export default function BookingsTable() {
                                   openPayModal(resv.booking_id);
                                 }}
                                 onMouseDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
                                 data-action-button="true"
                               >
                                 Pay Now
