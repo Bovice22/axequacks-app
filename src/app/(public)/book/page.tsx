@@ -388,6 +388,10 @@ function BookPageContent() {
   const isStaffMode = searchParams.get("mode") === "staff";
   const checkoutSessionId = searchParams.get("session_id");
 
+  useEffect(() => {
+    document.title = "Book - Axe Quacks";
+  }, []);
+
   const [activity, setActivity] = useState<Activity | "">("");
   const [duration, setDuration] = useState<number | null>(null);
   const [comboAxeDuration, setComboAxeDuration] = useState<number | null>(null);

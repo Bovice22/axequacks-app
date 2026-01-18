@@ -173,6 +173,10 @@ function MonthCalendar(props: {
 }
 
 export default function HostEventPage() {
+  useEffect(() => {
+    document.title = "Events - Axe Quacks";
+  }, []);
+
   const [selectedActivities, setSelectedActivities] = useState<Array<(typeof ACTIVITIES)[number]>>([]);
   const [durationByActivity, setDurationByActivity] = useState<Record<string, number>>({});
   const [partySize, setPartySize] = useState(10);
