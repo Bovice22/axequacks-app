@@ -62,12 +62,12 @@ export default function StaffNav() {
   }, []);
 
   return (
-    <nav className="mt-2">
-      <ul className="flex flex-nowrap items-center justify-center gap-4 text-sm font-semibold text-zinc-700">
+    <nav className="mt-2 w-full">
+      <ul className="flex flex-wrap items-center justify-center gap-3 text-xs font-semibold text-zinc-700 sm:gap-4 sm:text-sm">
         {MAIN_ITEMS.map((item) => (
           <li
             key={item.href}
-            className="flex items-center after:mx-3 after:text-zinc-300 after:content-['|'] last:after:content-['']"
+            className="flex items-center after:mx-2 after:text-zinc-300 after:content-[''] sm:after:mx-3 sm:after:content-['|'] last:after:content-['']"
           >
             <a href={item.href} className="hover:underline">
               {item.label}
@@ -77,7 +77,7 @@ export default function StaffNav() {
         {role === "admin" ? (
           <li
             ref={adminMenuRef}
-            className="relative flex items-center pb-2 after:mx-3 after:text-zinc-300 after:content-['|'] last:after:content-['']"
+            className="relative flex items-center pb-2 after:mx-2 after:text-zinc-300 after:content-[''] sm:after:mx-3 sm:after:content-['|'] last:after:content-['']"
           >
             <button
               type="button"

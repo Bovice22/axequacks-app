@@ -738,7 +738,7 @@ export default function PosScreen() {
   }, [displayItems, itemQuery]);
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-100 text-zinc-900">
+    <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900">
       {cashModalOpen ? (
         <div
           className="fixed inset-0 z-[2147483646] flex items-center justify-center bg-black/60 p-4"
@@ -761,7 +761,7 @@ export default function PosScreen() {
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-[1.1fr_1fr] gap-6">
+            <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_1fr]">
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
                 <div className="text-xs font-semibold uppercase text-zinc-500">Total Due</div>
                 <div className="mt-2 text-3xl font-semibold text-zinc-900">
@@ -787,7 +787,7 @@ export default function PosScreen() {
                   </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-5 gap-3">
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {[5, 10, 20, 50, 100].map((amount) => (
                     <button
                       key={amount}
@@ -976,16 +976,16 @@ export default function PosScreen() {
         <div className="w-24" />
       </div>
 
-      <div className="flex flex-1 gap-4 overflow-hidden p-4">
-        <div className="flex w-[35%] min-w-0 flex-col gap-4">
+      <div className="flex flex-1 flex-col gap-4 overflow-visible p-4 lg:flex-row lg:overflow-hidden">
+        <div className="flex w-full min-w-0 flex-col gap-4 lg:w-[35%]">
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="mr-24 text-xs font-semibold uppercase text-zinc-500">Active Tab</div>
+                <div className="text-xs font-semibold uppercase text-zinc-500 sm:mr-24">Active Tab</div>
                 <select
                   value={activeTabId}
                   onChange={(e) => setActiveTabId(e.target.value)}
-                  className="mr-24 h-9 min-w-[220px] rounded-lg border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800"
+                  className="h-9 min-w-[220px] rounded-lg border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-800 sm:mr-24"
                 >
                   <option value="">Walk-in (no tab)</option>
                   {tabs.map((tab) => (

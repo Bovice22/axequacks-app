@@ -233,14 +233,11 @@ function MonthCalendar(props: {
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return (
-    <div
-      className="rounded-2xl border border-zinc-200 bg-white p-4"
-      style={{ width: 580, maxWidth: "100%" }}
-    >
-      <div className="mb-3 flex items-center justify-between">
+    <div className="w-full max-w-[420px] rounded-2xl border border-zinc-200 bg-white p-3 sm:max-w-none sm:p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
         >
           ←
@@ -250,22 +247,22 @@ function MonthCalendar(props: {
 
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
         >
           →
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-zinc-500">
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-zinc-500 sm:gap-2 sm:text-xs">
         {weekDays.map((d) => (
           <div key={d}>{d}</div>
         ))}
       </div>
 
-      <div className="mt-2 grid grid-cols-7 gap-2">
+      <div className="mt-2 grid grid-cols-7 gap-1 sm:gap-2">
         {days.map((cell, idx) => {
-          if (!cell.date) return <div key={idx} className="h-10 rounded-xl bg-transparent" />;
+          if (!cell.date) return <div key={idx} className="h-9 rounded-xl bg-transparent sm:h-10" />;
 
           const dk = toDateKey(cell.date);
           const selected = selectedDateKey === dk;
@@ -278,7 +275,7 @@ function MonthCalendar(props: {
               type="button"
               disabled={disabled}
               onClick={() => !disabled && onSelectDateKey(dk)}
-              className={`h-10 rounded-xl border text-sm font-bold transition ${
+              className={`h-9 rounded-xl border text-xs font-bold transition sm:h-10 sm:text-sm ${
                 selected
                   ? "border-zinc-900 bg-zinc-900 text-white"
                   : disabled
@@ -309,6 +306,7 @@ export default function BookingsTable() {
   const [isClient, setIsClient] = useState(false);
   const scheduleWrapRef = useRef<HTMLDivElement | null>(null);
   const [scheduleWidth, setScheduleWidth] = useState<number | null>(null);
+  const [showSchedule, setShowSchedule] = useState(true);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
   const [hoveredBookingId, setHoveredBookingId] = useState<string | null>(null);
@@ -522,6 +520,13 @@ export default function BookingsTable() {
     if (!scheduleWidth) return;
     setCompactMode(scheduleWidth < 1200);
   }, [scheduleWidth]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth < 768) {
+      setShowSchedule(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/staff/me")
@@ -1308,6 +1313,13 @@ export default function BookingsTable() {
             <div className="flex items-center gap-3 text-xs text-zinc-500">
               <button
                 type="button"
+                onClick={() => setShowSchedule((prev) => !prev)}
+                className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 sm:hidden"
+              >
+                {showSchedule ? "Hide schedule" : "Show schedule"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setCompactMode((prev) => !prev)}
                 className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
               >
@@ -1316,7 +1328,11 @@ export default function BookingsTable() {
               <span>{prettyDate(selectedDateKey)}</span>
             </div>
           </div>
-          {!openWindow ? (
+          {!showSchedule ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 sm:hidden">
+              Schedule hidden. Tap "Show schedule" to view.
+            </div>
+          ) : !openWindow ? (
             <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">Closed today.</div>
           ) : (
             <div
