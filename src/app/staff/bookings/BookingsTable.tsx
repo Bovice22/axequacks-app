@@ -977,6 +977,14 @@ export default function BookingsTable() {
 
   const editingRow = editingBookingId ? bookingById.get(editingBookingId) || null : null;
   const originalPartySize = editSnapshot?.partySize ?? editPartySize;
+  const assignedStaffChanged = (editSnapshot?.assignedStaffId || "") !== (editAssignedStaffId || "");
+  const staffNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of staffUsers) {
+      map.set(user.staff_id, user.full_name || user.staff_id);
+    }
+    return map;
+  }, [staffUsers]);
   const reducedCount = originalPartySize - editPartySize;
   const refundRequired = !!editingRow?.paid && reducedCount > 0;
   const refundEstimateCents =
@@ -999,7 +1007,7 @@ export default function BookingsTable() {
         }
       }}
     >
-      <div className="pointer-events-auto relative z-[100000] w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+      <div className="pointer-events-auto relative z-[100000] w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-lg font-semibold text-zinc-900">Edit Booking</div>
@@ -1030,7 +1038,7 @@ export default function BookingsTable() {
             </button>
           </div>
         </div>
-        <div className="mt-4 grid gap-3">
+        <div className="mt-4 max-h-[70vh] space-y-3 overflow-y-auto pr-1">
           <select
             value={editActivity}
             onChange={(e) => setEditActivity(e.target.value)}
@@ -1075,22 +1083,33 @@ export default function BookingsTable() {
             disabled={editLoading}
           />
           {staffRole === "admin" ? (
-            <label className="text-xs font-semibold text-zinc-600">
-              Assigned Staff
-              <select
-                value={editAssignedStaffId}
-                onChange={(e) => setEditAssignedStaffId(e.target.value)}
-                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
-                disabled={editLoading}
-              >
-                <option value="">Unassigned</option>
-                {staffUsers.map((user) => (
-                  <option key={user.staff_id} value={user.staff_id}>
-                    {user.full_name ? `${user.full_name} (${user.staff_id})` : user.staff_id}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+              <label className="text-xs font-semibold text-zinc-600">
+                Assigned Staff
+                <select
+                  value={editAssignedStaffId}
+                  onChange={(e) => setEditAssignedStaffId(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                  disabled={editLoading}
+                >
+                  <option value="">Unassigned</option>
+                  {staffUsers.map((user) => (
+                    <option key={user.staff_id} value={user.staff_id}>
+                      {user.full_name ? `${user.full_name} (${user.staff_id})` : user.staff_id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {editAssignedStaffId && assignedStaffChanged ? (
+                <button
+                  type="button"
+                  onClick={saveBookingEdits}
+                  className="mt-2 w-full rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Save Staff Assignment
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {refundRequired ? (
@@ -1649,6 +1668,11 @@ export default function BookingsTable() {
                               <div className="text-[10px] text-zinc-600">
                                 {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
                               </div>
+                              {booking?.assigned_staff_id ? (
+                                <div className="text-[10px] text-zinc-600">
+                                  Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
+                                </div>
+                              ) : null}
                               <div className="text-[10px] text-zinc-600">{paymentLabel(booking?.status, booking?.paid)}</div>
                             </div>
                           ) : null}
@@ -1660,6 +1684,11 @@ export default function BookingsTable() {
                           <div className="text-[10px] text-zinc-200">
                             {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
                           </div>
+                          {booking?.assigned_staff_id ? (
+                            <div className="text-[10px] text-zinc-200">
+                              Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
+                            </div>
+                          ) : null}
                           <div className="text-[10px] text-zinc-200">
                             {paymentLabel(booking?.status, booking?.paid)}
                           </div>
