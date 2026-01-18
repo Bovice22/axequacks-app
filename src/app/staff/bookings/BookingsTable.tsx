@@ -1589,30 +1589,6 @@ export default function BookingsTable() {
                       backgroundSize: `100% ${HOUR_ROW_PX}px, 100% ${HOUR_ROW_PX}px`,
                     }}
                     data-schedule-root
-                    onPointerDown={(e) => {
-                      const target = e.target as HTMLElement | null;
-                      if (target?.closest("[data-action-button='true']")) {
-                        return;
-                      }
-                      const elements = typeof document !== "undefined" ? document.elementsFromPoint(e.clientX, e.clientY) : [];
-                      const card = elements.find((el) => (el as HTMLElement).dataset?.bookingId) as HTMLElement | undefined;
-                      const bookingId = card?.dataset?.bookingId;
-                      if (bookingId) {
-                        openEditForBooking(bookingId);
-                      }
-                    }}
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement | null;
-                      if (target?.closest("[data-action-button='true']")) {
-                        return;
-                      }
-                      const elements = typeof document !== "undefined" ? document.elementsFromPoint(e.clientX, e.clientY) : [];
-                      const card = elements.find((el) => (el as HTMLElement).dataset?.bookingId) as HTMLElement | undefined;
-                      const bookingId = card?.dataset?.bookingId;
-                      if (bookingId) {
-                        openEditForBooking(bookingId);
-                      }
-                    }}
                   >
                     <div
                       className="absolute left-0"
