@@ -1716,6 +1716,8 @@ export default function BookingsTable() {
                           <div
                             className="absolute left-0 right-0 top-0 z-20 flex h-[22px] items-center justify-end gap-2 rounded-t-xl px-2"
                             style={{ backgroundColor: actionBarColor, color: actionTextColor }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <button
                               type="button"
@@ -1731,6 +1733,7 @@ export default function BookingsTable() {
                                 e.stopPropagation();
                                 openTabForBooking(resv.booking_id);
                               }}
+                              onMouseDown={(e) => e.stopPropagation()}
                             >
                               Tab
                             </button>
@@ -1748,6 +1751,7 @@ export default function BookingsTable() {
                                 e.stopPropagation();
                                 openEditForBooking(resv.booking_id);
                               }}
+                              onMouseDown={(e) => e.stopPropagation()}
                             >
                               Edit
                             </button>
@@ -1765,6 +1769,7 @@ export default function BookingsTable() {
                                 e.stopPropagation();
                                 openEditForBooking(resv.booking_id);
                               }}
+                              onMouseDown={(e) => e.stopPropagation()}
                             >
                               Assign Staff
                             </button>
@@ -1783,6 +1788,7 @@ export default function BookingsTable() {
                                   e.stopPropagation();
                                   openPayModal(resv.booking_id);
                                 }}
+                                onMouseDown={(e) => e.stopPropagation()}
                               >
                                 Pay Now
                               </button>
