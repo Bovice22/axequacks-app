@@ -20,7 +20,7 @@ export async function GET() {
       .from("customers")
       .select("id,full_name,email,phone,created_at")
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(2000);
 
     if (error) {
       console.error("customers list error:", error);
