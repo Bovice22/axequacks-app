@@ -196,6 +196,7 @@ export async function POST(req: Request) {
           customer_phone: customerPhone.trim(),
           combo_order: comboOrder,
           ui_mode: "staff",
+          staff_id: staff?.staff_id || "",
           promo_code: promoMeta?.code || "",
           discount_amount: promoMeta ? String(promoMeta.amountOff) : "",
           discount_type: promoMeta?.discountType || "",

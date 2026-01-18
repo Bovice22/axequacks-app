@@ -19,6 +19,9 @@ type BookingRow = {
   status?: string | null;
   paid?: boolean | null;
   notes?: string | null;
+  assigned_staff_id?: string | null;
+  tip_cents?: number | null;
+  tip_staff_id?: string | null;
 };
 
 type ResourceRow = {
@@ -40,6 +43,13 @@ type ReservationRow = {
 type EventRequestRow = {
   id: string;
   party_size: number | null;
+};
+
+type StaffUserRow = {
+  staff_id: string;
+  full_name: string | null;
+  role: string | null;
+  active?: boolean | null;
 };
 
 function fmtNY(iso: string | null) {
@@ -326,6 +336,7 @@ export default function BookingsTable() {
   const [editBlockedStartMins, setEditBlockedStartMins] = useState<number[]>([]);
   const [editAvailabilityLoading, setEditAvailabilityLoading] = useState(false);
   const [editNotes, setEditNotes] = useState("");
+  const [editAssignedStaffId, setEditAssignedStaffId] = useState("");
   const [editSnapshot, setEditSnapshot] = useState<{
     activity: string;
     dateKey: string;
@@ -335,6 +346,7 @@ export default function BookingsTable() {
     email: string;
     notes: string;
     partySize: number;
+    assignedStaffId: string;
   } | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [staffRole, setStaffRole] = useState<"admin" | "staff" | null>(null);
@@ -347,6 +359,7 @@ export default function BookingsTable() {
   const [refundError, setRefundError] = useState("");
   const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
+  const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
 
   async function loadBookings(nextOrder: "upcoming" | "newest") {
     setLoading(true);
@@ -541,6 +554,19 @@ export default function BookingsTable() {
       });
   }, []);
 
+  useEffect(() => {
+    if (staffRole !== "admin") return;
+    fetch("/api/staff/users", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        const users = Array.isArray(json?.users) ? json.users : [];
+        setStaffUsers(users.filter((user: StaffUserRow) => user.active !== false));
+      })
+      .catch(() => {
+        setStaffUsers([]);
+      });
+  }, [staffRole]);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     const byDate = rows.filter(
@@ -576,6 +602,7 @@ export default function BookingsTable() {
       setEditDuration(booking.duration_minutes || 60);
       setEditComboOrder(booking.combo_order || null);
       setEditNotes(booking.notes || "");
+      setEditAssignedStaffId(booking.assigned_staff_id || "");
       const dk = dateKeyFromIsoNY(booking.start_ts) || todayKey;
       setEditDateKey(dk);
       const startMin = minutesFromIsoNY(booking.start_ts);
@@ -590,6 +617,7 @@ export default function BookingsTable() {
         email: booking.customer_email || "",
         notes: booking.notes || "",
         partySize: booking.party_size || 1,
+        assignedStaffId: booking.assigned_staff_id || "",
       });
       return;
     }
@@ -604,6 +632,7 @@ export default function BookingsTable() {
     setEditDateKey(todayKey);
     setEditStartMin(null);
     setEditBlockedStartMins([]);
+    setEditAssignedStaffId("");
     try {
       const res = await fetch(`/api/staff/bookings/${bookingId}`, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
@@ -619,6 +648,7 @@ export default function BookingsTable() {
       setEditDuration(b?.duration_minutes || 60);
       setEditComboOrder(b?.combo_order || null);
       setEditNotes(b?.notes || "");
+      setEditAssignedStaffId(b?.assigned_staff_id || "");
       const dk = dateKeyFromIsoNY(b?.start_ts) || todayKey;
       setEditDateKey(dk);
       const startMin = minutesFromIsoNY(b?.start_ts);
@@ -632,6 +662,7 @@ export default function BookingsTable() {
         email: b?.customer_email || "",
         notes: b?.notes || "",
         partySize: b?.party_size || 1,
+        assignedStaffId: b?.assigned_staff_id || "",
       });
     } finally {
       setEditLoading(false);
@@ -706,6 +737,7 @@ export default function BookingsTable() {
           dateKey: editDateKey,
           startMin: editStartMin,
           durationMinutes: editDuration,
+          assigned_staff_id: editAssignedStaffId || null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -1042,6 +1074,24 @@ export default function BookingsTable() {
             className="min-h-[80px] rounded-xl border border-zinc-200 px-3 py-2 text-sm"
             disabled={editLoading}
           />
+          {staffRole === "admin" ? (
+            <label className="text-xs font-semibold text-zinc-600">
+              Assigned Staff
+              <select
+                value={editAssignedStaffId}
+                onChange={(e) => setEditAssignedStaffId(e.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                disabled={editLoading}
+              >
+                <option value="">Unassigned</option>
+                {staffUsers.map((user) => (
+                  <option key={user.staff_id} value={user.staff_id}>
+                    {user.full_name ? `${user.full_name} (${user.staff_id})` : user.staff_id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         {refundRequired ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">

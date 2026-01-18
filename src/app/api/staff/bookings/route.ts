@@ -39,6 +39,9 @@ export async function GET(req: Request) {
       "combo_order",
       "status",
       "created_at",
+      "assigned_staff_id",
+      "tip_cents",
+      "tip_staff_id",
     ];
     const selectWithPayment = [...baseFields, "payment_intent_id", "notes", "paid"].join(",");
     const selectWithPaid = [...baseFields, "notes", "paid"].join(",");
@@ -59,10 +62,29 @@ export async function GET(req: Request) {
         .order("start_ts", { ascending })
         .limit(200));
     }
-    if (error && (String(error?.message || "").toLowerCase().includes("paid") || String(error?.message || "").toLowerCase().includes("notes"))) {
+    if (
+      error &&
+      (String(error?.message || "").toLowerCase().includes("paid") ||
+        String(error?.message || "").toLowerCase().includes("notes"))
+    ) {
       ({ data, error } = await sb
         .from("bookings")
         .select(baseFields.join(","))
+        .order("start_ts", { ascending })
+        .limit(200));
+    }
+    if (
+      error &&
+      (errorMessage.includes("assigned_staff_id") ||
+        errorMessage.includes("tip_staff_id") ||
+        errorMessage.includes("tip_cents"))
+    ) {
+      const minimalFields = baseFields.filter(
+        (field) => !["assigned_staff_id", "tip_cents", "tip_staff_id"].includes(field)
+      );
+      ({ data, error } = await sb
+        .from("bookings")
+        .select(minimalFields.join(","))
         .order("start_ts", { ascending })
         .limit(200));
     }

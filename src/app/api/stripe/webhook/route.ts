@@ -106,6 +106,38 @@ async function markBookingPaid(sb: ReturnType<typeof supabaseServer>, bookingId:
   }
 }
 
+async function recordBookingTip(
+  sb: ReturnType<typeof supabaseServer>,
+  bookingId: string,
+  intent: any
+) {
+  const tipDetails = (intent?.charges?.data?.[0] as any)?.amount_details;
+  const tipCents = Number(tipDetails?.tip || 0);
+  if (!tipCents || tipCents <= 0) return;
+
+  const { data: booking, error } = await sb
+    .from("bookings")
+    .select("assigned_staff_id,tip_cents")
+    .eq("id", bookingId)
+    .single();
+  if (error || !booking) {
+    console.error("booking tip lookup error:", error);
+    return;
+  }
+
+  const assignedStaffId = String((booking as any)?.assigned_staff_id || "");
+  const metadataStaffId = String(intent?.metadata?.staff_id || "");
+  const tipStaffId = assignedStaffId || metadataStaffId || null;
+
+  const { error: tipErr } = await sb
+    .from("bookings")
+    .update({ tip_cents: tipCents, tip_staff_id: tipStaffId })
+    .eq("id", bookingId);
+  if (tipErr) {
+    console.error("booking tip update error:", tipErr);
+  }
+}
+
 export async function POST(req: Request) {
   const stripe = getStripe();
   const signature = req.headers.get("stripe-signature");
@@ -234,6 +266,7 @@ export async function POST(req: Request) {
       const paymentIntentId = intent.id as string;
       const result = await finalizeBookingFromPaymentIntent(paymentIntentId);
       await markBookingPaid(sb, result.bookingId);
+      await recordBookingTip(sb, result.bookingId, result.intent);
       let waiverUrl = "";
       try {
         const customerId =

@@ -132,6 +132,35 @@ export async function GET(req: Request) {
       );
     }
 
+    let bookingTipsQuery = sb
+      .from("bookings")
+      .select("tip_staff_id,tip_cents,start_ts")
+      .order("start_ts", { ascending: true })
+      .limit(5000);
+
+    if (startDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+      bookingTipsQuery = bookingTipsQuery.gte("start_ts", startIso);
+    }
+    if (endDate) {
+      const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(endDate, 24 * 60 - 1);
+      bookingTipsQuery = bookingTipsQuery.lte("start_ts", endIso);
+    }
+
+    const { data: bookingTips, error: bookingTipsErr } = await bookingTipsQuery;
+    if (bookingTipsErr) {
+      console.error("reports booking tips error:", bookingTipsErr);
+    }
+
+    const mergedTips = [
+      ...(tips ?? []),
+      ...((bookingTips ?? []).map((row: any) => ({
+        staff_id: row.tip_staff_id,
+        tip_cents: row.tip_cents,
+        created_at: row.start_ts,
+      })) as any[]),
+    ];
+
     const { data: staffUsers, error: staffErr } = await sb
       .from("staff_users")
       .select("staff_id,full_name")
@@ -150,7 +179,7 @@ export async function GET(req: Request) {
         bookings: data ?? [],
         cashSales: cashSales ?? [],
         posItems: posItems ?? [],
-        tips: tips ?? [],
+        tips: mergedTips,
         staffUsers: staffUsers ?? [],
       },
       { status: 200 }

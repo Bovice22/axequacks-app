@@ -88,11 +88,27 @@ export async function GET(req: Request, context: RouteContext) {
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const sb = getSupabaseAdmin();
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from("bookings")
-      .select("id,customer_name,customer_email,party_size,status,activity,combo_order,duration_minutes,start_ts,end_ts,paid,notes")
+      .select(
+        "id,customer_name,customer_email,party_size,status,activity,combo_order,duration_minutes,start_ts,end_ts,paid,notes,assigned_staff_id,tip_cents,tip_staff_id"
+      )
       .eq("id", id)
       .single();
+
+    const errMessage = String(error?.message || "").toLowerCase();
+    if (
+      error &&
+      (errMessage.includes("assigned_staff_id") ||
+        errMessage.includes("tip_staff_id") ||
+        errMessage.includes("tip_cents"))
+    ) {
+      ({ data, error } = await sb
+        .from("bookings")
+        .select("id,customer_name,customer_email,party_size,status,activity,combo_order,duration_minutes,start_ts,end_ts,paid,notes")
+        .eq("id", id)
+        .single());
+    }
 
     if (error || !data) {
       console.error("staff booking fetch error:", error);
@@ -146,6 +162,26 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (body?.notes != null) {
       const note = String(body.notes || "").trim();
       updates.notes = note || null;
+    }
+    if (body?.assigned_staff_id != null) {
+      if (staff.role !== "admin") {
+        return NextResponse.json({ error: "Admin only" }, { status: 401 });
+      }
+      const staffId = String(body.assigned_staff_id || "").trim().toLowerCase();
+      if (!staffId) {
+        updates.assigned_staff_id = null;
+      } else {
+        const sb = getSupabaseAdmin();
+        const { data: staffRow, error: staffErr } = await sb
+          .from("staff_users")
+          .select("staff_id,active")
+          .eq("staff_id", staffId)
+          .single();
+        if (staffErr || !staffRow || staffRow.active === false) {
+          return NextResponse.json({ error: "Assigned staff not found" }, { status: 400 });
+        }
+        updates.assigned_staff_id = staffRow.staff_id;
+      }
     }
     let activityOverride: keyof typeof ACTIVITY_DB | null = null;
     if (body?.activity != null) {

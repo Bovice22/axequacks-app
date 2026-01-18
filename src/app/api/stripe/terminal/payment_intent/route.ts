@@ -9,6 +9,7 @@ import {
 } from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
 import type { ActivityUI, ComboOrder } from "@/lib/server/bookingService";
@@ -160,6 +161,7 @@ export async function POST(req: Request) {
       };
     }
 
+    const staff = await getStaffUserFromCookies().catch(() => null);
     const intent = await stripe.paymentIntents.create({
       amount,
       currency: "usd",
@@ -181,6 +183,7 @@ export async function POST(req: Request) {
         customer_phone: body.customerPhone?.trim() || "",
         combo_order: comboOrder,
         ui_mode: "staff",
+        staff_id: staff?.staff_id || "",
         promo_code: promoMeta?.code || "",
         discount_amount: promoMeta ? String(promoMeta.amountOff) : "",
         discount_type: promoMeta?.discountType || "",

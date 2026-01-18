@@ -103,6 +103,35 @@ async function markBookingPaymentIntent(bookingId: string, paymentIntentId: stri
   }
 }
 
+async function recordBookingTip(bookingId: string, intent: any) {
+  const tipDetails = (intent?.charges?.data?.[0] as any)?.amount_details;
+  const tipCents = Number(tipDetails?.tip || 0);
+  if (!tipCents || tipCents <= 0) return;
+
+  const sb = getSupabaseAdmin();
+  const { data: booking, error } = await sb
+    .from("bookings")
+    .select("assigned_staff_id")
+    .eq("id", bookingId)
+    .single();
+  if (error || !booking) {
+    console.error("booking tip lookup error:", error);
+    return;
+  }
+
+  const assignedStaffId = String((booking as any)?.assigned_staff_id || "");
+  const metadataStaffId = String(intent?.metadata?.staff_id || "");
+  const tipStaffId = assignedStaffId || metadataStaffId || null;
+
+  const { error: tipErr } = await sb
+    .from("bookings")
+    .update({ tip_cents: tipCents, tip_staff_id: tipStaffId })
+    .eq("id", bookingId);
+  if (tipErr) {
+    console.error("booking tip update error:", tipErr);
+  }
+}
+
 function buildWaiverUrl(token: string, bookingId?: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const url = new URL("/waiver", base);
@@ -166,6 +195,7 @@ export async function POST(req: Request) {
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
       await markBookingPaymentIntent(bookingId, paymentIntentId);
+      await recordBookingTip(bookingId, intent);
       if (bookingInput && intent.metadata?.promo_code) {
         await recordPromoRedemption({
           promoCode: String(intent.metadata.promo_code || ""),
@@ -230,6 +260,7 @@ export async function POST(req: Request) {
 
     const result = await createBookingWithResources(bookingInput);
     await markBookingPaid(result.bookingId);
+    await recordBookingTip(result.bookingId, result.intent);
     await markBookingPaymentIntent(result.bookingId, paymentIntentId);
     if (intent.metadata?.promo_code) {
       await recordPromoRedemption({
