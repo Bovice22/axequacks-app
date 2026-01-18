@@ -260,7 +260,7 @@ export async function POST(req: Request) {
 
     const result = await createBookingWithResources(bookingInput);
     await markBookingPaid(result.bookingId);
-    await recordBookingTip(result.bookingId, result.intent);
+    await recordBookingTip(result.bookingId, intent);
     await markBookingPaymentIntent(result.bookingId, paymentIntentId);
     if (intent.metadata?.promo_code) {
       await recordPromoRedemption({
