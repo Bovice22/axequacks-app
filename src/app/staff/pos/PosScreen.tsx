@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
+import { cardFeeCents } from "@/lib/bookingLogic";
 
 function todayDateKeyNY(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -422,6 +423,8 @@ export default function PosScreen() {
   }, [activeTabId, cartRows, tabItems]);
   const taxCents = useMemo(() => Math.round(subtotalCents * TAX_RATE), [subtotalCents]);
   const totalCents = useMemo(() => subtotalCents + taxCents, [subtotalCents, taxCents]);
+  const cardFee = useMemo(() => cardFeeCents(totalCents), [totalCents]);
+  const cardTotalCents = useMemo(() => totalCents + cardFee, [totalCents, cardFee]);
   const cashProvidedCents = useMemo(() => {
     const value = Number(cashInput || "0");
     if (!Number.isFinite(value)) return 0;
@@ -1106,9 +1109,17 @@ export default function PosScreen() {
                     <span className="text-zinc-600">Tax (7.25%)</span>
                     <span className="font-semibold text-zinc-900">${(taxCents / 100).toFixed(2)}</span>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-base font-semibold text-zinc-900">
-                    <span>Total</span>
+                  <div className="mt-2 flex items-center justify-between font-semibold text-zinc-900">
+                    <span>Total (Cash)</span>
                     <span>${(totalCents / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-zinc-600">
+                    <span>Card Processing Fee (3%)</span>
+                    <span>${(cardFee / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-base font-semibold text-zinc-900">
+                    <span>Total (Card)</span>
+                    <span>${(cardTotalCents / 100).toFixed(2)}</span>
                   </div>
                 </div>
               </div>

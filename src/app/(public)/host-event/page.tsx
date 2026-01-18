@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PARTY_AREA_OPTIONS, type PartyAreaName, partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, type PartyAreaName, partyAreaCostCents, totalCents, cardFeeCents } from "@/lib/bookingLogic";
 
 const ACTIVITIES = ["Axe Throwing", "Duckpin Bowling"] as const;
 const DURATIONS = [30, 60, 120] as const;
@@ -375,6 +375,10 @@ export default function HostEventPage() {
     return activityTotal + partyAreaCostCents(partyAreaDuration, partyAreas.length);
   }, [selectedActivities, durationByActivity, partySize, partyAreaDuration, partyAreas.length]);
   const discountedTotalCents = promoApplied?.totalCents ?? baseTotalCents;
+  const cardFee = cardFeeCents(discountedTotalCents);
+  const cardTotalCents = discountedTotalCents + cardFee;
+  const requestCardFee = requestSummary ? cardFeeCents(requestSummary.totalCents) : cardFee;
+  const requestCardTotal = requestSummary ? requestSummary.totalCents + requestCardFee : cardTotalCents;
   const discountCents = promoApplied?.amountOffCents ?? 0;
 
   const summary = useMemo(() => {
@@ -639,6 +643,14 @@ export default function HostEventPage() {
               <div>
                 <span className="font-semibold text-zinc-700">Total (est):</span>{" "}
                 {requestSummary ? (requestSummary.totalCents / 100).toFixed(2) : "0.00"}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Card Processing Fee (3%):</span>{" "}
+                {(requestCardFee / 100).toFixed(2)}
+              </div>
+              <div>
+                <span className="font-semibold text-zinc-700">Total (Card est):</span>{" "}
+                {(requestCardTotal / 100).toFixed(2)}
               </div>
               {requestSummary?.promoCode ? (
                 <div>
@@ -1034,6 +1046,12 @@ export default function HostEventPage() {
                   <div className="text-[10px] text-zinc-500">Estimated Total</div>
                   <div className="mt-1 text-base font-extrabold text-zinc-900">
                     ${((discountedTotalCents || 0) / 100).toFixed(2)}
+                  </div>
+                  <div className="mt-1 text-[10px] text-zinc-500">
+                    Card Processing Fee (3%): ${(cardFee / 100).toFixed(2)}
+                  </div>
+                  <div className="mt-1 text-[11px] font-semibold text-zinc-900">
+                    Total (Card est): ${(cardTotalCents / 100).toFixed(2)}
                   </div>
                   {promoApplied && discountCents > 0 ? (
                     <div className="mt-1 text-[10px] text-zinc-500">
