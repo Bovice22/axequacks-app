@@ -1589,6 +1589,10 @@ export default function BookingsTable() {
                     }}
                     data-schedule-root
                     onPointerDown={(e) => {
+                      const target = e.target as HTMLElement | null;
+                      if (target?.closest("[data-action-button='true']")) {
+                        return;
+                      }
                       const elements = typeof document !== "undefined" ? document.elementsFromPoint(e.clientX, e.clientY) : [];
                       const card = elements.find((el) => (el as HTMLElement).dataset?.bookingId) as HTMLElement | undefined;
                       const bookingId = card?.dataset?.bookingId;
@@ -1597,6 +1601,10 @@ export default function BookingsTable() {
                       }
                     }}
                     onClick={(e) => {
+                      const target = e.target as HTMLElement | null;
+                      if (target?.closest("[data-action-button='true']")) {
+                        return;
+                      }
                       const elements = typeof document !== "undefined" ? document.elementsFromPoint(e.clientX, e.clientY) : [];
                       const card = elements.find((el) => (el as HTMLElement).dataset?.bookingId) as HTMLElement | undefined;
                       const bookingId = card?.dataset?.bookingId;
@@ -1734,6 +1742,7 @@ export default function BookingsTable() {
                                 openTabForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
+                              data-action-button="true"
                             >
                               Tab
                             </button>
@@ -1752,6 +1761,7 @@ export default function BookingsTable() {
                                 openEditForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
+                              data-action-button="true"
                             >
                               Edit
                             </button>
@@ -1770,6 +1780,7 @@ export default function BookingsTable() {
                                 openEditForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
+                              data-action-button="true"
                             >
                               Assign Staff
                             </button>
@@ -1789,6 +1800,7 @@ export default function BookingsTable() {
                                   openPayModal(resv.booking_id);
                                 }}
                                 onMouseDown={(e) => e.stopPropagation()}
+                                data-action-button="true"
                               >
                                 Pay Now
                               </button>
