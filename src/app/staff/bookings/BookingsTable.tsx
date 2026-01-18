@@ -364,6 +364,7 @@ export default function BookingsTable() {
   const todayKey = todayDateKeyNY();
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
   const actionBarClickRef = useRef(false);
+  const editIntentRef = useRef(false);
   const staffNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const user of staffUsers) {
@@ -657,6 +658,10 @@ export default function BookingsTable() {
 
 
   async function openEditForBooking(bookingId: string) {
+    if (!editIntentRef.current) {
+      return;
+    }
+    editIntentRef.current = false;
     const booking = bookingById.get(bookingId);
     setEditingBookingId(bookingId);
     setHoveredNoteId(null);
@@ -1744,6 +1749,7 @@ export default function BookingsTable() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                editIntentRef.current = true;
                                 openEditForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => {
@@ -1771,6 +1777,7 @@ export default function BookingsTable() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                editIntentRef.current = true;
                                 openEditForBooking(resv.booking_id);
                               }}
                               onMouseDown={(e) => {
@@ -1986,7 +1993,10 @@ export default function BookingsTable() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => openEditForBooking(r.id)}
+                        onClick={() => {
+                          editIntentRef.current = true;
+                          openEditForBooking(r.id);
+                        }}
                         disabled={actionLoadingId === r.id}
                         className="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
                         style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
