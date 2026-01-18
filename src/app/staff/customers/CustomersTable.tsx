@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 type CustomerRow = {
   id: string;
@@ -98,6 +98,56 @@ function formatDateTimeRange(startIso: string | null, endIso: string | null) {
   return endTime ? `${date} • ${startTime} – ${endTime}` : `${date} • ${startTime}`;
 }
 
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let current = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(current);
+      current = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(current);
+      rows.push(row);
+      row = [];
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.length || row.length) {
+    row.push(current);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function normalizeHeader(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export default function CustomersTable() {
   const [rows, setRows] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,6 +171,10 @@ export default function CustomersTable() {
   const [editError, setEditError] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [waiverLoadingId, setWaiverLoadingId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
+  const [importError, setImportError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadCustomers() {
     setLoading(true);
@@ -229,6 +283,69 @@ export default function CustomersTable() {
       await loadCustomers();
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function handleCsvUpload(file: File) {
+    setImportError("");
+    setImportStatus("");
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text).filter((row) => row.some((cell) => cell.trim().length));
+      if (rows.length < 2) {
+        setImportError("CSV looks empty.");
+        return;
+      }
+      const header = rows[0].map((cell) => normalizeHeader(cell));
+      const firstIdx = header.findIndex((h) => h === "firstname");
+      const lastIdx = header.findIndex((h) => h === "lastname");
+      const emailIdx = header.findIndex((h) => h === "email");
+      const phoneIdx = header.findIndex((h) => h === "phonenumber" || h === "phone");
+
+      if (emailIdx === -1) {
+        setImportError("CSV must include an Email column.");
+        return;
+      }
+
+      const byEmail = new Map<string, { full_name: string; email: string; phone: string | null }>();
+      for (const row of rows.slice(1)) {
+        const email = String(row[emailIdx] || "").trim().toLowerCase();
+        if (!email) continue;
+        const first = firstIdx >= 0 ? String(row[firstIdx] || "").trim() : "";
+        const last = lastIdx >= 0 ? String(row[lastIdx] || "").trim() : "";
+        const fullName = `${first} ${last}`.trim();
+        const phone = phoneIdx >= 0 ? String(row[phoneIdx] || "").trim() : "";
+        byEmail.set(email, {
+          full_name: fullName,
+          email,
+          phone: phone || null,
+        });
+      }
+
+      const customers = Array.from(byEmail.values());
+      if (!customers.length) {
+        setImportError("No valid rows with emails found.");
+        return;
+      }
+
+      const res = await fetch("/api/staff/customers/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customers }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setImportError(json?.error || "Failed to import customers.");
+        return;
+      }
+      setImportStatus(
+        `Imported ${json?.processed ?? customers.length} customers. Skipped ${json?.skipped ?? 0} invalid rows.`
+      );
+      await loadCustomers();
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -361,6 +478,28 @@ export default function CustomersTable() {
               Add Customer +
             </button>
           ) : null}
+          {staffRole === "admin" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700"
+                disabled={importing}
+              >
+                {importing ? "Importing…" : "Import CSV"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleCsvUpload(file);
+                }}
+              />
+            </>
+          ) : null}
           <button
             type="button"
             onClick={loadCustomers}
@@ -370,6 +509,13 @@ export default function CustomersTable() {
           </button>
         </div>
       </div>
+      {importError ? <div className="mb-2 text-sm text-red-600">{importError}</div> : null}
+      {importStatus ? <div className="mb-2 text-sm text-emerald-600">{importStatus}</div> : null}
+      {staffRole === "admin" ? (
+        <div className="mb-2 text-xs text-zinc-500">
+          CSV columns: First Name, Last Name, Email, Phone Number.
+        </div>
+      ) : null}
 
       {staffRole === "admin" && showAdd ? (
         <div className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
