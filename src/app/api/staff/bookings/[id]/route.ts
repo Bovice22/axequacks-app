@@ -163,6 +163,9 @@ export async function PATCH(req: Request, context: RouteContext) {
       const note = String(body.notes || "").trim();
       updates.notes = note || null;
     }
+    if (body?.paid != null) {
+      updates.paid = Boolean(body.paid);
+    }
     if (body?.assigned_staff_id != null) {
       if (staff.role !== "admin") {
         return NextResponse.json({ error: "Admin only" }, { status: 401 });

@@ -357,6 +357,9 @@ export default function BookingsTable() {
   const [refundManagerPin, setRefundManagerPin] = useState("");
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState("");
+  const [payModalBookingId, setPayModalBookingId] = useState<string | null>(null);
+  const [payLoading, setPayLoading] = useState<"cash" | "card" | null>(null);
+  const [payError, setPayError] = useState("");
   const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
@@ -434,6 +437,63 @@ export default function BookingsTable() {
     setRefundManagerId("");
     setRefundManagerPin("");
     setRefundError("");
+  }
+
+  function openPayModal(bookingId: string) {
+    setPayModalBookingId(bookingId);
+    setPayError("");
+  }
+
+  function closePayModal() {
+    setPayModalBookingId(null);
+    setPayLoading(null);
+    setPayError("");
+  }
+
+  async function payWithCash(bookingId: string) {
+    setPayLoading("cash");
+    setPayError("");
+    try {
+      const res = await fetch(`/api/staff/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paid: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayError(json?.error || "Failed to mark booking paid.");
+        return;
+      }
+      setRows((prev) => prev.map((row) => (row.id === bookingId ? { ...row, paid: true } : row)));
+      closePayModal();
+    } catch (err: any) {
+      setPayError(err?.message || "Failed to mark booking paid.");
+    } finally {
+      setPayLoading(null);
+    }
+  }
+
+  async function payWithCard(bookingId: string) {
+    setPayLoading("card");
+    setPayError("");
+    try {
+      const res = await fetch(`/api/staff/bookings/${bookingId}/payment-link`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayError(json?.error || "Failed to create payment link.");
+        return;
+      }
+      if (json?.paymentUrl) {
+        window.open(json.paymentUrl, "_blank", "noopener,noreferrer");
+        closePayModal();
+      } else {
+        setPayError("Payment link unavailable.");
+      }
+    } catch (err: any) {
+      setPayError(err?.message || "Failed to create payment link.");
+    } finally {
+      setPayLoading(null);
+    }
   }
 
   async function submitRefund() {
@@ -1343,10 +1403,77 @@ export default function BookingsTable() {
       </div>
     </div>
   ) : null;
+  const payModalBooking = payModalBookingId ? bookingById.get(payModalBookingId) || null : null;
+  const payModal = payModalBooking ? (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        zIndex: 2147483647,
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          closePayModal();
+        }
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          background: "#ffffff",
+          borderRadius: "16px",
+          border: "1px solid #e5e7eb",
+          padding: "16px",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div className="text-sm font-semibold text-zinc-900">Record Payment</div>
+        <div className="mt-1 text-xs text-zinc-500">
+          {payModalBooking.customer_name || "Customer"} · $
+          {(payModalBooking.total_cents / 100).toFixed(2)} · {activityLabel(payModalBooking.activity)}
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => payWithCash(payModalBooking.id)}
+            disabled={payLoading !== null}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            {payLoading === "cash" ? "Processing..." : "Pay With Cash"}
+          </button>
+          <button
+            type="button"
+            onClick={() => payWithCard(payModalBooking.id)}
+            disabled={payLoading !== null}
+            className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {payLoading === "card" ? "Opening..." : "Pay With Card"}
+          </button>
+        </div>
+        {payError ? <div className="mt-3 text-xs font-semibold text-red-600">{payError}</div> : null}
+        <div className="mt-4 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={closePayModal}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
   return (
     <>
       {modal}
       {refundModal}
+      {payModal}
       <div className={`relative z-0 rounded-2xl border border-zinc-200 bg-white p-4 ${editingBookingId ? "pointer-events-none" : ""}`}>
         <div className="mb-6 grid gap-6 lg:grid-cols-1">
         <div className="mx-auto w-full max-w-[640px]">
@@ -1535,6 +1662,8 @@ export default function BookingsTable() {
                       const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
                       const actionBarColor = ACTION_BAR_COLOR;
                       const actionTextColor = "#111";
+                      const showPayNow =
+                        booking && (booking.status ?? "CONFIRMED") !== "CANCELLED" && !booking.paid;
 
                       return (
                         <div
@@ -1639,6 +1768,25 @@ export default function BookingsTable() {
                             >
                               Assign Staff
                             </button>
+                            {showPayNow ? (
+                              <button
+                                type="button"
+                                aria-label="Pay now"
+                                className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                style={{
+                                  border: "1px solid rgba(0,0,0,0.35)",
+                                  color: "#111",
+                                  backgroundColor: "#fff",
+                                }}
+                                data-booking-id={resv.booking_id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPayModal(resv.booking_id);
+                                }}
+                              >
+                                Pay Now
+                              </button>
+                            ) : null}
                           </div>
                           {hoveredNoteId === resv.booking_id &&
                           (booking?.notes || "").trim() &&
