@@ -360,6 +360,13 @@ export default function BookingsTable() {
   const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
+  const staffNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const user of staffUsers) {
+      map.set(user.staff_id, user.full_name || user.staff_id);
+    }
+    return map;
+  }, [staffUsers]);
 
   async function loadBookings(nextOrder: "upcoming" | "newest") {
     setLoading(true);
@@ -978,13 +985,6 @@ export default function BookingsTable() {
   const editingRow = editingBookingId ? bookingById.get(editingBookingId) || null : null;
   const originalPartySize = editSnapshot?.partySize ?? editPartySize;
   const assignedStaffChanged = (editSnapshot?.assignedStaffId || "") !== (editAssignedStaffId || "");
-  const staffNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const user of staffUsers) {
-      map.set(user.staff_id, user.full_name || user.staff_id);
-    }
-    return map;
-  }, [staffUsers]);
   const reducedCount = originalPartySize - editPartySize;
   const refundRequired = !!editingRow?.paid && reducedCount > 0;
   const refundEstimateCents =
