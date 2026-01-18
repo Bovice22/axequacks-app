@@ -363,6 +363,7 @@ export default function BookingsTable() {
   const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
+  const actionBarClickRef = useRef(false);
   const staffNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const user of staffUsers) {
@@ -1694,12 +1695,18 @@ export default function BookingsTable() {
                             if (target?.closest("[data-action-button='true']")) {
                               return;
                             }
+                            if (actionBarClickRef.current) {
+                              return;
+                            }
                             openEditForBooking(resv.booking_id);
                           }}
                           onMouseDown={(e) => {
                             e.stopPropagation();
                             const target = e.target as HTMLElement | null;
                             if (target?.closest("[data-action-button='true']")) {
+                              return;
+                            }
+                            if (actionBarClickRef.current) {
                               return;
                             }
                             openEditForBooking(resv.booking_id);
@@ -1721,6 +1728,9 @@ export default function BookingsTable() {
                             if (target?.closest("[data-action-button='true']")) {
                               return;
                             }
+                            if (actionBarClickRef.current) {
+                              return;
+                            }
                             openEditForBooking(resv.booking_id);
                           }}
                           data-booking-id={resv.booking_id}
@@ -1739,6 +1749,12 @@ export default function BookingsTable() {
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
+                            onPointerDownCapture={() => {
+                              actionBarClickRef.current = true;
+                              window.setTimeout(() => {
+                                actionBarClickRef.current = false;
+                              }, 0);
+                            }}
                           >
                             <button
                               type="button"
