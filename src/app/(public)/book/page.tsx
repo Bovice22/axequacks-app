@@ -459,6 +459,7 @@ function BookPageContent() {
   const [cashInput, setCashInput] = useState("0.00");
   const cashInputRef = useRef<HTMLInputElement | null>(null);
   const [cashError, setCashError] = useState("");
+  const [reserveSuccessOpen, setReserveSuccessOpen] = useState(false);
 
   useEffect(() => {
     if (isStaffMode) return;
@@ -2247,6 +2248,7 @@ function BookPageContent() {
                     onClick={async () => {
                       setSubmitError("");
                       setSubmitSuccess("");
+                      setReserveSuccessOpen(false);
                       if (!activity || !effectiveDuration || !dateKey || !time) return;
                       if (startMin == null || endMin == null) return;
                       if (!pricing) return;
@@ -2279,7 +2281,10 @@ function BookPageContent() {
                           setSubmitError(json?.error || "Failed to reserve booking.");
                           return;
                         }
-                        setSubmitSuccess("Booking reserved as unpaid.");
+                        setReserveSuccessOpen(true);
+                        window.setTimeout(() => {
+                          window.location.href = "https://staff.axequacks.com/staff/bookings";
+                        }, 1200);
                       } catch (e: any) {
                         setSubmitError(e?.message || "Failed to reserve booking.");
                       } finally {
@@ -2289,7 +2294,7 @@ function BookPageContent() {
                     className={cx(
                       "h-11 rounded-2xl border text-sm font-extrabold transition",
                       canConfirm && !submitting
-                        ? "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
+                        ? "border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800"
                         : "border-zinc-200 bg-zinc-100 text-zinc-400"
                     )}
                   >
@@ -2371,8 +2376,32 @@ function BookPageContent() {
           </div>
         </div>
 
-        <div className="mt-6 text-xs text-zinc-500">Note: This saves bookings + resource reservations in Supabase now.</div>
-      </div>
+      <div className="mt-6 text-xs text-zinc-500">Note: This saves bookings + resource reservations in Supabase now.</div>
+    </div>
+
+    {reserveSuccessOpen && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            data-booking-overlay
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2147483647,
+              background: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+          >
+            <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-2xl">
+              <div className="text-lg font-semibold text-zinc-900">Booking Successfully Added</div>
+              <div className="mt-2 text-sm text-zinc-600">Returning to staff bookings…</div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null}
 
       {cashModalOpen && typeof document !== "undefined"
         ? createPortal(
