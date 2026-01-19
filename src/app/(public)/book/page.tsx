@@ -2222,7 +2222,7 @@ function BookPageContent() {
               </button>
 
               {isStaffMode && (
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     disabled={!canConfirm}
@@ -2240,6 +2240,60 @@ function BookPageContent() {
                     )}
                   >
                     Pay With Cash
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canConfirm || submitting}
+                    onClick={async () => {
+                      setSubmitError("");
+                      setSubmitSuccess("");
+                      if (!activity || !effectiveDuration || !dateKey || !time) return;
+                      if (startMin == null || endMin == null) return;
+                      if (!pricing) return;
+                      setSubmitting(true);
+                      try {
+                        const res = await fetch("/api/staff/bookings/reserve", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            activity,
+                            durationMinutes: effectiveDuration,
+                            partySize,
+                            dateKey,
+                            startMin,
+                            partyAreas,
+                            partyAreaMinutes: partyAreas.length ? partyAreaDuration : undefined,
+                            partyAreaTiming: partyAreas.length ? partyAreaTiming : undefined,
+                            customerName: name.trim(),
+                            customerEmail: email.trim(),
+                            customerPhone: phone.trim(),
+                            comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
+                            comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
+                            comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
+                            promoCode: promoApplied?.code || "",
+                            totalCentsOverride: discountedTotalCents,
+                          }),
+                        });
+                        const json = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                          setSubmitError(json?.error || "Failed to reserve booking.");
+                          return;
+                        }
+                        setSubmitSuccess("Booking reserved as unpaid.");
+                      } catch (e: any) {
+                        setSubmitError(e?.message || "Failed to reserve booking.");
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                    className={cx(
+                      "h-11 rounded-2xl border text-sm font-extrabold transition",
+                      canConfirm && !submitting
+                        ? "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
+                        : "border-zinc-200 bg-zinc-100 text-zinc-400"
+                    )}
+                  >
+                    Reserve Now - Pay Later
                   </button>
                   <button
                     type="button"
