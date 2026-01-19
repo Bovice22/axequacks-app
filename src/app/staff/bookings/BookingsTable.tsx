@@ -85,6 +85,21 @@ function paymentLabel(status: string | null | undefined, paid: boolean | null | 
   return paid ? "PAID" : "UNPAID";
 }
 
+function paymentBadge(status: string | null | undefined, paid: boolean | null | undefined, className?: string) {
+  const label = paymentLabel(status, paid);
+  const style =
+    label === "PAID"
+      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+      : label === "UNPAID"
+      ? "bg-red-100 text-red-800 border-red-200"
+      : "bg-zinc-100 text-zinc-700 border-zinc-200";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style} ${className ?? ""}`}>
+      {label}
+    </span>
+  );
+}
+
 function todayDateKeyNY(): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/New_York",
@@ -2010,7 +2025,7 @@ export default function BookingsTable() {
                                   Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
                                 </div>
                               ) : null}
-                              <div className="text-[10px] text-zinc-600">{paymentLabel(booking?.status, booking?.paid)}</div>
+                              {paymentBadge(booking?.status, booking?.paid, "text-[10px]")}
                             </div>
                           ) : null}
                           <div className="font-semibold">
@@ -2026,9 +2041,7 @@ export default function BookingsTable() {
                               Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
                             </div>
                           ) : null}
-                          <div className="text-[10px] text-zinc-200">
-                            {paymentLabel(booking?.status, booking?.paid)}
-                          </div>
+                          {paymentBadge(booking?.status, booking?.paid, "text-[10px]")}
                         </div>
                       );
                     })}
