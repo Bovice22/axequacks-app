@@ -1027,7 +1027,7 @@ export default function PosScreen() {
                 <button
                   type="button"
                   onClick={clearCart}
-                  disabled={activeTabId || !cartRows.length}
+                  disabled={Boolean(activeTabId) || !cartRows.length}
                   className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Clear Cart
