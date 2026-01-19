@@ -1022,7 +1022,17 @@ export default function PosScreen() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <div className="text-sm font-semibold text-zinc-700">Cart Items</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-zinc-700">Cart Items</div>
+                <button
+                  type="button"
+                  onClick={clearCart}
+                  disabled={activeTabId || !cartRows.length}
+                  className="rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Clear Cart
+                </button>
+              </div>
               <div className="flex min-w-0 flex-col gap-3">
                 <div className="max-h-[300px] overflow-y-auto rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                   {activeTabId ? (
@@ -1150,9 +1160,20 @@ export default function PosScreen() {
                 disabled={terminalLoading}
                 className="h-12 rounded-xl bg-teal-600 text-sm font-semibold text-white hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {terminalLoading ? "Processing…" : "Pay"}
+                {terminalLoading ? "Processing…" : "Pay With Card"}
               </button>
             </div>
+            {terminalPhase !== "idle" ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={handleCancelPayment}
+                  className="h-10 w-full rounded-xl border border-red-200 bg-white text-xs font-semibold text-red-700 hover:bg-red-50"
+                >
+                  Cancel Transaction
+                </button>
+              </div>
+            ) : null}
             <div className="mt-3">
               <button
                 type="button"
