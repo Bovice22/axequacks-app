@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripe } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
-import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
+import { sendBookingConfirmationEmail, sendOwnerNotification } from "@/lib/server/mailer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { createClient } from "@supabase/supabase-js";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
@@ -142,6 +142,14 @@ function buildWaiverUrl(token: string, bookingId?: string) {
   return url.toString();
 }
 
+function formatTimeFromMinutes(minsFromMidnight: number) {
+  const h24 = Math.floor(minsFromMidnight / 60);
+  const m = minsFromMidnight % 60;
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = ((h24 + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 async function fetchBookingResources(bookingId: string): Promise<string[]> {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
@@ -251,6 +259,31 @@ export async function POST(req: Request) {
           }
         }
       }
+      if ((intent.metadata as any)?.owner_notified !== "true" && bookingInput) {
+        try {
+          const startLabel = formatTimeFromMinutes(bookingInput.startMin);
+          const endLabel = formatTimeFromMinutes(bookingInput.startMin + bookingInput.durationMinutes);
+          await sendOwnerNotification({
+            subject: "Axe Quacks: New Booking Paid",
+            lines: [
+              `Booking ID: ${bookingId}`,
+              `Customer: ${bookingInput.customerName || "—"}`,
+              bookingInput.customerEmail ? `Email: ${bookingInput.customerEmail}` : null,
+              bookingInput.customerPhone ? `Phone: ${bookingInput.customerPhone}` : null,
+              `Activity: ${bookingInput.activity}`,
+              `Date: ${bookingInput.dateKey}`,
+              `Time: ${startLabel} – ${endLabel}`,
+              `Party Size: ${bookingInput.partySize}`,
+              `Status: PAID`,
+            ].filter(Boolean) as string[],
+          });
+          await stripe.paymentIntents.update(paymentIntentId, {
+            metadata: { ...intent.metadata, owner_notified: "true" },
+          });
+        } catch (notifyErr) {
+          console.error("owner notify fallback error:", notifyErr);
+        }
+      }
       return NextResponse.json({ bookingId, resources, waiverUrl, emailStatus }, { status: 200 });
     }
 
@@ -322,6 +355,31 @@ export async function POST(req: Request) {
         }
       } catch (emailErr) {
         console.error("confirmation email error:", emailErr);
+      }
+    }
+    if ((intent.metadata as any)?.owner_notified !== "true") {
+      try {
+        const startLabel = formatTimeFromMinutes(bookingInput.startMin);
+        const endLabel = formatTimeFromMinutes(bookingInput.startMin + bookingInput.durationMinutes);
+        await sendOwnerNotification({
+          subject: "Axe Quacks: New Booking Paid",
+          lines: [
+            `Booking ID: ${result.bookingId}`,
+            `Customer: ${bookingInput.customerName || "—"}`,
+            bookingInput.customerEmail ? `Email: ${bookingInput.customerEmail}` : null,
+            bookingInput.customerPhone ? `Phone: ${bookingInput.customerPhone}` : null,
+            `Activity: ${bookingInput.activity}`,
+            `Date: ${bookingInput.dateKey}`,
+            `Time: ${startLabel} – ${endLabel}`,
+            `Party Size: ${bookingInput.partySize}`,
+            `Status: PAID`,
+          ].filter(Boolean) as string[],
+        });
+        await stripe.paymentIntents.update(paymentIntentId, {
+          metadata: { ...intent.metadata, owner_notified: "true" },
+        });
+      } catch (notifyErr) {
+        console.error("owner notify fallback error:", notifyErr);
       }
     }
     const waiverUrl = await fetchWaiverUrlForBooking(result.bookingId);
