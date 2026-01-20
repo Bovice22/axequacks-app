@@ -200,7 +200,9 @@ export async function POST(req: Request) {
           `Date: ${dateKey}`,
           `Time: ${startLabel} – ${endLabel}`,
           `Party Size: ${partySize}`,
-          `Activities: ${cleanActivities.map((a) => `${a.activity} (${a.durationMinutes} min)`).join(", ")}`,
+          `Activities: ${cleanActivities
+            .map((a: { activity: Activity; durationMinutes: number }) => `${a.activity} (${a.durationMinutes} min)`)
+            .join(", ")}`,
           partyAreas.length ? `Party Area: ${partyAreas.join(", ")}` : null,
           partyAreas.length && normalizedPartyAreaMinutes
             ? `Party Area Duration: ${normalizedPartyAreaMinutes / 60} hr`
