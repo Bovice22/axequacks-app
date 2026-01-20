@@ -299,6 +299,179 @@ export async function sendBookingConfirmationEmail(input: EmailBookingInput): Pr
   return { sent: true, id: payload?.id };
 }
 
+export async function sendOwnerBookingConfirmationEmail(input: EmailBookingInput): Promise<{
+  sent: boolean;
+  id?: string;
+  skippedReason?: string;
+}> {
+  const apiKey = process.env.RESEND_API_KEY || "";
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "";
+  const fromName = process.env.RESEND_FROM_NAME || "Axe Quacks";
+  const ownerEmail = process.env.OWNER_NOTIFY_EMAIL || "unsurpassedgraphics@gmail.com";
+  if (!apiKey || !fromEmail) {
+    console.warn("Resend config missing; skipping owner booking email.");
+    return { sent: false, skippedReason: "missing_config" };
+  }
+
+  if (!ownerEmail || !ownerEmail.includes("@")) {
+    return { sent: false, skippedReason: "invalid_recipient" };
+  }
+
+  const resources =
+    input.resourceNames && input.resourceNames.length
+      ? input.resourceNames
+      : await fetchBookingResources(input.bookingId);
+
+  let waiverUrl = input.waiverUrl || "";
+  if (!waiverUrl) {
+    try {
+      const waiverResult = await ensureWaiverForBooking({
+        bookingId: input.bookingId,
+        customerId: "",
+        bookingInput: {
+          activity: input.activity,
+          partySize: input.partySize,
+          dateKey: input.dateKey,
+          startMin: input.startMin,
+          durationMinutes: input.durationMinutes,
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          customerPhone: input.customerPhone,
+          comboOrder: input.comboOrder,
+        },
+      });
+      waiverUrl = waiverResult.waiverUrl || "";
+    } catch (waiverErr) {
+      console.error("waiver request error:", waiverErr);
+    }
+  }
+  if (!waiverUrl && input.bookingId) {
+    try {
+      const sb = supabaseAdmin();
+      const { data, error } = await sb
+        .from("waiver_requests")
+        .select("token,status")
+        .eq("booking_id", input.bookingId)
+        .maybeSingle();
+      if (!error && data?.token && data?.status !== "SIGNED") {
+        waiverUrl = buildWaiverUrl(data.token as string, input.bookingId);
+      }
+    } catch (waiverErr) {
+      console.error("waiver lookup error:", waiverErr);
+    }
+  }
+
+  const startLabel = formatTimeFromMinutes(input.startMin);
+  const endLabel = formatTimeFromMinutes(input.startMin + input.durationMinutes);
+
+  const comboOrder =
+    input.activity === "Combo Package"
+      ? input.comboOrder === "DUCKPIN_FIRST"
+        ? "First: Duckpin Bowling, Second: Axe Throwing"
+        : input.comboOrder === "AXE_FIRST"
+        ? "First: Axe Throwing, Second: Duckpin Bowling"
+        : null
+      : null;
+
+  const subject = "Your Axe Quacks Booking Confirmation";
+  const priceLine =
+    typeof input.totalCents === "number"
+      ? `Amount: $${(input.totalCents / 100).toFixed(2)} ${input.paid ? "PAID" : ""}`.trim()
+      : null;
+
+  const lines = [
+    `Name: ${input.customerName || "—"}`,
+    comboOrder ? `Combo Order: ${comboOrder}` : null,
+    `Activity: ${input.activity}`,
+    `Date: ${prettyDate(input.dateKey)}`,
+    `Start/End Time: ${startLabel} – ${endLabel}`,
+    `Resource: ${resources.length ? resources.join(", ") : "TBD"}`,
+    `Group Size: ${input.partySize}`,
+    priceLine,
+    waiverUrl ? `Waiver Link: ${waiverUrl}` : null,
+  ].filter(Boolean) as string[];
+
+  const detailRows = lines.map((line) => {
+    const idx = line.indexOf(":");
+    if (idx === -1) return { label: "", value: line };
+    return {
+      label: line.slice(0, idx).trim(),
+      value: line.slice(idx + 1).trim(),
+    };
+  });
+
+  const text = `Axe Quacks booking confirmation\n\n${lines.join("\n")}`;
+  const logoAttachment = getLogoAttachment();
+  const logoUrl = getLogoUrl();
+  const logoSrc = logoAttachment ? `cid:${LOGO_CID}` : logoUrl;
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111; background: #f6f6f6; padding: 14px;">
+      <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 14px; border: 1px solid #e6e6e6;">
+        ${
+          logoSrc
+            ? `<div style="text-align: center; padding-bottom: 6px;">
+            <img src="${logoSrc}" alt="Axe Quacks" style="max-width: 96px; height: auto; display: block; margin: 0 auto;" />
+          </div>`
+            : ""
+        }
+        <div style="text-align: center; font-size: 15px; font-weight: 700; margin-bottom: 6px;">
+          Booking Confirmation
+        </div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 13px; border-collapse: collapse;">
+          ${detailRows
+            .map(
+              (row) => `
+            <tr>
+              <td style="padding: 3px 0; color: #666; width: 34%;">${row.label || "&nbsp;"}</td>
+              <td style="padding: 3px 0; color: #111; font-weight: 600;">${row.value}</td>
+            </tr>
+          `
+            )
+            .join("")}
+        </table>
+        ${
+          waiverUrl
+            ? `<div style="margin-top: 10px; text-align: center;">
+            <a href="${waiverUrl}" style="display: inline-block; padding: 8px 12px; border-radius: 999px; background: #111; color: #fff; text-decoration: none; font-weight: 700; font-size: 12px;">
+              Complete Waiver
+            </a>
+          </div>`
+            : ""
+        }
+      </div>
+    </div>
+  `;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${fromName} <${fromEmail}>`,
+        to: [ownerEmail],
+        subject,
+        text,
+        html,
+        attachments: logoAttachment ? [logoAttachment] : undefined,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.text().catch(() => "");
+      throw new Error(`Resend email failed: ${res.status} ${error}`.trim());
+    }
+
+    const data = await res.json().catch(() => ({}));
+    return { sent: true, id: data?.id };
+  } catch (err: any) {
+    console.error("owner booking email error:", err);
+    return { sent: false, skippedReason: err?.message || "send_failed" };
+  }
+}
+
 export async function sendOwnerNotification(input: {
   subject: string;
   lines: string[];

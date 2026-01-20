@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
-import { sendBookingConfirmationEmail, sendOwnerNotification } from "@/lib/server/mailer";
+import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
@@ -193,22 +193,7 @@ export async function POST(req: Request) {
       }
       if ((intent.metadata as any)?.owner_notified !== "true" && bookingInput) {
         try {
-          const startLabel = formatTimeFromMinutes(bookingInput.startMin);
-          const endLabel = formatTimeFromMinutes(bookingInput.startMin + bookingInput.durationMinutes);
-          await sendOwnerNotification({
-            subject: "Axe Quacks: New Booking Paid",
-            lines: [
-              `Booking ID: ${bookingId}`,
-              `Customer: ${bookingInput.customerName || "—"}`,
-              bookingInput.customerEmail ? `Email: ${bookingInput.customerEmail}` : null,
-              bookingInput.customerPhone ? `Phone: ${bookingInput.customerPhone}` : null,
-              `Activity: ${bookingInput.activity}`,
-              `Date: ${bookingInput.dateKey}`,
-              `Time: ${startLabel} – ${endLabel}`,
-              `Party Size: ${bookingInput.partySize}`,
-              `Status: PAID`,
-            ].filter(Boolean) as string[],
-          });
+          await sendOwnerBookingConfirmationEmail({ ...bookingInput, bookingId, paid: true });
           await stripe.paymentIntents.update(paymentIntentId, {
             metadata: { ...intent.metadata, owner_notified: "true" },
           });
@@ -286,22 +271,7 @@ export async function POST(req: Request) {
       }
       if ((intent.metadata as any)?.owner_notified !== "true") {
         try {
-          const startLabel = formatTimeFromMinutes(bookingInput.startMin);
-          const endLabel = formatTimeFromMinutes(bookingInput.startMin + bookingInput.durationMinutes);
-          await sendOwnerNotification({
-            subject: "Axe Quacks: New Booking Paid",
-            lines: [
-              `Booking ID: ${result.bookingId}`,
-              `Customer: ${bookingInput.customerName || "—"}`,
-              bookingInput.customerEmail ? `Email: ${bookingInput.customerEmail}` : null,
-              bookingInput.customerPhone ? `Phone: ${bookingInput.customerPhone}` : null,
-              `Activity: ${bookingInput.activity}`,
-              `Date: ${bookingInput.dateKey}`,
-              `Time: ${startLabel} – ${endLabel}`,
-              `Party Size: ${bookingInput.partySize}`,
-              `Status: PAID`,
-            ].filter(Boolean) as string[],
-          });
+          await sendOwnerBookingConfirmationEmail({ ...bookingInput, bookingId: result.bookingId, paid: true });
           await stripe.paymentIntents.update(paymentIntentId, {
             metadata: {
               ...intent.metadata,

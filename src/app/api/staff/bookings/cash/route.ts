@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
-import { sendBookingConfirmationEmail, sendOwnerNotification } from "@/lib/server/mailer";
+import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode, recordPromoRedemption } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
@@ -141,24 +141,21 @@ export async function POST(req: Request) {
     }
 
     try {
-      const startLabel = formatTimeFromMinutes(startMin);
-      const endLabel = formatTimeFromMinutes(startMin + durationMinutes);
-      await sendOwnerNotification({
-        subject: "Axe Quacks: Booking Paid (Cash)",
-        lines: [
-          `Booking ID: ${result.bookingId}`,
-          `Customer: ${customerName || "Walk-in"}`,
-          customerEmail ? `Email: ${customerEmail}` : null,
-          customerPhone ? `Phone: ${customerPhone}` : null,
-          `Activity: ${activity}`,
-          `Date: ${dateKey}`,
-          `Time: ${startLabel} – ${endLabel}`,
-          `Party Size: ${partySize}`,
-          `Status: PAID (Cash)`,
-        ].filter(Boolean) as string[],
+      await sendOwnerBookingConfirmationEmail({
+        bookingId: result.bookingId,
+        activity,
+        partySize,
+        dateKey,
+        startMin,
+        durationMinutes,
+        customerName,
+        customerEmail,
+        customerPhone,
+        totalCents: totalCentsOverride,
+        paid: true,
       });
     } catch (err) {
-      console.error("cash owner notify error:", err);
+      console.error("cash owner booking email error:", err);
     }
 
     return NextResponse.json({ bookingId: result.bookingId }, { status: 200 });

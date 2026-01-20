@@ -257,14 +257,14 @@ function BookingConfirmationContent() {
           )}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Link href="/book" className="inline-flex">
+            <a href="https://www.axequacks.com" className="inline-flex">
               <div
                 className="bg-[#FFD700] px-5 text-sm font-extrabold text-black hover:bg-[#ffe24a]"
                 style={{ width: "160px", height: "44px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}
               >
                 Done
               </div>
-            </Link>
+            </a>
             <button
               type="button"
               onClick={() => window.print()}

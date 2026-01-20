@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
-import { sendOwnerNotification } from "@/lib/server/mailer";
+import { sendOwnerBookingConfirmationEmail } from "@/lib/server/mailer";
 
 function formatTimeFromMinutes(minsFromMidnight: number) {
   const h24 = Math.floor(minsFromMidnight / 60);
@@ -87,24 +87,21 @@ export async function POST(req: Request) {
     }
 
     try {
-      const startLabel = formatTimeFromMinutes(startMin);
-      const endLabel = formatTimeFromMinutes(startMin + durationMinutes);
-      await sendOwnerNotification({
-        subject: "Axe Quacks: Booking Reserved (Unpaid)",
-        lines: [
-          `Booking ID: ${result.bookingId}`,
-          `Customer: ${customerName || "Walk-in"}`,
-          customerEmail ? `Email: ${customerEmail}` : null,
-          customerPhone ? `Phone: ${customerPhone}` : null,
-          `Activity: ${activity}`,
-          `Date: ${dateKey}`,
-          `Time: ${startLabel} – ${endLabel}`,
-          `Party Size: ${partySize}`,
-          `Status: UNPAID`,
-        ].filter(Boolean) as string[],
+      await sendOwnerBookingConfirmationEmail({
+        bookingId: result.bookingId,
+        activity,
+        partySize,
+        dateKey,
+        startMin,
+        durationMinutes,
+        customerName,
+        customerEmail,
+        customerPhone,
+        totalCents: totalCentsOverride,
+        paid: false,
       });
     } catch (err) {
-      console.error("reserve owner notify error:", err);
+      console.error("reserve owner booking email error:", err);
     }
 
     return NextResponse.json({ bookingId: result.bookingId }, { status: 200 });
