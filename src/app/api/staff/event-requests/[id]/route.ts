@@ -579,7 +579,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           `Date: ${requestRow.date_key}`,
           `Time: ${startLabel} – ${endLabel}`,
           `Party Size: ${requestRow.party_size || "—"}`,
-          `Activities: ${activities.map((a) => `${a.activity} (${a.durationMinutes} min)`).join(", ")}`,
+          `Activities: ${activities
+            .map((a: { activity: Activity; durationMinutes: number }) => `${a.activity} (${a.durationMinutes} min)`)
+            .join(", ")}`,
           requestRow.party_areas?.length ? `Party Area: ${requestRow.party_areas.join(", ")}` : null,
           requestRow.party_area_minutes ? `Party Area Duration: ${requestRow.party_area_minutes / 60} hr` : null,
           payInPerson ? "Payment: Pay in Person" : "Payment: Unpaid (payment link available)",
