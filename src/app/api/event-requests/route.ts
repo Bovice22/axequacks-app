@@ -3,6 +3,15 @@ import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, typ
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { sendOwnerNotification } from "@/lib/server/mailer";
+
+function formatTimeFromMinutes(minsFromMidnight: number) {
+  const h24 = Math.floor(minsFromMidnight / 60);
+  const m = minsFromMidnight % 60;
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = ((h24 + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
@@ -176,6 +185,31 @@ export async function POST(req: Request) {
         { error: "Unable to submit request", detail: error?.message || "Insert failed" },
         { status: 500 }
       );
+    }
+
+    try {
+      const startLabel = formatTimeFromMinutes(startMin);
+      const endLabel = formatTimeFromMinutes(startMin + durationMinutes);
+      await sendOwnerNotification({
+        subject: "Axe Quacks: New Event Request",
+        lines: [
+          `Request ID: ${data?.id}`,
+          `Customer: ${customerName}`,
+          `Email: ${customerEmail}`,
+          customerPhone ? `Phone: ${customerPhone}` : null,
+          `Date: ${dateKey}`,
+          `Time: ${startLabel} – ${endLabel}`,
+          `Party Size: ${partySize}`,
+          `Activities: ${cleanActivities.map((a) => `${a.activity} (${a.durationMinutes} min)`).join(", ")}`,
+          partyAreas.length ? `Party Area: ${partyAreas.join(", ")}` : null,
+          partyAreas.length && normalizedPartyAreaMinutes
+            ? `Party Area Duration: ${normalizedPartyAreaMinutes / 60} hr`
+            : null,
+          payInPerson ? "Pay in Person: Yes" : "Pay in Person: No",
+        ].filter(Boolean) as string[],
+      });
+    } catch (err) {
+      console.error("event request owner notify error:", err);
     }
 
     return NextResponse.json({ id: data?.id }, { status: 200 });

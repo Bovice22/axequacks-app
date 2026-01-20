@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
-import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
+import { sendBookingConfirmationEmail, sendOwnerNotification } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode, recordPromoRedemption } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
+
+function formatTimeFromMinutes(minsFromMidnight: number) {
+  const h24 = Math.floor(minsFromMidnight / 60);
+  const m = minsFromMidnight % 60;
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = ((h24 + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
 export async function POST(req: Request) {
   try {
@@ -130,6 +138,27 @@ export async function POST(req: Request) {
       });
     } catch (emailErr) {
       console.error("cash booking confirmation error:", emailErr);
+    }
+
+    try {
+      const startLabel = formatTimeFromMinutes(startMin);
+      const endLabel = formatTimeFromMinutes(startMin + durationMinutes);
+      await sendOwnerNotification({
+        subject: "Axe Quacks: Booking Paid (Cash)",
+        lines: [
+          `Booking ID: ${result.bookingId}`,
+          `Customer: ${customerName || "Walk-in"}`,
+          customerEmail ? `Email: ${customerEmail}` : null,
+          customerPhone ? `Phone: ${customerPhone}` : null,
+          `Activity: ${activity}`,
+          `Date: ${dateKey}`,
+          `Time: ${startLabel} – ${endLabel}`,
+          `Party Size: ${partySize}`,
+          `Status: PAID (Cash)`,
+        ].filter(Boolean) as string[],
+      });
+    } catch (err) {
+      console.error("cash owner notify error:", err);
     }
 
     return NextResponse.json({ bookingId: result.bookingId }, { status: 200 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
+import { sendOwnerNotification } from "@/lib/server/mailer";
 
 const ALLOWED_STATUSES = new Set(["CONFIRMED", "CANCELLED", "NO-SHOW", "COMPLETED"]);
 const ACTIVITY_DB = {
@@ -33,6 +34,25 @@ function getSupabaseAdmin() {
   }
 
   return createClient(url, key, { auth: { persistSession: false } });
+}
+
+function dateKeyFromIsoNY(iso: string | null) {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+function timeLabelFromIsoNY(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function weekdayNY(dateKey: string) {
@@ -456,6 +476,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       return NextResponse.json({ error: "No updates provided" }, { status: 400 });
     }
 
+    const statusChanged = Object.prototype.hasOwnProperty.call(updates, "status");
     const { data, error } = await sb
       .from("bookings")
       .update(updates)
@@ -494,6 +515,34 @@ export async function PATCH(req: Request, context: RouteContext) {
       action: "UPDATE",
       details: updates,
     });
+
+    if (statusChanged) {
+      try {
+        const statusValue = String(data?.status || "").toUpperCase();
+        const subject =
+          statusValue === "CANCELLED"
+            ? "Axe Quacks: Booking Cancelled"
+            : statusValue === "COMPLETED"
+            ? "Axe Quacks: Booking Completed"
+            : "Axe Quacks: Booking Status Updated";
+        const startLabel = timeLabelFromIsoNY(data?.start_ts || null);
+        const endLabel = timeLabelFromIsoNY(data?.end_ts || null);
+        await sendOwnerNotification({
+          subject,
+          lines: [
+            `Booking ID: ${data?.id || id}`,
+            `Customer: ${data?.customer_name || "—"}`,
+            data?.customer_email ? `Email: ${data.customer_email}` : null,
+            `Activity: ${data?.activity || "—"}`,
+            `Date: ${dateKeyFromIsoNY(data?.start_ts || null)}`,
+            `Time: ${startLabel} – ${endLabel}`,
+            `Status: ${statusValue}`,
+          ].filter(Boolean) as string[],
+        });
+      } catch (err) {
+        console.error("booking status owner notify error:", err);
+      }
+    }
 
     return NextResponse.json({ booking: data }, { status: 200 });
   } catch (err: any) {

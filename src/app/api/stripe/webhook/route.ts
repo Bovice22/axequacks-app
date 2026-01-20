@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripe } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
-import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
+import { sendBookingConfirmationEmail, sendOwnerNotification } from "@/lib/server/mailer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
@@ -10,6 +10,14 @@ import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
   PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
 );
+
+function formatTimeFromMinutes(minsFromMidnight: number) {
+  const h24 = Math.floor(minsFromMidnight / 60);
+  const m = minsFromMidnight % 60;
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = ((h24 + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
 function parsePartyAreas(value?: string | null) {
   if (!value) return [];
@@ -234,6 +242,33 @@ export async function POST(req: Request) {
             console.error("confirmation email error:", emailErr);
           }
         }
+        if ((result.intent.metadata as any)?.owner_notified !== "true") {
+          try {
+            const startLabel = formatTimeFromMinutes(result.bookingInput.startMin);
+            const endLabel = formatTimeFromMinutes(
+              result.bookingInput.startMin + result.bookingInput.durationMinutes
+            );
+            await sendOwnerNotification({
+              subject: "Axe Quacks: New Booking Paid",
+              lines: [
+                `Booking ID: ${result.bookingId}`,
+                `Customer: ${result.bookingInput.customerName || "—"}`,
+                result.bookingInput.customerEmail ? `Email: ${result.bookingInput.customerEmail}` : null,
+                result.bookingInput.customerPhone ? `Phone: ${result.bookingInput.customerPhone}` : null,
+                `Activity: ${result.bookingInput.activity}`,
+                `Date: ${result.bookingInput.dateKey}`,
+                `Time: ${startLabel} – ${endLabel}`,
+                `Party Size: ${result.bookingInput.partySize}`,
+                `Status: PAID`,
+              ].filter(Boolean) as string[],
+            });
+            await stripe.paymentIntents.update(paymentIntentId, {
+              metadata: { ...result.intent.metadata, owner_notified: "true" },
+            });
+          } catch (notifyErr) {
+            console.error("owner notify error:", notifyErr);
+          }
+        }
         const customerId =
           result.customerId || (await ensureCustomerAndLinkBooking(result.bookingInput, result.bookingId));
         if (result.intent.metadata?.promo_code) {
@@ -313,6 +348,33 @@ export async function POST(req: Request) {
           }
         } catch (emailErr) {
           console.error("confirmation email error:", emailErr);
+        }
+      }
+      if ((result.intent.metadata as any)?.owner_notified !== "true") {
+        try {
+          const startLabel = formatTimeFromMinutes(result.bookingInput.startMin);
+          const endLabel = formatTimeFromMinutes(
+            result.bookingInput.startMin + result.bookingInput.durationMinutes
+          );
+          await sendOwnerNotification({
+            subject: "Axe Quacks: New Booking Paid",
+            lines: [
+              `Booking ID: ${result.bookingId}`,
+              `Customer: ${result.bookingInput.customerName || "—"}`,
+              result.bookingInput.customerEmail ? `Email: ${result.bookingInput.customerEmail}` : null,
+              result.bookingInput.customerPhone ? `Phone: ${result.bookingInput.customerPhone}` : null,
+              `Activity: ${result.bookingInput.activity}`,
+              `Date: ${result.bookingInput.dateKey}`,
+              `Time: ${startLabel} – ${endLabel}`,
+              `Party Size: ${result.bookingInput.partySize}`,
+              `Status: PAID`,
+            ].filter(Boolean) as string[],
+          });
+          await stripe.paymentIntents.update(paymentIntentId, {
+            metadata: { ...result.intent.metadata, owner_notified: "true" },
+          });
+        } catch (notifyErr) {
+          console.error("owner notify error:", notifyErr);
         }
       }
     }

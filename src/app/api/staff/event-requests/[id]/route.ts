@@ -10,13 +10,21 @@ import {
   nyLocalDateKeyPlusMinutesToUTCISOString,
   totalCents,
 } from "@/lib/bookingLogic";
-import { sendEventRequestAcceptedEmail } from "@/lib/server/mailer";
+import { sendEventRequestAcceptedEmail, sendOwnerNotification } from "@/lib/server/mailer";
 
 type Activity = "Axe Throwing" | "Duckpin Bowling";
 type PartyAreaTiming = "BEFORE" | "DURING" | "AFTER";
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
   PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
 );
+
+function formatTimeFromMinutes(minsFromMidnight: number) {
+  const h24 = Math.floor(minsFromMidnight / 60);
+  const m = minsFromMidnight % 60;
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = ((h24 + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
 function normalizePartyAreas(input: unknown) {
   if (!Array.isArray(input)) return [];
@@ -554,6 +562,31 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
     } catch (emailErr) {
       console.error("event request accepted email error:", emailErr);
+    }
+
+    try {
+      const startLabel = formatTimeFromMinutes(Number(requestRow.start_min || 0));
+      const endLabel = formatTimeFromMinutes(
+        Number(requestRow.start_min || 0) + Number(requestRow.duration_minutes || 0)
+      );
+      await sendOwnerNotification({
+        subject: "Axe Quacks: Event Request Accepted",
+        lines: [
+          `Request ID: ${requestRow.id}`,
+          `Customer: ${requestRow.customer_name || "—"}`,
+          `Email: ${requestRow.customer_email || "—"}`,
+          requestRow.customer_phone ? `Phone: ${requestRow.customer_phone}` : null,
+          `Date: ${requestRow.date_key}`,
+          `Time: ${startLabel} – ${endLabel}`,
+          `Party Size: ${requestRow.party_size || "—"}`,
+          `Activities: ${activities.map((a) => `${a.activity} (${a.durationMinutes} min)`).join(", ")}`,
+          requestRow.party_areas?.length ? `Party Area: ${requestRow.party_areas.join(", ")}` : null,
+          requestRow.party_area_minutes ? `Party Area Duration: ${requestRow.party_area_minutes / 60} hr` : null,
+          payInPerson ? "Payment: Pay in Person" : "Payment: Unpaid (payment link available)",
+        ].filter(Boolean) as string[],
+      });
+    } catch (err) {
+      console.error("event request accepted owner notify error:", err);
     }
 
     return NextResponse.json({ bookingIds, acceptedAt }, { status: 200 });

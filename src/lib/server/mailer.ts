@@ -299,6 +299,85 @@ export async function sendBookingConfirmationEmail(input: EmailBookingInput): Pr
   return { sent: true, id: payload?.id };
 }
 
+export async function sendOwnerNotification(input: {
+  subject: string;
+  lines: string[];
+}): Promise<{ sent: boolean; id?: string; skippedReason?: string }> {
+  const apiKey = process.env.RESEND_API_KEY || "";
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "";
+  const fromName = process.env.RESEND_FROM_NAME || "Axe Quacks";
+  const ownerEmail = process.env.OWNER_NOTIFY_EMAIL || "unsurpassedgraphics@gmail.com";
+
+  if (!apiKey || !fromEmail) {
+    console.warn("Resend config missing; skipping owner notification.");
+    return { sent: false, skippedReason: "missing_config" };
+  }
+
+  if (!ownerEmail || !ownerEmail.includes("@")) {
+    return { sent: false, skippedReason: "invalid_recipient" };
+  }
+
+  const detailRows = (input.lines || []).map((line) => {
+    const idx = line.indexOf(":");
+    if (idx === -1) return { label: "", value: line };
+    return {
+      label: line.slice(0, idx).trim(),
+      value: line.slice(idx + 1).trim(),
+    };
+  });
+
+  const text = `${input.subject}\n\n${(input.lines || []).join("\n")}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111; background: #f6f6f6; padding: 14px;">
+      <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 14px; border: 1px solid #e6e6e6;">
+        <div style="text-align: center; font-size: 15px; font-weight: 700; margin-bottom: 6px;">
+          ${input.subject}
+        </div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 13px; border-collapse: collapse;">
+          ${detailRows
+            .map(
+              (row) => `
+            <tr>
+              <td style="padding: 3px 0; color: #666; width: 34%;">${row.label || "&nbsp;"}</td>
+              <td style="padding: 3px 0; color: #111; font-weight: 600;">${row.value}</td>
+            </tr>
+          `
+            )
+            .join("")}
+        </table>
+      </div>
+    </div>
+  `;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${fromName} <${fromEmail}>`,
+        to: [ownerEmail],
+        subject: input.subject,
+        text,
+        html,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.text().catch(() => "");
+      throw new Error(`Resend email failed: ${res.status} ${error}`.trim());
+    }
+
+    const data = await res.json().catch(() => ({}));
+    return { sent: true, id: data?.id };
+  } catch (err: any) {
+    console.error("owner email error:", err);
+    return { sent: false, skippedReason: err?.message || "send_failed" };
+  }
+}
+
 type EventRequestEmailInput = {
   customerName: string;
   customerEmail: string;
