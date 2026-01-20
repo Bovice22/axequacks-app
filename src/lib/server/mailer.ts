@@ -199,7 +199,7 @@ export async function sendBookingConfirmationEmail(input: EmailBookingInput): Pr
         : null
       : null;
 
-  const subject = "Your Axe Quacks Booking Confirmation";
+  const subject = "Axe Quacks: Owner Booking Notification";
   const priceLine =
     typeof input.totalCents === "number"
       ? `Amount: $${(input.totalCents / 100).toFixed(2)} ${input.paid ? "PAID" : ""}`.trim()
