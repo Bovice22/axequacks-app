@@ -2621,7 +2621,7 @@ function BookPageContent() {
         : null}
 
       {showConfirmation && confirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-booking-overlay>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-booking-overlay data-booking-details>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="text-lg font-extrabold text-zinc-900">Thanks For Booking At Axe Quacks</div>
             <div className="mt-2 text-sm text-zinc-900">Here are your booking details:</div>
