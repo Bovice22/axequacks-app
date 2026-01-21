@@ -28,6 +28,7 @@ type InventoryItem = {
   description: string | null;
   price_cents: number;
   image_url?: string | null;
+  category?: string | null;
   active: boolean;
 };
 
@@ -78,6 +79,7 @@ export default function PosScreen() {
   const [activeTabName, setActiveTabName] = useState("");
   const [activeTabStatus, setActiveTabStatus] = useState("");
   const [tabItems, setTabItems] = useState<TabItemRow[]>([]);
+  const [activeCategory, setActiveCategory] = useState("All");
   const [tabLoading, setTabLoading] = useState(false);
   const [tabModalOpen, setTabModalOpen] = useState(false);
   const [tabDateKey, setTabDateKey] = useState("");
@@ -718,27 +720,104 @@ export default function PosScreen() {
   }
 
   const sampleItems: InventoryItem[] = [
-    { id: "axe-lanes", name: "Axe Lanes", description: "Lane rental", price_cents: 2500, image_url: null, active: true },
-    { id: "duckpin", name: "Duckpin Bowling", description: "Lane rental", price_cents: 3000, image_url: null, active: true },
-    { id: "arcade", name: "Arcade Credits", description: "Game card", price_cents: 1000, image_url: null, active: true },
-    { id: "drinks", name: "Drinks", description: "Beverages", price_cents: 400, image_url: null, active: true },
-    { id: "snacks", name: "Snacks", description: "Concessions", price_cents: 350, image_url: null, active: true },
-    { id: "merch", name: "Merchandise", description: "Apparel", price_cents: 2000, image_url: null, active: true },
-    { id: "addons", name: "Event Add-Ons", description: "Extras", price_cents: 1500, image_url: null, active: true },
-    { id: "gift", name: "Gift Card", description: "Store credit", price_cents: 2500, image_url: null, active: true },
+    {
+      id: "axe-lanes",
+      name: "Axe Lanes",
+      description: "Lane rental",
+      price_cents: 2500,
+      image_url: null,
+      category: "Axe",
+      active: true,
+    },
+    {
+      id: "duckpin",
+      name: "Duckpin Bowling",
+      description: "Lane rental",
+      price_cents: 3000,
+      image_url: null,
+      category: "Duckpin",
+      active: true,
+    },
+    {
+      id: "arcade",
+      name: "Arcade Credits",
+      description: "Game card",
+      price_cents: 1000,
+      image_url: null,
+      category: "Concessions",
+      active: true,
+    },
+    {
+      id: "drinks",
+      name: "Drinks",
+      description: "Beverages",
+      price_cents: 400,
+      image_url: null,
+      category: "Concessions",
+      active: true,
+    },
+    {
+      id: "snacks",
+      name: "Snacks",
+      description: "Concessions",
+      price_cents: 350,
+      image_url: null,
+      category: "Concessions",
+      active: true,
+    },
+    {
+      id: "merch",
+      name: "Merchandise",
+      description: "Apparel",
+      price_cents: 2000,
+      image_url: null,
+      category: "Merch",
+      active: true,
+    },
+    {
+      id: "addons",
+      name: "Event Add-Ons",
+      description: "Extras",
+      price_cents: 1500,
+      image_url: null,
+      category: "Events",
+      active: true,
+    },
+    {
+      id: "gift",
+      name: "Gift Card",
+      description: "Store credit",
+      price_cents: 2500,
+      image_url: null,
+      category: "Gift",
+      active: true,
+    },
   ];
   const displayItems = items.length ? items : sampleItems;
+  const categoryOptions = useMemo(() => {
+    const unique = new Set<string>();
+    displayItems.forEach((item) => {
+      const name = String(item.category || "").trim();
+      if (name) unique.add(name);
+    });
+    return ["All", ...Array.from(unique).sort((a, b) => a.localeCompare(b))];
+  }, [displayItems]);
   const filteredItems = useMemo(() => {
     const q = itemQuery.trim().toLowerCase();
-    const itemsToFilter = !q
-      ? displayItems
-      : displayItems.filter((item) => (item.name || "").toLowerCase().includes(q));
+    const itemsToFilter = displayItems.filter((item) => {
+      if (activeCategory !== "All") {
+        const category = String(item.category || "").trim();
+        if (category.toLowerCase() !== activeCategory.toLowerCase()) return false;
+      }
+      if (!q) return true;
+      return (item.name || "").toLowerCase().includes(q);
+    });
     return [...itemsToFilter].sort((a, b) => {
       const aName = (a.name || "").toLowerCase();
       const bName = (b.name || "").toLowerCase();
       return aName.localeCompare(bName);
     });
-  }, [displayItems, itemQuery]);
+  }, [displayItems, itemQuery, activeCategory]);
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-900">
@@ -1191,6 +1270,25 @@ export default function PosScreen() {
         <div className="flex flex-1 min-w-0 flex-col gap-4">
           <div className="flex min-h-0 w-full flex-1 flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-3 text-sm font-semibold text-zinc-700">Items</div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {categoryOptions.map((category) => {
+                const isActive = category === activeCategory;
+                return (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setActiveCategory(category)}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                      isActive
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {category}
+                  </button>
+                );
+              })}
+            </div>
             <input
               value={itemQuery}
               onChange={(e) => setItemQuery(e.target.value)}
