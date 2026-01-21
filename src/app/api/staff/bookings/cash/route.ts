@@ -62,11 +62,13 @@ export async function POST(req: Request) {
       partyAreas,
     };
 
+    const comboDurations =
+      Number.isFinite(comboAxeMinutes) && Number.isFinite(comboDuckpinMinutes)
+        ? { axeMinutes: comboAxeMinutes, duckpinMinutes: comboDuckpinMinutes }
+        : undefined;
     const baseAmount =
-      totalCents(activity, partySize, durationMinutes, {
-        axeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
-        duckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
-      }) + partyAreaCostCents(normalizedPartyAreaMinutes, partyAreas.length);
+      totalCents(activity, partySize, durationMinutes, comboDurations) +
+      partyAreaCostCents(normalizedPartyAreaMinutes, partyAreas.length);
     let giftMeta: { code: string; amountOff: number } | null = null;
 
     if (promoCode) {
