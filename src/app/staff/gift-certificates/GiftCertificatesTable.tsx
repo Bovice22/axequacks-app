@@ -32,6 +32,8 @@ export default function GiftCertificatesTable() {
   const [createLoading, setCreateLoading] = useState(false);
   const [customerEmail, setCustomerEmail] = useState("");
   const [amountDollars, setAmountDollars] = useState("50");
+  const [sendLoadingId, setSendLoadingId] = useState<string | null>(null);
+  const [sendStatus, setSendStatus] = useState("");
 
   async function loadCertificates() {
     setLoading(true);
@@ -84,6 +86,24 @@ export default function GiftCertificatesTable() {
     }
   }
 
+  async function sendBalanceEmail(certificate: GiftCertificate) {
+    setSendLoadingId(certificate.id);
+    setSendStatus("");
+    try {
+      const res = await fetch(`/api/staff/gift-certificates/${certificate.id}/send`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSendStatus(json?.error || "Failed to send email.");
+        return;
+      }
+      setSendStatus(`Email sent for ${certificate.code}.`);
+    } catch (err: any) {
+      setSendStatus(err?.message || "Failed to send email.");
+    } finally {
+      setSendLoadingId(null);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -132,6 +152,7 @@ export default function GiftCertificatesTable() {
         </div>
       </div>
       {createError ? <div className="mb-4 text-xs font-semibold text-red-600">{createError}</div> : null}
+      {sendStatus ? <div className="mb-4 text-xs font-semibold text-emerald-700">{sendStatus}</div> : null}
       {error ? <div className="text-xs font-semibold text-red-600">{error}</div> : null}
       {loading ? (
         <div className="text-sm text-zinc-700">Loading gift certificates…</div>
@@ -147,6 +168,7 @@ export default function GiftCertificatesTable() {
                 <th className="py-2 pr-4">Status</th>
                 <th className="py-2 pr-4">Expires</th>
                 <th className="py-2 pr-4">Created</th>
+                <th className="py-2 pr-4">Email</th>
               </tr>
             </thead>
             <tbody>
@@ -162,11 +184,21 @@ export default function GiftCertificatesTable() {
                   <td className="py-2 pr-4">{row.status}</td>
                   <td className="py-2 pr-4">{formatDate(row.expires_at)}</td>
                   <td className="py-2 pr-4">{formatDate(row.created_at)}</td>
+                  <td className="py-2 pr-4">
+                    <button
+                      type="button"
+                      onClick={() => sendBalanceEmail(row)}
+                      disabled={sendLoadingId === row.id}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    >
+                      {sendLoadingId === row.id ? "Sending..." : "Send Email"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!rows.length ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-sm text-zinc-500">
+                  <td colSpan={8} className="py-6 text-center text-sm text-zinc-500">
                     No gift certificates yet.
                   </td>
                 </tr>

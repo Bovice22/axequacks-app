@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { generateGiftCode } from "@/lib/server/giftCertificates";
+import { sendGiftCertificateEmail } from "@/lib/server/mailer";
 
 export async function GET() {
   try {
@@ -89,6 +90,18 @@ export async function POST(req: Request) {
     if (!created) {
       console.error("gift certificate create error:", lastError);
       return NextResponse.json({ error: "Failed to create gift certificate" }, { status: 500 });
+    }
+
+    try {
+      await sendGiftCertificateEmail({
+        customerEmail,
+        customerName: (created as any)?.customers?.full_name || null,
+        code: created.code,
+        balanceCents: created.balance_cents,
+        expiresAt: created.expires_at,
+      });
+    } catch (emailErr) {
+      console.error("gift certificate email error:", emailErr);
     }
 
     return NextResponse.json({ certificate: created }, { status: 200 });

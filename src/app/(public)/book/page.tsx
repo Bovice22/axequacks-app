@@ -2624,43 +2624,43 @@ function BookPageContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" data-booking-overlay>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="text-lg font-extrabold text-zinc-900">Thanks For Booking At Axe Quacks</div>
-            <div className="mt-2 text-sm text-zinc-600">Here are your booking details:</div>
-            <div className="mt-4 space-y-2 text-sm">
+            <div className="mt-2 text-sm text-zinc-900">Here are your booking details:</div>
+            <div className="mt-4 space-y-2 text-sm text-zinc-900">
               <div>
-                <span className="font-semibold text-zinc-700">Name:</span> {confirmation.customerName}
+                <span className="font-semibold text-zinc-900">Name:</span> {confirmation.customerName}
               </div>
               {confirmation.comboOrder && (
                 <div>
-                  <span className="font-semibold text-zinc-700">Combo Order:</span>{" "}
+                  <span className="font-semibold text-zinc-900">Combo Order:</span>{" "}
                   {confirmation.comboOrder === "DUCKPIN_FIRST"
                     ? "First: Duckpin Bowling, Second: Axe Throwing"
                     : "First: Axe Throwing, Second: Duckpin Bowling"}
                 </div>
               )}
               <div>
-                <span className="font-semibold text-zinc-700">Activity:</span> {confirmation.activity}
+                <span className="font-semibold text-zinc-900">Activity:</span> {confirmation.activity}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Date:</span> {prettyDate(confirmation.dateKey)}
+                <span className="font-semibold text-zinc-900">Date:</span> {prettyDate(confirmation.dateKey)}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Start/End Time:</span> {confirmation.timeLabel}
+                <span className="font-semibold text-zinc-900">Start/End Time:</span> {confirmation.timeLabel}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Resource Assigned:</span>{" "}
+                <span className="font-semibold text-zinc-900">Resource Assigned:</span>{" "}
                 {confirmation.resourceNames?.length ? confirmation.resourceNames.join(", ") : "TBD"}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Group Size:</span> {confirmation.partySize}
+                <span className="font-semibold text-zinc-900">Group Size:</span> {confirmation.partySize}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Phone:</span> {confirmation.customerPhone || "—"}
+                <span className="font-semibold text-zinc-900">Phone:</span> {confirmation.customerPhone || "—"}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Email:</span> {confirmation.customerEmail}
+                <span className="font-semibold text-zinc-900">Email:</span> {confirmation.customerEmail}
               </div>
               <div>
-                <span className="font-semibold text-zinc-700">Total:</span> $
+                <span className="font-semibold text-zinc-900">Total:</span> $
                 {(confirmation.totalCents / 100).toFixed(2)}
               </div>
             </div>
