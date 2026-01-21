@@ -14,6 +14,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: "/staff/addons", label: "Inventory" },
   { href: "/staff/admin", label: "Staff" },
   { href: "/staff/promos", label: "Promo Codes" },
+  { href: "/staff/gift-certificates", label: "Gift Certificates" },
   { href: "/staff/reports", label: "Reporting" },
   { href: "/staff/buffers", label: "Buffers/Blackouts/Policies" },
   { href: "/staff/events", label: "Event Requests" },

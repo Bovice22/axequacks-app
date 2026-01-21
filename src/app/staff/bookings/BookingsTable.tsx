@@ -376,6 +376,14 @@ export default function BookingsTable() {
   const [payModalBookingId, setPayModalBookingId] = useState<string | null>(null);
   const [payLoading, setPayLoading] = useState<"cash" | "card" | null>(null);
   const [payError, setPayError] = useState("");
+  const [payGiftCode, setPayGiftCode] = useState("");
+  const [payGiftApplied, setPayGiftApplied] = useState<{
+    code: string;
+    amountOffCents: number;
+    remainingCents: number;
+  } | null>(null);
+  const [payGiftStatus, setPayGiftStatus] = useState("");
+  const [payGiftLoading, setPayGiftLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
@@ -468,6 +476,9 @@ export default function BookingsTable() {
     setPayError("");
     setTerminalError("");
     setTerminalPhase("idle");
+    setPayGiftCode("");
+    setPayGiftApplied(null);
+    setPayGiftStatus("");
     if (!terminalReaders.length) {
       void loadReaders();
     }
@@ -479,6 +490,49 @@ export default function BookingsTable() {
     setPayError("");
     setTerminalError("");
     setTerminalPhase("idle");
+    setPayGiftCode("");
+    setPayGiftApplied(null);
+    setPayGiftStatus("");
+  }
+
+  async function applyPayGiftCode(booking: BookingRow) {
+    const code = payGiftCode.trim();
+    if (!code) {
+      setPayGiftApplied(null);
+      setPayGiftStatus("");
+      return;
+    }
+    setPayGiftLoading(true);
+    setPayGiftStatus("");
+    try {
+      const res = await fetch("/api/promos/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          amount_cents: booking.total_cents,
+          customer_email: booking.customer_email || "",
+          allow_gift: true,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.gift) {
+        setPayGiftApplied(null);
+        setPayGiftStatus(json?.error || "Gift certificate not found.");
+        return;
+      }
+      setPayGiftApplied({
+        code: json.gift.code,
+        amountOffCents: json.amount_off_cents ?? 0,
+        remainingCents: json.total_cents ?? booking.total_cents,
+      });
+      setPayGiftStatus("Gift certificate applied.");
+    } catch (err: any) {
+      setPayGiftApplied(null);
+      setPayGiftStatus(err?.message || "Failed to apply gift certificate.");
+    } finally {
+      setPayGiftLoading(false);
+    }
   }
 
   async function payWithCash(bookingId: string) {
@@ -488,7 +542,7 @@ export default function BookingsTable() {
       const res = await fetch(`/api/staff/bookings/${bookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paid: true }),
+        body: JSON.stringify({ paid: true, gift_code: payGiftApplied?.code || "" }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -535,7 +589,7 @@ export default function BookingsTable() {
       const intentRes = await fetch("/api/stripe/terminal/booking_payment_intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: bookingId }),
+        body: JSON.stringify({ booking_id: bookingId, gift_code: payGiftApplied?.code || "" }),
       });
       const intentJson = await intentRes.json().catch(() => ({}));
       if (!intentRes.ok || !intentJson?.client_secret) {
@@ -1553,6 +1607,11 @@ export default function BookingsTable() {
     </div>
   ) : null;
   const payModalBooking = payModalBookingId ? bookingById.get(payModalBookingId) || null : null;
+  const payModalTotalCents = payModalBooking
+    ? payGiftApplied
+      ? payGiftApplied.remainingCents
+      : payModalBooking.total_cents
+    : 0;
   const payModal = payModalBooking ? (
     <div
       style={{
@@ -1584,8 +1643,38 @@ export default function BookingsTable() {
       >
         <div className="text-sm font-semibold text-zinc-900">Record Payment</div>
         <div className="mt-1 text-xs text-zinc-500">
-          {payModalBooking.customer_name || "Customer"} · $
-          {(payModalBooking.total_cents / 100).toFixed(2)} · {activityLabel(payModalBooking.activity)}
+          {payModalBooking.customer_name || "Customer"} · ${(payModalTotalCents / 100).toFixed(2)} ·{" "}
+          {activityLabel(payModalBooking.activity)}
+        </div>
+        {payGiftApplied ? (
+          <div className="mt-2 text-[11px] font-semibold text-emerald-700">
+            Gift {payGiftApplied.code}: -${(payGiftApplied.amountOffCents / 100).toFixed(2)}
+          </div>
+        ) : null}
+        <div className="mt-3">
+          <label className="text-xs font-semibold text-zinc-600">
+            Gift Certificate Code
+            <div className="mt-1 flex gap-2">
+              <input
+                value={payGiftCode}
+                onChange={(e) => {
+                  setPayGiftCode(e.target.value);
+                  setPayGiftStatus("");
+                }}
+                className="h-9 w-full rounded-lg border border-zinc-200 px-2 text-xs"
+                placeholder="GC-XXXX-XXXX"
+              />
+              <button
+                type="button"
+                onClick={() => payModalBooking && applyPayGiftCode(payModalBooking)}
+                disabled={payGiftLoading || !payGiftCode.trim()}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+              >
+                {payGiftLoading ? "Checking..." : "Apply"}
+              </button>
+            </div>
+          </label>
+          {payGiftStatus ? <div className="mt-1 text-[11px] font-semibold text-zinc-600">{payGiftStatus}</div> : null}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <button
@@ -1599,7 +1688,7 @@ export default function BookingsTable() {
           <button
             type="button"
             onClick={() => payWithCard(payModalBooking.id)}
-            disabled={payLoading !== null}
+            disabled={payLoading !== null || (payGiftApplied ? payGiftApplied.remainingCents <= 0 : false)}
             className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {payLoading === "card" ? "Charging..." : "Pay With Card"}

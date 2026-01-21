@@ -6,6 +6,7 @@ import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from 
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
+import { redeemGiftCertificate } from "@/lib/server/giftCertificates";
 
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
   PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
@@ -262,6 +263,14 @@ export async function POST(req: Request) {
             bookingId: result.bookingId,
           });
         }
+        if (result.intent.metadata?.gift_code && result.intent.metadata?.gift_amount) {
+          await redeemGiftCertificate({
+            code: String(result.intent.metadata.gift_code || ""),
+            customerEmail: result.bookingInput.customerEmail,
+            amountCents: Number(result.intent.metadata.gift_amount || 0),
+            bookingId: result.bookingId,
+          });
+        }
         try {
           await ensureWaiverForBooking({ bookingId: result.bookingId, customerId, bookingInput: result.bookingInput });
         } catch (waiverErr) {
@@ -294,6 +303,14 @@ export async function POST(req: Request) {
             promoCode: String(result.intent.metadata.promo_code || ""),
             customerEmail: result.bookingInput.customerEmail,
             customerId,
+            bookingId: result.bookingId,
+          });
+        }
+        if (result.intent.metadata?.gift_code && result.intent.metadata?.gift_amount) {
+          await redeemGiftCertificate({
+            code: String(result.intent.metadata.gift_code || ""),
+            customerEmail: result.bookingInput.customerEmail,
+            amountCents: Number(result.intent.metadata.gift_amount || 0),
             bookingId: result.bookingId,
           });
         }

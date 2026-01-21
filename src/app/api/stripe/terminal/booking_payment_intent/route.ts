@@ -3,6 +3,7 @@ import { getStripeTerminal } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { cardFeeCents } from "@/lib/bookingLogic";
+import { validateGiftCertificate } from "@/lib/server/giftCertificates";
 
 const ACTIVITY_LABELS: Record<string, string> = {
   AXE: "Axe Throwing",
@@ -58,7 +59,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
-    const amount = Number(booking.total_cents || 0);
+    const baseAmount = Number(booking.total_cents || 0);
+    const giftCode = String(body?.gift_code || "").trim();
+    let giftMeta: { code: string; amountOff: number } | null = null;
+    let amount = baseAmount;
+    if (giftCode) {
+      try {
+        const giftResult = await validateGiftCertificate({
+          code: giftCode,
+          customerEmail: String(booking.customer_email || ""),
+          amountCents: baseAmount,
+        });
+        amount = giftResult.remainingCents;
+        giftMeta = { code: giftResult.gift.code, amountOff: giftResult.amountOffCents };
+      } catch (giftErr: any) {
+        return NextResponse.json({ error: giftErr?.message || "Invalid gift certificate." }, { status: 400 });
+      }
+    }
+
+    if (giftMeta && amount <= 0) {
+      return NextResponse.json({ error: "Gift certificate covers total. Use cash to record payment." }, { status: 400 });
+    }
+    if (giftMeta && amount > 0 && amount < 50) {
+      return NextResponse.json({ error: "Remaining balance must be at least $0.50 to pay by card." }, { status: 400 });
+    }
     if (!Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: "Invalid booking total" }, { status: 400 });
     }
@@ -85,8 +109,11 @@ export async function POST(req: Request) {
         combo_order: String(booking.combo_order || "DUCKPIN_FIRST"),
         ui_mode: "staff",
         staff_id: staff.staff_id,
-        total_before_discount: String(amount),
-        discount_amount: "0",
+        total_before_discount: String(baseAmount),
+        discount_amount: giftMeta ? String(giftMeta.amountOff) : "0",
+        discount_type: giftMeta ? "GIFT" : "",
+        gift_code: giftMeta?.code || "",
+        gift_amount: giftMeta ? String(giftMeta.amountOff) : "",
         card_fee_cents: String(cardFee),
         total_with_fee: String(totalWithFee),
       },

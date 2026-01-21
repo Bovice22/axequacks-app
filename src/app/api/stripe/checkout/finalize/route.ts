@@ -6,6 +6,7 @@ import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from 
 import { ensureWaiverForBooking } from "@/lib/server/waiverService";
 import { createClient } from "@supabase/supabase-js";
 import { recordPromoRedemption } from "@/lib/server/promoRedemptions";
+import { redeemGiftCertificate } from "@/lib/server/giftCertificates";
 
 const PARTY_AREA_BOOKABLE_SET: Set<string> = new Set(
   PARTY_AREA_OPTIONS.filter((option) => option.visible).map((option) => normalizePartyAreaName(option.name))
@@ -212,6 +213,14 @@ export async function POST(req: Request) {
           bookingId,
         });
       }
+      if (bookingInput && intent.metadata?.gift_code && intent.metadata?.gift_amount) {
+        await redeemGiftCertificate({
+          code: String(intent.metadata.gift_code || ""),
+          customerEmail: bookingInput.customerEmail,
+          amountCents: Number(intent.metadata.gift_amount || 0),
+          bookingId,
+        });
+      }
       const resources = await fetchBookingResources(bookingId);
       let waiverUrl = "";
       if (bookingInput) {
@@ -280,14 +289,22 @@ export async function POST(req: Request) {
     await markBookingPaid(result.bookingId);
     await recordBookingTip(result.bookingId, intent);
     await markBookingPaymentIntent(result.bookingId, paymentIntentId);
-    if (intent.metadata?.promo_code) {
-      await recordPromoRedemption({
-        promoCode: String(intent.metadata.promo_code || ""),
-        customerEmail: bookingInput.customerEmail,
-        customerId: result.customerId,
-        bookingId: result.bookingId,
-      });
-    }
+      if (intent.metadata?.promo_code) {
+        await recordPromoRedemption({
+          promoCode: String(intent.metadata.promo_code || ""),
+          customerEmail: bookingInput.customerEmail,
+          customerId: result.customerId,
+          bookingId: result.bookingId,
+        });
+      }
+      if (intent.metadata?.gift_code && intent.metadata?.gift_amount) {
+        await redeemGiftCertificate({
+          code: String(intent.metadata.gift_code || ""),
+          customerEmail: bookingInput.customerEmail,
+          amountCents: Number(intent.metadata.gift_amount || 0),
+          bookingId: result.bookingId,
+        });
+      }
     await stripe.paymentIntents.update(paymentIntentId, {
       metadata: {
         ...intent.metadata,

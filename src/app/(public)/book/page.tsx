@@ -414,10 +414,11 @@ function BookPageContent() {
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState<{
     code: string;
-    discountType: "PERCENT" | "AMOUNT";
+    discountType: "PERCENT" | "AMOUNT" | "GIFT";
     discountValue: number;
     amountOffCents: number;
     totalCents: number;
+    giftBalanceCents?: number;
   } | null>(null);
   const [promoStatus, setPromoStatus] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
@@ -776,22 +777,35 @@ function BookPageContent() {
           customer_email: email.trim(),
           activity,
           duration_minutes: effectiveDuration,
+          allow_gift: true,
         }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.promo) {
+      if (!res.ok || (!json?.promo && !json?.gift)) {
         setPromoApplied(null);
         setPromoStatus(json?.error || "Invalid promo code.");
         return;
       }
-      setPromoApplied({
-        code: json.promo.code,
-        discountType: json.promo.discount_type,
-        discountValue: json.promo.discount_value,
-        amountOffCents: json.amount_off_cents ?? 0,
-        totalCents: json.total_cents ?? pricing.cents,
-      });
-      setPromoStatus("Promo applied.");
+      if (json.gift) {
+        setPromoApplied({
+          code: json.gift.code,
+          discountType: "GIFT",
+          discountValue: Number(json.gift.balance_cents || 0) / 100,
+          amountOffCents: json.amount_off_cents ?? 0,
+          totalCents: json.total_cents ?? pricing.cents,
+          giftBalanceCents: json.gift.balance_cents ?? 0,
+        });
+        setPromoStatus("Gift certificate applied.");
+      } else {
+        setPromoApplied({
+          code: json.promo.code,
+          discountType: json.promo.discount_type,
+          discountValue: json.promo.discount_value,
+          amountOffCents: json.amount_off_cents ?? 0,
+          totalCents: json.total_cents ?? pricing.cents,
+        });
+        setPromoStatus("Promo applied.");
+      }
     } catch (e: any) {
       setPromoApplied(null);
       setPromoStatus(e?.message || "Failed to apply promo.");
@@ -1035,6 +1049,40 @@ function BookPageContent() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSubmitError(json?.error || "Failed to start checkout.");
+        return;
+      }
+
+      if (json?.gift_only) {
+        const comboOrder = activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined;
+        setConfirmation({
+          activity,
+          duration: effectiveDuration,
+          dateKey,
+          timeLabel: selectedTimeRange,
+          partySize,
+          customerName: name.trim(),
+          customerEmail: email.trim(),
+          customerPhone: phone.trim(),
+          totalCents: discountedTotalCents,
+          comboOrder,
+          resourceNames: [],
+        });
+        setShowConfirmation(true);
+        resetBookingState();
+        if (json?.waiverUrl && typeof window !== "undefined") {
+          try {
+            const url = new URL(String(json.waiverUrl));
+            const returnTo = `${window.location.origin}/book`;
+            url.searchParams.set("return", returnTo);
+            window.sessionStorage.removeItem(`${BOOKING_DRAFT_KEY}:restore`);
+            window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+            window.location.href = url.toString();
+            return;
+          } catch {
+            window.location.href = String(json.waiverUrl);
+            return;
+          }
+        }
         return;
       }
 
@@ -2058,7 +2106,9 @@ function BookPageContent() {
                     <span className="font-semibold text-zinc-800">{formatMoney(totalCents)}</span>
                   </div>
                   <div className="flex items-center justify-between text-emerald-700">
-                    <span>Promo {promoApplied.code}</span>
+                    <span>
+                      {promoApplied.discountType === "GIFT" ? "Gift Certificate" : "Promo"} {promoApplied.code}
+                    </span>
                     <span className="font-semibold">-{formatMoney(discountCents)}</span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -2088,7 +2138,7 @@ function BookPageContent() {
               ) : null}
 
               <div className="mt-4">
-                <div className="text-sm font-extrabold text-zinc-900">Promo Code</div>
+                <div className="text-sm font-extrabold text-zinc-900">Promo / Gift Code</div>
                 <div className="mt-2 flex gap-2">
                   <input
                     value={promoCode}

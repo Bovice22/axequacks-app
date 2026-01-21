@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
+import { validateGiftCertificate } from "@/lib/server/giftCertificates";
 
 type ValidateBody = {
   code?: string;
@@ -10,6 +11,7 @@ type ValidateBody = {
   activity?: string;
   duration_minutes?: number;
   activities?: Array<{ activity?: string; durationMinutes?: number }>;
+  allow_gift?: boolean;
 };
 
 export async function POST(req: Request) {
@@ -22,6 +24,7 @@ export async function POST(req: Request) {
     const activity = body?.activity != null ? String(body.activity) : undefined;
     const durationMinutes = Number(body?.duration_minutes ?? NaN);
     const activities = Array.isArray(body?.activities) ? body.activities : undefined;
+    const allowGift = body?.allow_gift === true;
 
     if (!code) return NextResponse.json({ error: "Missing promo code." }, { status: 400 });
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
@@ -40,7 +43,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to validate promo." }, { status: 500 });
     }
 
-    if (!data) return NextResponse.json({ error: "Promo not found." }, { status: 404 });
+    if (!data) {
+      if (!allowGift) return NextResponse.json({ error: "Promo not found." }, { status: 404 });
+      try {
+        const giftResult = await validateGiftCertificate({
+          code,
+          customerEmail,
+          amountCents,
+        });
+        return NextResponse.json(
+          {
+            gift: {
+              code: giftResult.gift.code,
+              balance_cents: giftResult.gift.balance_cents,
+              expires_at: giftResult.gift.expires_at,
+            },
+            amount_off_cents: giftResult.amountOffCents,
+            total_cents: giftResult.remainingCents,
+          },
+          { status: 200 }
+        );
+      } catch (giftErr: any) {
+        return NextResponse.json({ error: giftErr?.message || "Gift certificate invalid." }, { status: 400 });
+      }
+    }
     if (!data.active) return NextResponse.json({ error: "Promo is inactive." }, { status: 400 });
 
     const now = new Date();

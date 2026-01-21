@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { PARTY_AREA_OPTIONS, neededResources, nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
 import { sendOwnerNotification } from "@/lib/server/mailer";
+import { validateGiftCertificate, redeemGiftCertificate } from "@/lib/server/giftCertificates";
 
 const ALLOWED_STATUSES = new Set(["CONFIRMED", "CANCELLED", "NO-SHOW", "COMPLETED"]);
 const ACTIVITY_DB = {
@@ -158,6 +159,7 @@ export async function PATCH(req: Request, context: RouteContext) {
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const updates: Record<string, any> = {};
+    const giftCode = String(body?.gift_code || "").trim();
     const statusRaw = body?.status;
     const status = statusRaw ? String(statusRaw).toUpperCase() : "";
     if (status) {
@@ -481,7 +483,7 @@ export async function PATCH(req: Request, context: RouteContext) {
       .from("bookings")
       .update(updates)
       .eq("id", id)
-      .select("id,status,customer_name,customer_email,party_size,activity,duration_minutes,start_ts,end_ts,paid,notes")
+      .select("id,status,customer_name,customer_email,party_size,activity,duration_minutes,start_ts,end_ts,paid,notes,total_cents")
       .single();
 
     if (error) {
@@ -493,6 +495,25 @@ export async function PATCH(req: Request, context: RouteContext) {
         },
         { status: 500 }
       );
+    }
+
+    if (giftCode && updates.paid === true) {
+      try {
+        const giftResult = await validateGiftCertificate({
+          code: giftCode,
+          customerEmail: String(data.customer_email || ""),
+          amountCents: Number(data.total_cents || 0),
+        });
+        await redeemGiftCertificate({
+          code: giftCode,
+          customerEmail: String(data.customer_email || ""),
+          amountCents: giftResult.amountOffCents,
+          bookingId: data.id,
+          createdBy: staff.staff_id,
+        });
+      } catch (giftErr: any) {
+        return NextResponse.json({ error: giftErr?.message || "Failed to redeem gift certificate." }, { status: 400 });
+      }
     }
 
     if (updates.status === "CANCELLED") {

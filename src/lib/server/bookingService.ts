@@ -209,13 +209,13 @@ export async function createBookingWithResources(input: BookingInput) {
   const partyAreaStartTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, partyAreaStartMin);
   const partyAreaEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, partyAreaEndMin);
 
-  const totalCentsValue =
-    Number.isFinite(input.totalCentsOverride) && (input.totalCentsOverride as number) > 0
-      ? (input.totalCentsOverride as number)
-      : totalCents(input.activity, input.partySize, input.durationMinutes, {
-          axeMinutes: comboAxeMinutes,
-          duckpinMinutes: comboDuckpinMinutes,
-        });
+  const hasOverride = Number.isFinite(input.totalCentsOverride);
+  const totalCentsValue = hasOverride
+    ? Math.max(0, Number(input.totalCentsOverride))
+    : totalCents(input.activity, input.partySize, input.durationMinutes, {
+        axeMinutes: comboAxeMinutes,
+        duckpinMinutes: comboDuckpinMinutes,
+      });
 
   if (input.activity === "Combo Package") {
     const comboDuration = comboTotalMinutes;

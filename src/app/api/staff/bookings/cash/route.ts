@@ -5,6 +5,8 @@ import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from 
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode, recordPromoRedemption } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
+import { validateGiftCertificate, redeemGiftCertificate } from "@/lib/server/giftCertificates";
+import { partyAreaCostCents, totalCents } from "@/lib/bookingLogic";
 
 function formatTimeFromMinutes(minsFromMidnight: number) {
   const h24 = Math.floor(minsFromMidnight / 60);
@@ -33,6 +35,10 @@ export async function POST(req: Request) {
     const partyAreas = Array.isArray(body?.partyAreas) ? body.partyAreas : [];
     const partyAreaMinutes = Number(body?.partyAreaMinutes);
     const partyAreaTiming = (String(body?.partyAreaTiming || "DURING").toUpperCase() as "BEFORE" | "DURING" | "AFTER");
+    const normalizedPartyAreaMinutes =
+      partyAreas.length && Number.isFinite(partyAreaMinutes)
+        ? Math.min(480, Math.max(60, Math.round(partyAreaMinutes / 60) * 60))
+        : 0;
 
     if (!activity || !dateKey || !Number.isFinite(partySize) || !Number.isFinite(startMin) || !Number.isFinite(durationMinutes)) {
       return NextResponse.json({ error: "Missing booking fields" }, { status: 400 });
@@ -46,7 +52,7 @@ export async function POST(req: Request) {
       durationMinutes,
       comboAxeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
       comboDuckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
-      partyAreaMinutes: Number.isFinite(partyAreaMinutes) ? partyAreaMinutes : undefined,
+      partyAreaMinutes: normalizedPartyAreaMinutes || undefined,
       partyAreaTiming,
       customerName,
       customerEmail,
@@ -56,24 +62,15 @@ export async function POST(req: Request) {
       partyAreas,
     };
 
+    const baseAmount =
+      totalCents(activity, partySize, durationMinutes, {
+        axeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
+        duckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
+      }) + partyAreaCostCents(normalizedPartyAreaMinutes, partyAreas.length);
+    let giftMeta: { code: string; amountOff: number } | null = null;
+
     if (promoCode) {
       const normalizedCode = normalizePromoCode(promoCode);
-      const promoRuleError = validatePromoUsage({
-        code: normalizedCode,
-        activity,
-        durationMinutes,
-      });
-      if (promoRuleError) {
-        return NextResponse.json({ error: promoRuleError }, { status: 400 });
-      }
-      const normalizedEmail = normalizeEmail(customerEmail || "");
-      if (normalizedEmail) {
-        const alreadyUsed = await hasPromoRedemption(normalizedCode, normalizedEmail);
-        if (alreadyUsed) {
-          return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
-        }
-      }
-
       const sb = supabaseServer();
       const { data, error } = await sb
         .from("promo_codes")
@@ -85,18 +82,47 @@ export async function POST(req: Request) {
         console.error("promo lookup error:", error);
         return NextResponse.json({ error: "Failed to validate promo code" }, { status: 500 });
       }
-      if (!data || !data.active) {
-        return NextResponse.json({ error: "Invalid promo code" }, { status: 400 });
-      }
-      const now = new Date();
-      if (data.starts_at && new Date(data.starts_at) > now) {
-        return NextResponse.json({ error: "Promo not active yet" }, { status: 400 });
-      }
-      if (data.ends_at && new Date(data.ends_at) < now) {
-        return NextResponse.json({ error: "Promo has expired" }, { status: 400 });
-      }
-      if (data.max_redemptions != null && data.redemptions_count >= data.max_redemptions) {
-        return NextResponse.json({ error: "Promo has reached its limit" }, { status: 400 });
+      if (data) {
+        const promoRuleError = validatePromoUsage({
+          code: normalizedCode,
+          activity,
+          durationMinutes,
+        });
+        if (promoRuleError) {
+          return NextResponse.json({ error: promoRuleError }, { status: 400 });
+        }
+        const normalizedEmail = normalizeEmail(customerEmail || "");
+        if (normalizedEmail) {
+          const alreadyUsed = await hasPromoRedemption(normalizedCode, normalizedEmail);
+          if (alreadyUsed) {
+            return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
+          }
+        }
+        if (!data.active) {
+          return NextResponse.json({ error: "Invalid promo code" }, { status: 400 });
+        }
+        const now = new Date();
+        if (data.starts_at && new Date(data.starts_at) > now) {
+          return NextResponse.json({ error: "Promo not active yet" }, { status: 400 });
+        }
+        if (data.ends_at && new Date(data.ends_at) < now) {
+          return NextResponse.json({ error: "Promo has expired" }, { status: 400 });
+        }
+        if (data.max_redemptions != null && data.redemptions_count >= data.max_redemptions) {
+          return NextResponse.json({ error: "Promo has reached its limit" }, { status: 400 });
+        }
+      } else {
+        try {
+          const giftResult = await validateGiftCertificate({
+            code: normalizedCode,
+            customerEmail,
+            amountCents: baseAmount,
+          });
+          giftMeta = { code: giftResult.gift.code, amountOff: giftResult.amountOffCents };
+          bookingInput.totalCentsOverride = giftResult.remainingCents;
+        } catch (giftErr: any) {
+          return NextResponse.json({ error: giftErr?.message || "Invalid promo code." }, { status: 400 });
+        }
       }
     }
 
@@ -106,11 +132,19 @@ export async function POST(req: Request) {
     if (error) {
       console.error("cash booking paid update error:", error);
     }
-    if (promoCode) {
+    if (promoCode && !giftMeta) {
       await recordPromoRedemption({
         promoCode,
         customerEmail,
         customerId: result.customerId,
+        bookingId: result.bookingId,
+      });
+    }
+    if (giftMeta) {
+      await redeemGiftCertificate({
+        code: giftMeta.code,
+        customerEmail,
+        amountCents: giftMeta.amountOff,
         bookingId: result.bookingId,
       });
     }

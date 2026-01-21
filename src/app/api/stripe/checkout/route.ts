@@ -13,6 +13,10 @@ import { getStripe } from "@/lib/server/stripe";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { hasPromoRedemption, normalizeEmail, normalizePromoCode } from "@/lib/server/promoRedemptions";
 import { validatePromoUsage } from "@/lib/server/promoRules";
+import { validateGiftCertificate, redeemGiftCertificate } from "@/lib/server/giftCertificates";
+import { ensureWaiverForBooking } from "@/lib/server/waiverService";
+import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from "@/lib/server/mailer";
+import { createClient } from "@supabase/supabase-js";
 
 type CheckoutRequest = {
   activity: ActivityUI;
@@ -86,6 +90,21 @@ function serializePartyAreas(partyAreas: string[]) {
   return partyAreas.length ? JSON.stringify(partyAreas) : "";
 }
 
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+async function markBookingPaid(bookingId: string) {
+  const sb = supabaseAdmin();
+  const { error } = await sb.from("bookings").update({ paid: true }).eq("id", bookingId);
+  if (error) {
+    console.error("booking paid update error:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as CheckoutRequest;
@@ -108,25 +127,12 @@ export async function POST(req: Request) {
     }) + partyAreaCostCents(partyAreaMinutes, partyAreas.length);
     let amount = baseAmount;
     let promoMeta: { code: string; amountOff: number; discountType: string; discountValue: number } | null = null;
+    let giftMeta: { code: string; amountOff: number } | null = null;
 
     const promoCode = body.promoCode ? normalizePromoCode(body.promoCode) : "";
     if (promoCode) {
-      const promoRuleError = validatePromoUsage({
-        code: promoCode,
-        activity: body.activity,
-        durationMinutes: body.durationMinutes,
-      });
-      if (promoRuleError) {
-        return NextResponse.json({ error: promoRuleError }, { status: 400 });
-      }
       const sb = supabaseServer();
       const customerEmail = normalizeEmail(body.customerEmail || "");
-      if (customerEmail) {
-        const alreadyUsed = await hasPromoRedemption(promoCode, customerEmail);
-        if (alreadyUsed) {
-          return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
-        }
-      }
       const { data, error } = await sb
         .from("promo_codes")
         .select("code,discount_type,discount_value,active,starts_at,ends_at,max_redemptions,redemptions_count")
@@ -137,40 +143,68 @@ export async function POST(req: Request) {
         console.error("promo lookup error:", error);
         return NextResponse.json({ error: "Failed to validate promo code" }, { status: 500 });
       }
+      if (data) {
+        const promoRuleError = validatePromoUsage({
+          code: promoCode,
+          activity: body.activity,
+          durationMinutes: body.durationMinutes,
+        });
+        if (promoRuleError) {
+          return NextResponse.json({ error: promoRuleError }, { status: 400 });
+        }
+        if (!data.active) {
+          return NextResponse.json({ error: "Invalid promo code" }, { status: 400 });
+        }
 
-      if (!data || !data.active) {
-        return NextResponse.json({ error: "Invalid promo code" }, { status: 400 });
-      }
+        if (customerEmail) {
+          const alreadyUsed = await hasPromoRedemption(promoCode, customerEmail);
+          if (alreadyUsed) {
+            return NextResponse.json({ error: "Promo code already used." }, { status: 400 });
+          }
+        }
 
-      const now = new Date();
-      if (data.starts_at && new Date(data.starts_at) > now) {
-        return NextResponse.json({ error: "Promo not active yet" }, { status: 400 });
-      }
-      if (data.ends_at && new Date(data.ends_at) < now) {
-        return NextResponse.json({ error: "Promo has expired" }, { status: 400 });
-      }
-      if (data.max_redemptions != null && data.redemptions_count >= data.max_redemptions) {
-        return NextResponse.json({ error: "Promo has reached its limit" }, { status: 400 });
-      }
+        const now = new Date();
+        if (data.starts_at && new Date(data.starts_at) > now) {
+          return NextResponse.json({ error: "Promo not active yet" }, { status: 400 });
+        }
+        if (data.ends_at && new Date(data.ends_at) < now) {
+          return NextResponse.json({ error: "Promo has expired" }, { status: 400 });
+        }
+        if (data.max_redemptions != null && data.redemptions_count >= data.max_redemptions) {
+          return NextResponse.json({ error: "Promo has reached its limit" }, { status: 400 });
+        }
 
-      let amountOff = 0;
-      if (data.discount_type === "PERCENT") {
-        amountOff = Math.round((baseAmount * Number(data.discount_value || 0)) / 100);
+        let amountOff = 0;
+        if (data.discount_type === "PERCENT") {
+          amountOff = Math.round((baseAmount * Number(data.discount_value || 0)) / 100);
+        } else {
+          amountOff = Math.round(Number(data.discount_value || 0) * 100);
+        }
+        amountOff = Math.max(0, Math.min(amountOff, baseAmount));
+        const discounted = baseAmount - amountOff;
+        if (discounted < 50) {
+          return NextResponse.json({ error: "Promo discount exceeds total" }, { status: 400 });
+        }
+        amount = discounted;
+        promoMeta = {
+          code: data.code,
+          amountOff,
+          discountType: data.discount_type,
+          discountValue: Number(data.discount_value || 0),
+        };
       } else {
-        amountOff = Math.round(Number(data.discount_value || 0) * 100);
+        try {
+          const giftResult = await validateGiftCertificate({
+            code: promoCode,
+            customerEmail,
+            amountCents: baseAmount,
+          });
+          amount = giftResult.remainingCents;
+          giftMeta = { code: giftResult.gift.code, amountOff: giftResult.amountOffCents };
+        } catch (giftErr: any) {
+          return NextResponse.json({ error: giftErr?.message || "Invalid promo code" }, { status: 400 });
+        }
       }
-      amountOff = Math.max(0, Math.min(amountOff, baseAmount));
-      const discounted = baseAmount - amountOff;
-      if (discounted < 50) {
-        return NextResponse.json({ error: "Promo discount exceeds total" }, { status: 400 });
-      }
-      amount = discounted;
-      promoMeta = {
-        code: data.code,
-        amountOff,
-        discountType: data.discount_type,
-        discountValue: Number(data.discount_value || 0),
-      };
     }
     const origin = originFromRequest(req);
     const successPath = body.successPath || "/book";
@@ -182,6 +216,86 @@ export async function POST(req: Request) {
       body.activity === "Combo Package"
         ? Number(body.comboAxeMinutes || 0) + Number(body.comboDuckpinMinutes || 0)
         : body.durationMinutes;
+
+    if (giftMeta && amount <= 0) {
+      const bookingInput = {
+        activity: body.activity,
+        partySize: body.partySize,
+        dateKey: body.dateKey,
+        startMin: body.startMin,
+        durationMinutes: comboTotalMinutes,
+        comboAxeMinutes: body.comboAxeMinutes,
+        comboDuckpinMinutes: body.comboDuckpinMinutes,
+        partyAreas,
+        partyAreaMinutes,
+        partyAreaTiming,
+        customerName: body.customerName.trim(),
+        customerEmail: body.customerEmail.trim(),
+        customerPhone: body.customerPhone?.trim() || "",
+        comboOrder,
+        totalCentsOverride: amount,
+      } as const;
+
+      const bookingResult = await createBookingWithResources(bookingInput);
+      const bookingId = String(bookingResult.bookingId || "");
+      await markBookingPaid(bookingId);
+      await redeemGiftCertificate({
+        code: giftMeta.code,
+        customerEmail: body.customerEmail.trim(),
+        amountCents: giftMeta.amountOff,
+        bookingId,
+      });
+      let waiverUrl = "";
+      try {
+        const waiverResult = await ensureWaiverForBooking({
+          bookingId,
+          customerId: bookingResult.customerId || "",
+          bookingInput,
+        });
+        waiverUrl = waiverResult.waiverUrl || "";
+      } catch (waiverErr) {
+        console.error("gift booking waiver error:", waiverErr);
+      }
+      try {
+        await sendBookingConfirmationEmail({
+          bookingId,
+          activity: body.activity,
+          partySize: body.partySize,
+          dateKey: body.dateKey,
+          startMin: body.startMin,
+          durationMinutes: comboTotalMinutes,
+          customerName: body.customerName.trim(),
+          customerEmail: body.customerEmail.trim(),
+          customerPhone: body.customerPhone?.trim() || "",
+          comboOrder,
+          totalCents: amount,
+          paid: true,
+          waiverUrl,
+        });
+        await sendOwnerBookingConfirmationEmail({
+          bookingId,
+          activity: body.activity,
+          partySize: body.partySize,
+          dateKey: body.dateKey,
+          startMin: body.startMin,
+          durationMinutes: comboTotalMinutes,
+          customerName: body.customerName.trim(),
+          customerEmail: body.customerEmail.trim(),
+          customerPhone: body.customerPhone?.trim() || "",
+          comboOrder,
+          totalCents: amount,
+          paid: true,
+          waiverUrl,
+        });
+      } catch (notifyErr) {
+        console.error("gift booking email error:", notifyErr);
+      }
+
+      return NextResponse.json({ gift_only: true, bookingId, waiverUrl }, { status: 200 });
+    }
+    if (giftMeta && amount > 0 && amount < 50) {
+      return NextResponse.json({ error: "Remaining balance must be at least $0.50 to pay by card." }, { status: 400 });
+    }
 
     const cardFee = cardFeeCents(amount);
     const session = await stripe.checkout.sessions.create({
@@ -231,9 +345,15 @@ export async function POST(req: Request) {
         combo_order: comboOrder,
         ui_mode: uiMode,
         promo_code: promoMeta?.code || "",
-        discount_amount: promoMeta ? String(promoMeta.amountOff) : "",
-        discount_type: promoMeta?.discountType || "",
+        discount_amount: promoMeta
+          ? String(promoMeta.amountOff)
+          : giftMeta
+          ? String(giftMeta.amountOff)
+          : "",
+        discount_type: promoMeta?.discountType || (giftMeta ? "GIFT" : ""),
         discount_value: promoMeta ? String(promoMeta.discountValue) : "",
+        gift_code: giftMeta?.code || "",
+        gift_amount: giftMeta ? String(giftMeta.amountOff) : "",
             total_before_discount: String(baseAmount),
             card_fee_cents: String(cardFee),
           },
