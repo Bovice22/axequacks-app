@@ -3,12 +3,12 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { sendGiftCertificateEmail } from "@/lib/server/mailer";
 
-export async function POST(_: Request, context: { params: { id: string } }) {
+export async function POST(_: Request, { params }: { params: { id: string } }) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const id = String(context?.params?.id || "").trim();
+    const id = String(params?.id || "").trim();
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const sb = supabaseServer();
