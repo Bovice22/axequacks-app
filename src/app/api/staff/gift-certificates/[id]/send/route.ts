@@ -3,12 +3,25 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { sendGiftCertificateEmail } from "@/lib/server/mailer";
 
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+async function getRouteId(req: Request, context: RouteContext) {
+  const resolvedParams = await Promise.resolve(context.params);
+  if (resolvedParams?.id) return String(resolvedParams.id).trim();
+  try {
+    const path = new URL(req.url).pathname;
+    return path.split("/").pop() || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function POST(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const id = String(params?.id || "").trim();
+    const id = await getRouteId(req, context);
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const sb = supabaseServer();
