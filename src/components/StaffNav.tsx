@@ -65,14 +65,14 @@ export default function StaffNav() {
   }, []);
 
   return (
-    <nav className="mt-2 w-full">
-      <ul className="flex flex-wrap items-center justify-center gap-3 text-xs font-semibold leading-none text-zinc-700 sm:gap-4 sm:text-sm">
+    <nav className="mt-2 w-full rounded-xl bg-white py-2">
+      <ul className="flex flex-wrap items-center justify-center gap-3 text-xs font-semibold leading-none text-black sm:gap-4 sm:text-sm">
         {MAIN_ITEMS.map((item) => (
           <li
             key={item.href}
             className="flex items-center after:mx-2 after:text-zinc-300 after:content-[''] sm:after:mx-3 sm:after:content-['|'] last:after:content-['']"
           >
-            <a href={item.href} className="hover:underline">
+            <a href={item.href} className="text-black hover:underline">
               {item.label}
             </a>
           </li>
@@ -84,7 +84,7 @@ export default function StaffNav() {
           >
             <button
               type="button"
-              className="inline-flex items-center gap-2 leading-none hover:underline"
+              className="inline-flex items-center gap-2 leading-none text-black hover:underline"
               aria-haspopup="true"
               aria-expanded={adminOpen}
               onClick={() => setAdminOpen((prev) => !prev)}
@@ -102,7 +102,7 @@ export default function StaffNav() {
                 <li key={item.href}>
                   <a
                     href={item.href}
-                    className="block px-4 py-2 text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900"
+                    className="block px-4 py-2 text-black hover:bg-zinc-50"
                     onClick={() => setAdminOpen(false)}
                   >
                     {item.label}
