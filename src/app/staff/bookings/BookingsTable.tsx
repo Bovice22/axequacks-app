@@ -1270,7 +1270,7 @@ export default function BookingsTable() {
         }
       }}
     >
-      <div className="pointer-events-auto relative z-[100000] w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
+      <div className="pointer-events-auto relative z-[100000] w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-lg font-semibold text-zinc-900">Edit Booking</div>
@@ -1305,7 +1305,7 @@ export default function BookingsTable() {
           <select
             value={editActivity}
             onChange={(e) => setEditActivity(e.target.value)}
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
             disabled={editLoading}
           >
             <option value="">Select activity</option>
@@ -1317,14 +1317,14 @@ export default function BookingsTable() {
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             placeholder="Customer name"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             disabled={editLoading}
           />
           <input
             value={editEmail}
             onChange={(e) => setEditEmail(e.target.value)}
             placeholder="Customer email"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
             disabled={editLoading}
           />
           <label className="text-xs font-semibold text-zinc-600">
@@ -1334,7 +1334,7 @@ export default function BookingsTable() {
               onChange={(e) => setEditPartySize(Number(e.target.value || 0))}
               type="number"
               min="1"
-              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
               disabled={editLoading}
             />
           </label>
@@ -1342,7 +1342,7 @@ export default function BookingsTable() {
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
             placeholder="Internal notes (staff only)"
-            className="min-h-[80px] rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+            className="min-h-[80px] rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
             disabled={editLoading}
           />
           {staffRole === "admin" ? (
@@ -1352,7 +1352,7 @@ export default function BookingsTable() {
                 <select
                   value={editAssignedStaffId}
                   onChange={(e) => setEditAssignedStaffId(e.target.value)}
-                  className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
                   disabled={editLoading}
                 >
                   <option value="">Unassigned</option>
@@ -1447,7 +1447,7 @@ export default function BookingsTable() {
                           const next = Number(e.target.value);
                           setEditStartMin(Number.isFinite(next) ? next : null);
                         }}
-                        className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                        className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
                         disabled={editAvailabilityLoading}
                       >
                         <option value="">Select start</option>
@@ -1474,7 +1474,7 @@ export default function BookingsTable() {
                           const nextDuration = endMin - editStartMin;
                           if (nextDuration > 0) setEditDuration(nextDuration);
                         }}
-                        className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+                        className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
                         disabled={editStartMin == null || editAvailabilityLoading}
                       >
                         <option value="">Select end</option>
@@ -1545,7 +1545,7 @@ export default function BookingsTable() {
               type="number"
               min="0"
               step="0.01"
-              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm"
+              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
               placeholder="Full refund"
             />
           </label>
@@ -1554,7 +1554,7 @@ export default function BookingsTable() {
             <textarea
               value={refundReason}
               onChange={(e) => setRefundReason(e.target.value)}
-              className="mt-1 min-h-[80px] w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+              className="mt-1 min-h-[80px] w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
               placeholder="Reason for refund"
             />
           </label>
