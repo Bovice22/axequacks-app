@@ -1,0 +1,185 @@
+import { NextResponse } from "next/server";
+import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
+import { supabaseServer } from "@/lib/supabaseServer";
+import { getStaffUserFromCookies } from "@/lib/staffAuth";
+
+type ParsedRow = {
+  activity: ActivityUI;
+  partySize: number;
+  dateKey: string;
+  startMin: number;
+  durationMinutes: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  paid: boolean;
+  notes?: string;
+  comboOrder?: ComboOrder;
+  comboAxeMinutes?: number;
+  comboDuckpinMinutes?: number;
+  totalCentsOverride?: number;
+};
+
+function parseMinutesFromTime(input: string) {
+  const raw = input.trim().toUpperCase();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const mins = match[2] ? Number(match[2]) : 0;
+  const meridiem = match[3] || "";
+  if (!Number.isFinite(hour) || !Number.isFinite(mins)) return null;
+  if (meridiem) {
+    if (hour === 12) hour = 0;
+    if (meridiem === "PM") hour += 12;
+  }
+  if (hour < 0 || hour > 23 || mins < 0 || mins > 59) return null;
+  return hour * 60 + mins;
+}
+
+function parseActivity(input: string): ActivityUI | null {
+  const value = input.trim().toUpperCase();
+  if (!value) return null;
+  if (value.includes("AXE")) return "Axe Throwing";
+  if (value.includes("DUCK")) return "Duckpin Bowling";
+  if (value.includes("COMBO")) return "Combo Package";
+  return null;
+}
+
+function parseComboOrder(input: string): ComboOrder | undefined {
+  const value = input.trim().toUpperCase();
+  if (value.includes("AXE")) return "AXE_FIRST";
+  if (value.includes("DUCK")) return "DUCKPIN_FIRST";
+  return undefined;
+}
+
+function parsePaid(input: string) {
+  const value = input.trim().toUpperCase();
+  if (!value) return false;
+  return value === "PAID" || value === "YES" || value === "TRUE";
+}
+
+function parseRows(raw: string) {
+  const rows: ParsedRow[] = [];
+  const errors: string[] = [];
+  const lines = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const line = lines[idx];
+    const parts = line.split("|").map((part) => part.trim());
+    const [
+      dateKey,
+      startTime,
+      activityRaw,
+      durationRaw,
+      partySizeRaw,
+      customerName,
+      customerEmail,
+      customerPhone,
+      paidRaw,
+      notes,
+      comboOrderRaw,
+      comboAxeRaw,
+      comboDuckRaw,
+      totalCentsRaw,
+    ] = parts;
+
+    const activity = parseActivity(activityRaw || "");
+    const startMin = parseMinutesFromTime(startTime || "");
+    const durationMinutes = Number(durationRaw);
+    const partySize = Number(partySizeRaw);
+    const paid = parsePaid(paidRaw || "");
+
+    if (!dateKey || !activity || startMin == null || !Number.isFinite(durationMinutes) || !Number.isFinite(partySize)) {
+      errors.push(`Line ${idx + 1}: Missing or invalid required fields.`);
+      continue;
+    }
+    if (!customerEmail) {
+      errors.push(`Line ${idx + 1}: Missing customer email.`);
+      continue;
+    }
+
+    const comboOrder = comboOrderRaw ? parseComboOrder(comboOrderRaw) : undefined;
+    const comboAxeMinutes = comboAxeRaw ? Number(comboAxeRaw) : undefined;
+    const comboDuckpinMinutes = comboDuckRaw ? Number(comboDuckRaw) : undefined;
+    const totalCentsOverride = totalCentsRaw ? Number(totalCentsRaw) : undefined;
+
+    rows.push({
+      activity,
+      partySize,
+      dateKey,
+      startMin,
+      durationMinutes,
+      customerName: customerName || "Customer",
+      customerEmail,
+      customerPhone,
+      paid,
+      notes,
+      comboOrder,
+      comboAxeMinutes: Number.isFinite(comboAxeMinutes) ? comboAxeMinutes : undefined,
+      comboDuckpinMinutes: Number.isFinite(comboDuckpinMinutes) ? comboDuckpinMinutes : undefined,
+      totalCentsOverride: Number.isFinite(totalCentsOverride) ? totalCentsOverride : undefined,
+    });
+  }
+
+  return { rows, errors };
+}
+
+export async function POST(req: Request) {
+  try {
+    const staff = await getStaffUserFromCookies();
+    if (!staff || staff.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const raw = String(body?.lines || "");
+    if (!raw.trim()) {
+      return NextResponse.json({ error: "Missing booking lines" }, { status: 400 });
+    }
+
+    const { rows, errors } = parseRows(raw);
+    if (errors.length) {
+      return NextResponse.json({ error: "Invalid booking lines", detail: errors }, { status: 400 });
+    }
+
+    const sb = supabaseServer();
+    const results: Array<{ bookingId: string; line: number }> = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      const bookingInput = {
+        activity: row.activity,
+        partySize: row.partySize,
+        dateKey: row.dateKey,
+        startMin: row.startMin,
+        durationMinutes: row.durationMinutes,
+        comboAxeMinutes: row.comboAxeMinutes,
+        comboDuckpinMinutes: row.comboDuckpinMinutes,
+        customerName: row.customerName,
+        customerEmail: row.customerEmail,
+        customerPhone: row.customerPhone,
+        comboOrder: row.comboOrder,
+        totalCentsOverride: row.totalCentsOverride,
+      };
+
+      const result = await createBookingWithResources(bookingInput);
+      await sb
+        .from("bookings")
+        .update({
+          paid: row.paid,
+          notes: row.notes || null,
+        })
+        .eq("id", result.bookingId);
+      results.push({ bookingId: result.bookingId, line: i + 1 });
+    }
+
+    return NextResponse.json({ ok: true, created: results.length, results }, { status: 200 });
+  } catch (err: any) {
+    console.error("bulk booking create error:", err);
+    return NextResponse.json({ error: err?.message || "Failed to create bookings" }, { status: 500 });
+  }
+}
