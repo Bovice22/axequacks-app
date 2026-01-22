@@ -66,7 +66,7 @@ export default function StaffNav() {
 
   return (
     <nav className="mt-2 w-full">
-      <ul className="flex flex-wrap items-center justify-center gap-3 text-xs font-semibold text-zinc-700 sm:gap-4 sm:text-sm">
+      <ul className="flex flex-wrap items-center justify-center gap-3 text-xs font-semibold leading-none text-zinc-700 sm:gap-4 sm:text-sm">
         {MAIN_ITEMS.map((item) => (
           <li
             key={item.href}
@@ -80,11 +80,11 @@ export default function StaffNav() {
         {role === "admin" ? (
           <li
             ref={adminMenuRef}
-            className="relative flex items-center pb-2 after:mx-2 after:text-zinc-300 after:content-[''] sm:after:mx-3 sm:after:content-['|'] last:after:content-['']"
+            className="relative flex items-center after:mx-2 after:text-zinc-300 after:content-[''] sm:after:mx-3 sm:after:content-['|'] last:after:content-['']"
           >
             <button
               type="button"
-              className="inline-flex items-center gap-2 hover:underline"
+              className="inline-flex items-center gap-2 leading-none hover:underline"
               aria-haspopup="true"
               aria-expanded={adminOpen}
               onClick={() => setAdminOpen((prev) => !prev)}
