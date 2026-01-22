@@ -128,6 +128,20 @@ function parseRows(raw: string) {
   return { rows, errors };
 }
 
+type IncomingRow = {
+  activity: ActivityUI;
+  durationMinutes: number;
+  partyArea?: string | null;
+  partyAreaMinutes?: number | null;
+  partySize: number;
+  dateKey: string;
+  startTime: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  paid?: boolean;
+};
+
 export async function POST(req: Request) {
   try {
     const staff = await getStaffUserFromCookies();
@@ -136,14 +150,51 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const raw = String(body?.lines || "");
-    if (!raw.trim()) {
-      return NextResponse.json({ error: "Missing booking lines" }, { status: 400 });
-    }
+    let rows: ParsedRow[] = [];
+    if (Array.isArray(body?.rows)) {
+      const inputRows = body.rows as IncomingRow[];
+      const errors: string[] = [];
+      rows = inputRows
+        .map((row, idx) => {
+          const startMin = parseMinutesFromTime(String(row.startTime || ""));
+          if (!row.dateKey || !row.activity || !Number.isFinite(Number(row.durationMinutes)) || !Number.isFinite(Number(row.partySize)) || startMin == null) {
+            errors.push(`Row ${idx + 1}: Missing required fields.`);
+            return null;
+          }
+          if (!row.customerEmail) {
+            errors.push(`Row ${idx + 1}: Missing customer email.`);
+            return null;
+          }
+          return {
+            activity: row.activity,
+            partySize: Number(row.partySize),
+            dateKey: row.dateKey,
+            startMin,
+            durationMinutes: Number(row.durationMinutes),
+            customerName: row.customerName || "Customer",
+            customerEmail: row.customerEmail,
+            customerPhone: row.customerPhone,
+            paid: !!row.paid,
+            notes: "",
+            partyAreas: row.partyArea ? [row.partyArea] : [],
+            partyAreaMinutes: Number.isFinite(Number(row.partyAreaMinutes)) ? Number(row.partyAreaMinutes) : undefined,
+          } as ParsedRow;
+        })
+        .filter(Boolean) as ParsedRow[];
+      if (errors.length) {
+        return NextResponse.json({ error: "Invalid booking rows", detail: errors }, { status: 400 });
+      }
+    } else {
+      const raw = String(body?.lines || "");
+      if (!raw.trim()) {
+        return NextResponse.json({ error: "Missing booking lines" }, { status: 400 });
+      }
 
-    const { rows, errors } = parseRows(raw);
-    if (errors.length) {
-      return NextResponse.json({ error: "Invalid booking lines", detail: errors }, { status: 400 });
+      const parsed = parseRows(raw);
+      if (parsed.errors.length) {
+        return NextResponse.json({ error: "Invalid booking lines", detail: parsed.errors }, { status: 400 });
+      }
+      rows = parsed.rows;
     }
 
     const sb = supabaseServer();
