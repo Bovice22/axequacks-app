@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     const sb = supabaseServer();
     const { data: openEntry } = await sb
       .from("staff_time_entries")
-      .select("id,clock_in_ts,clock_out_ts")
+      .select("id,clock_in_ts,clock_out_ts,staff_users(full_name,staff_id)")
       .eq("staff_user_id", targetStaffId)
       .is("clock_out_ts", null)
       .order("clock_in_ts", { ascending: false })
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 
     const { data: recent } = await sb
       .from("staff_time_entries")
-      .select("id,clock_in_ts,clock_out_ts,created_at")
+      .select("id,clock_in_ts,clock_out_ts,created_at,staff_users(full_name,staff_id)")
       .eq("staff_user_id", targetStaffId)
       .order("clock_in_ts", { ascending: false })
       .limit(20);

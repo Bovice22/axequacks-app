@@ -7,6 +7,10 @@ type TimeEntry = {
   clock_in_ts: string;
   clock_out_ts: string | null;
   created_at?: string;
+  staff_users?: {
+    full_name?: string | null;
+    staff_id?: string | null;
+  } | null;
 };
 
 type StaffUser = {
@@ -25,6 +29,15 @@ function durationMinutes(entry: TimeEntry) {
   const end = new Date(entry.clock_out_ts).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
   return Math.round((end - start) / 60000);
+}
+
+function staffLabel(entry: TimeEntry) {
+  const fullName = entry.staff_users?.full_name?.trim();
+  const staffId = entry.staff_users?.staff_id?.trim();
+  if (fullName && staffId) return `${fullName} (${staffId})`;
+  if (fullName) return fullName;
+  if (staffId) return staffId;
+  return "—";
 }
 
 export default function TimeClockPanel() {
@@ -152,6 +165,7 @@ export default function TimeClockPanel() {
           <table className="w-full text-sm">
             <thead className="text-center text-zinc-900">
               <tr>
+                <th className="py-2 text-center">Staff</th>
                 <th className="py-2 text-center">Clock In</th>
                 <th className="py-2 text-center">Clock Out</th>
                 <th className="py-2 text-center">Minutes</th>
@@ -162,6 +176,7 @@ export default function TimeClockPanel() {
                 const minutes = durationMinutes(entry);
                 return (
                   <tr key={entry.id} className="border-t border-zinc-100 text-zinc-900">
+                    <td className="py-2 text-center">{staffLabel(entry)}</td>
                     <td className="py-2 text-center">{formatTimestamp(entry.clock_in_ts)}</td>
                     <td className="py-2 text-center">
                       {entry.clock_out_ts ? formatTimestamp(entry.clock_out_ts) : "In progress"}
@@ -172,7 +187,7 @@ export default function TimeClockPanel() {
               })}
               {!recent.length ? (
                 <tr>
-                  <td colSpan={3} className="py-6 text-center text-sm text-zinc-500">
+                  <td colSpan={4} className="py-6 text-center text-sm text-zinc-500">
                     No time entries yet.
                   </td>
                 </tr>
