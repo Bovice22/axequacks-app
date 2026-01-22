@@ -9,6 +9,12 @@ type TimeEntry = {
   created_at?: string;
 };
 
+type StaffUser = {
+  id: string;
+  staff_id: string;
+  full_name: string | null;
+};
+
 function formatTimestamp(ts: string) {
   return new Date(ts).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" });
 }
@@ -27,10 +33,17 @@ export default function TimeClockPanel() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [role, setRole] = useState<"staff" | "admin">("staff");
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("");
 
   async function loadStatus() {
     setLoading(true);
-    const res = await fetch("/api/staff/time-clock", { cache: "no-store" });
+    const params = new URLSearchParams();
+    if (role === "admin" && selectedStaffId) {
+      params.set("staff_user_id", selectedStaffId);
+    }
+    const res = await fetch(`/api/staff/time-clock?${params.toString()}`, { cache: "no-store" });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(json?.error || "Failed to load time clock.");
@@ -39,12 +52,29 @@ export default function TimeClockPanel() {
     }
     setOpenEntry(json.openEntry || null);
     setRecent(json.recent || []);
+    if (!selectedStaffId && json.staff_user_id) {
+      setSelectedStaffId(json.staff_user_id);
+    }
     setLoading(false);
   }
 
   useEffect(() => {
+    fetch("/api/staff/me", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => setRole(json?.role === "admin" ? "admin" : "staff"))
+      .catch(() => setRole("staff"));
+    fetch("/api/staff/users", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => setStaffUsers(json.users || []))
+      .catch(() => setStaffUsers([]));
     loadStatus();
   }, []);
+
+  useEffect(() => {
+    if (role === "admin" && selectedStaffId) {
+      loadStatus();
+    }
+  }, [role, selectedStaffId]);
 
   async function handleAction(action: "clock_in" | "clock_out") {
     setError("");
@@ -52,7 +82,7 @@ export default function TimeClockPanel() {
     const res = await fetch("/api/staff/time-clock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, staff_user_id: role === "admin" ? selectedStaffId : undefined }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -68,6 +98,23 @@ export default function TimeClockPanel() {
     <div className="space-y-6">
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="text-sm font-extrabold text-zinc-900">Clock In / Clock Out</div>
+        {role === "admin" ? (
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-semibold text-zinc-600">Select staff member</label>
+            <select
+              value={selectedStaffId}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+              className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+            >
+              <option value="">Select staff</option>
+              {staffUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name || user.staff_id} ({user.staff_id})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className="mt-2 text-sm text-zinc-600">
           {loading ? "Loading status…" : openEntry ? `Clocked in since ${formatTimestamp(openEntry.clock_in_ts)}` : "Not clocked in."}
         </div>
@@ -76,7 +123,7 @@ export default function TimeClockPanel() {
           <button
             type="button"
             onClick={() => handleAction("clock_in")}
-            disabled={working || !!openEntry}
+            disabled={working || !!openEntry || (role === "admin" && !selectedStaffId)}
             className="h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
           >
             Clock In
@@ -84,7 +131,7 @@ export default function TimeClockPanel() {
           <button
             type="button"
             onClick={() => handleAction("clock_out")}
-            disabled={working || !openEntry}
+            disabled={working || !openEntry || (role === "admin" && !selectedStaffId)}
             className="h-10 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white disabled:opacity-60"
           >
             Clock Out

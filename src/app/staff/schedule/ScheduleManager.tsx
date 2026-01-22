@@ -29,6 +29,18 @@ function timeToMinutes(value: string) {
   return h * 60 + m;
 }
 
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function fromDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map((part) => Number(part));
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
 function minutesToLabel(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -45,6 +57,88 @@ function todayKey() {
   return `${year}-${month}-${day}`;
 }
 
+function MonthCalendar(props: { selectedDateKey: string; onSelectDateKey: (dateKey: string) => void }) {
+  const { selectedDateKey, onSelectDateKey } = props;
+  const [cursor, setCursor] = useState(() => {
+    const base = selectedDateKey ? fromDateKey(selectedDateKey) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+
+  const monthLabel = cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const days = useMemo(() => {
+    const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const totalDays = end.getDate();
+
+    const startWeekday = start.getDay();
+    const cells: Array<{ date: Date | null }> = [];
+
+    for (let i = 0; i < startWeekday; i++) cells.push({ date: null });
+    for (let d = 1; d <= totalDays; d++) {
+      cells.push({ date: new Date(cursor.getFullYear(), cursor.getMonth(), d) });
+    }
+
+    while (cells.length % 7 !== 0) cells.push({ date: null });
+
+    return cells;
+  }, [cursor]);
+
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return (
+    <div className="w-full max-w-[420px] rounded-2xl border border-zinc-200 bg-white p-3 sm:max-w-none sm:p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
+          onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
+        >
+          ←
+        </button>
+
+        <div className="text-sm font-extrabold text-zinc-900">{monthLabel}</div>
+
+        <button
+          type="button"
+          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
+          onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
+        >
+          →
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-zinc-500 sm:gap-2 sm:text-xs">
+        {weekDays.map((d) => (
+          <div key={d}>{d}</div>
+        ))}
+      </div>
+
+      <div className="mt-2 grid grid-cols-7 gap-1 sm:gap-2">
+        {days.map((cell, idx) => {
+          if (!cell.date) return <div key={idx} className="h-9 rounded-xl bg-transparent sm:h-10" />;
+
+          const dk = toDateKey(cell.date);
+          const selected = selectedDateKey === dk;
+          return (
+            <button
+              key={dk}
+              type="button"
+              onClick={() => onSelectDateKey(dk)}
+              className={`h-9 rounded-xl border text-xs font-bold transition sm:h-10 sm:text-sm ${
+                selected
+                  ? "border-zinc-900 bg-zinc-900 text-white"
+                  : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
+              }`}
+            >
+              {cell.date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ScheduleManager() {
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
@@ -54,6 +148,7 @@ export default function ScheduleManager() {
 
   const [startDate, setStartDate] = useState(todayKey());
   const [endDate, setEndDate] = useState(todayKey());
+  const [selectedDateKey, setSelectedDateKey] = useState(todayKey());
 
   const [staffUserId, setStaffUserId] = useState("");
   const [shiftDate, setShiftDate] = useState(todayKey());
@@ -229,82 +324,84 @@ export default function ScheduleManager() {
       </div>
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-9 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,420px),1fr]">
+          <MonthCalendar
+            selectedDateKey={selectedDateKey}
+            onSelectDateKey={(dateKey) => {
+              setSelectedDateKey(dateKey);
+              setStartDate(dateKey);
+              setEndDate(dateKey);
+            }}
           />
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-9 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
-          />
-          <button
-            type="button"
-            onClick={loadShifts}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700"
-          >
-            Refresh
-          </button>
-        </div>
 
-        {loading ? (
-          <div className="text-sm text-zinc-600">Loading shifts…</div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="text-center text-zinc-900">
-                <tr>
-                  <th className="py-2 text-center">Date</th>
-                  <th className="py-2 text-center">Staff</th>
-                  <th className="py-2 text-center">Time</th>
-                  <th className="py-2 text-center">Notes</th>
-                  <th className="py-2 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shifts.map((row) => (
-                  <tr key={row.id} className="border-t border-zinc-100 text-zinc-900">
-                    <td className="py-2 text-center">{row.shift_date}</td>
-                    <td className="py-2 text-center">{staffLabel.get(row.staff_user_id) || row.staff_user_id}</td>
-                    <td className="py-2 text-center">
-                      {minutesToLabel(row.start_min)} - {minutesToLabel(row.end_min)}
-                    </td>
-                    <td className="py-2 text-center">{row.notes || "—"}</td>
-                    <td className="py-2 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => editShift(row)}
-                          className="inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-semibold"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteShift(row.id)}
-                          className="inline-flex h-8 items-center justify-center rounded-lg border border-red-500 bg-red-500 px-3 text-xs font-semibold text-white"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!shifts.length ? (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-sm text-zinc-500">
-                      No shifts scheduled.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-sm font-extrabold text-zinc-900">Scheduled Shifts</div>
+              <button
+                type="button"
+                onClick={loadShifts}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="text-sm text-zinc-600">Loading shifts…</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-center text-zinc-900">
+                    <tr>
+                      <th className="py-2 text-center">Date</th>
+                      <th className="py-2 text-center">Staff</th>
+                      <th className="py-2 text-center">Time</th>
+                      <th className="py-2 text-center">Notes</th>
+                      <th className="py-2 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shifts.map((row) => (
+                      <tr key={row.id} className="border-t border-zinc-100 text-zinc-900">
+                        <td className="py-2 text-center">{row.shift_date}</td>
+                        <td className="py-2 text-center">{staffLabel.get(row.staff_user_id) || row.staff_user_id}</td>
+                        <td className="py-2 text-center">
+                          {minutesToLabel(row.start_min)} - {minutesToLabel(row.end_min)}
+                        </td>
+                        <td className="py-2 text-center">{row.notes || "—"}</td>
+                        <td className="py-2 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => editShift(row)}
+                              className="inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-semibold"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteShift(row.id)}
+                              className="inline-flex h-8 items-center justify-center rounded-lg border border-red-500 bg-red-500 px-3 text-xs font-semibold text-white"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {!shifts.length ? (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-sm text-zinc-500">
+                          No shifts scheduled.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

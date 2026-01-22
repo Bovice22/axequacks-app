@@ -2,18 +2,23 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const url = new URL(req.url);
+    const requestedStaffId = String(url.searchParams.get("staff_user_id") || "").trim();
+    const targetStaffId =
+      requestedStaffId && staff.role === "admin" ? requestedStaffId : staff.id;
+
     const sb = supabaseServer();
     const { data: openEntry } = await sb
       .from("staff_time_entries")
       .select("id,clock_in_ts,clock_out_ts")
-      .eq("staff_user_id", staff.id)
+      .eq("staff_user_id", targetStaffId)
       .is("clock_out_ts", null)
       .order("clock_in_ts", { ascending: false })
       .limit(1)
@@ -22,11 +27,14 @@ export async function GET() {
     const { data: recent } = await sb
       .from("staff_time_entries")
       .select("id,clock_in_ts,clock_out_ts,created_at")
-      .eq("staff_user_id", staff.id)
+      .eq("staff_user_id", targetStaffId)
       .order("clock_in_ts", { ascending: false })
       .limit(20);
 
-    return NextResponse.json({ openEntry: openEntry || null, recent: recent || [] }, { status: 200 });
+    return NextResponse.json(
+      { openEntry: openEntry || null, recent: recent || [], staff_user_id: targetStaffId },
+      { status: 200 }
+    );
   } catch (err: any) {
     console.error("time clock status fatal:", err);
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
@@ -46,11 +54,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
+    const requestedStaffId = body?.staff_user_id ? String(body.staff_user_id).trim() : "";
+    const targetStaffId =
+      requestedStaffId && staff.role === "admin" ? requestedStaffId : staff.id;
+
     const sb = supabaseServer();
     const { data: openEntry } = await sb
       .from("staff_time_entries")
       .select("id,clock_in_ts")
-      .eq("staff_user_id", staff.id)
+      .eq("staff_user_id", targetStaffId)
       .is("clock_out_ts", null)
       .order("clock_in_ts", { ascending: false })
       .limit(1)
@@ -63,7 +75,7 @@ export async function POST(req: Request) {
       const { data, error } = await sb
         .from("staff_time_entries")
         .insert({
-          staff_user_id: staff.id,
+          staff_user_id: targetStaffId,
           clock_in_ts: new Date().toISOString(),
           source: "staff",
         })
