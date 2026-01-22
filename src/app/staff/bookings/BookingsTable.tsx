@@ -1280,7 +1280,8 @@ export default function BookingsTable() {
             <button
               type="button"
               onClick={() => setEditingBookingId(null)}
-              className="rounded-lg border border-zinc-200 px-3 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: "#7c3aed" }}
             >
               Back
             </button>
@@ -1328,7 +1329,7 @@ export default function BookingsTable() {
             disabled={editLoading}
           />
           <label className="text-xs font-semibold text-zinc-600">
-            Group Size
+            <span className="mb-1 block text-xs font-semibold text-zinc-600">Group Size</span>
             <input
               value={editPartySize}
               onChange={(e) => setEditPartySize(Number(e.target.value || 0))}
@@ -2182,7 +2183,7 @@ export default function BookingsTable() {
 
         <div className="overflow-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-zinc-600">
+            <thead className="text-left text-zinc-900">
               <tr>
                 <th className="py-2">Customer</th>
                 <th className="py-2">Start Time</th>
@@ -2211,15 +2212,15 @@ export default function BookingsTable() {
                     <div className="text-xs text-zinc-600">{r.customer_email || "—"}</div>
                     {r.notes ? <div className="text-[11px] text-zinc-500">Note: {r.notes}</div> : null}
                   </td>
-                  <td className="py-2 text-center">{fmtNY(r.start_ts)}</td>
-                  <td className="py-2 text-center">{fmtNY(r.end_ts)}</td>
-                  <td className="py-2 text-center">{activityLabel(r.activity)}</td>
-                  <td className="py-2 text-center">{comboOrderLabel(r.combo_order)}</td>
-                  <td className="py-2 text-center">{displayPartySize(r)}</td>
-                  <td className="py-2 text-center">
+                  <td className="py-2 text-center text-zinc-900">{fmtNY(r.start_ts)}</td>
+                  <td className="py-2 text-center text-zinc-900">{fmtNY(r.end_ts)}</td>
+                  <td className="py-2 text-center text-zinc-900">{activityLabel(r.activity)}</td>
+                  <td className="py-2 text-center text-zinc-900">{comboOrderLabel(r.combo_order)}</td>
+                  <td className="py-2 text-center text-zinc-900">{displayPartySize(r)}</td>
+                  <td className="py-2 text-center text-zinc-900">
                     {(r.status ?? "CONFIRMED") === "CANCELLED" ? "CANCELLED" : r.paid ? "PAID" : "UNPAID"}
                   </td>
-                  <td className="py-2 text-center">${(r.total_cents / 100).toFixed(2)}</td>
+                  <td className="py-2 text-center text-zinc-900">${(r.total_cents / 100).toFixed(2)}</td>
                   <td className="py-2 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <button
