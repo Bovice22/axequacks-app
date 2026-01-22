@@ -17,7 +17,7 @@ export async function GET() {
     const sb = supabaseServer();
     const { data, error } = await sb
       .from("staff_users")
-      .select("id,auth_user_id,staff_id,full_name,role,active,created_at")
+      .select("id,auth_user_id,staff_id,full_name,role,role_label,hourly_rate_cents,active,created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -43,6 +43,8 @@ export async function POST(req: Request) {
     const staffIdRaw = String(body?.staffId || "");
     const fullName = String(body?.fullName || "").trim();
     const role = String(body?.role || "staff");
+    const roleLabel = body?.role_label != null ? String(body.role_label) : null;
+    const hourlyRateCents = body?.hourly_rate_cents != null ? Number(body.hourly_rate_cents) : null;
     const pin = String(body?.pin || "").trim();
 
     if (!staffIdRaw || pin.length !== 4) {
@@ -76,8 +78,10 @@ export async function POST(req: Request) {
         full_name: fullName || null,
         role,
         active: true,
+        role_label: roleLabel,
+        hourly_rate_cents: Number.isFinite(hourlyRateCents) ? hourlyRateCents : null,
       })
-      .select("id,auth_user_id,staff_id,full_name,role,active,created_at")
+      .select("id,auth_user_id,staff_id,full_name,role,role_label,hourly_rate_cents,active,created_at")
       .single();
 
     if (staffErr) {

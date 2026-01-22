@@ -38,6 +38,15 @@ type StaffUserRow = {
   staff_id: string;
   full_name: string | null;
 };
+type TimeClockSummaryRow = {
+  staff_id: string;
+  full_name: string | null;
+  role_label: string | null;
+  hourly_rate_cents: number | null;
+  total_minutes: number;
+  total_hours: number;
+  gross_pay_cents: number;
+};
 
 type ViewMode = "day" | "week" | "month" | "year";
 
@@ -110,6 +119,7 @@ export default function ReportsDashboard() {
   const [posItems, setPosItems] = useState<PosItemRow[]>([]);
   const [tips, setTips] = useState<TipRow[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
+  const [timeClockSummary, setTimeClockSummary] = useState<TimeClockSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("month");
@@ -148,6 +158,9 @@ export default function ReportsDashboard() {
     setPosItems(json.posItems || []);
     setTips(json.tips || []);
     setStaffUsers(json.staffUsers || []);
+    if (json.timeClockSummary) {
+      setTimeClockSummary(json.timeClockSummary || []);
+    }
     setLoading(false);
   }
 
@@ -168,6 +181,22 @@ export default function ReportsDashboard() {
   useEffect(() => {
     if (!startDate && !endDate) return;
     loadBookings();
+  }, [startDate, endDate]);
+
+  async function loadTimeClockSummary() {
+    const params = new URLSearchParams();
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    const res = await fetch(`/api/staff/reports/time-clock?${params.toString()}`, { cache: "no-store" });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setTimeClockSummary(json.summary || []);
+    }
+  }
+
+  useEffect(() => {
+    if (!startDate && !endDate) return;
+    loadTimeClockSummary();
   }, [startDate, endDate]);
 
   const cashAsBookings = useMemo<BookingRow[]>(() => {
@@ -625,6 +654,43 @@ export default function ReportsDashboard() {
               ) : (
                 <div className="text-sm text-zinc-600">No tips in this range.</div>
               )}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-extrabold text-zinc-900">Time Clock Summary</div>
+          {loading ? (
+            <div className="mt-3 text-sm text-zinc-900">Loading…</div>
+          ) : (
+            <div className="mt-3 overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="text-center text-zinc-900">
+                  <tr>
+                    <th className="px-3 py-2">Staff</th>
+                    <th className="px-3 py-2">Role</th>
+                    <th className="px-3 py-2">Hours</th>
+                    <th className="px-3 py-2">Gross Pay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeClockSummary.map((row) => (
+                    <tr key={row.staff_id} className="border-t border-zinc-100 text-zinc-900">
+                      <td className="px-3 py-2 text-center">{row.full_name || row.staff_id}</td>
+                      <td className="px-3 py-2 text-center">{row.role_label || "—"}</td>
+                      <td className="px-3 py-2 text-center">{row.total_hours.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-center">{formatMoney(row.gross_pay_cents)}</td>
+                    </tr>
+                  ))}
+                  {!timeClockSummary.length ? (
+                    <tr>
+                      <td className="px-3 py-3 text-center text-sm text-zinc-900" colSpan={4}>
+                        No time clock entries in this range.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

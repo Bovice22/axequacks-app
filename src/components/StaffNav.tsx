@@ -8,11 +8,13 @@ const MAIN_ITEMS: NavItem[] = [
   { href: "/staff/bookings", label: "Bookings" },
   { href: "/staff/customers", label: "Customers" },
   { href: "/staff/pos", label: "POS" },
+  { href: "/staff/time-clock", label: "Time Clock" },
 ];
 
 const ADMIN_ITEMS: NavItem[] = [
   { href: "/staff/addons", label: "Inventory" },
   { href: "/staff/admin", label: "Staff" },
+  { href: "/staff/schedule", label: "Schedule" },
   { href: "/staff/promos", label: "Promo Codes" },
   { href: "/staff/gift-certificates", label: "Gift Certificates" },
   { href: "/staff/reports", label: "Reporting" },

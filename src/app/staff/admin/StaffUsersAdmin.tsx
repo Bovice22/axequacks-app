@@ -8,9 +8,17 @@ type StaffUser = {
   staff_id: string;
   full_name: string | null;
   role: "staff" | "admin";
+  role_label?: string | null;
+  hourly_rate_cents?: number | null;
   active: boolean;
   created_at: string;
 };
+
+const ROLE_OPTIONS = [
+  { label: "Manager", rateCents: 1600 },
+  { label: "Lead", rateCents: 1200 },
+  { label: "Front Desk", rateCents: 1000 },
+];
 
 export default function StaffUsersAdmin() {
   const [rows, setRows] = useState<StaffUser[]>([]);
@@ -20,12 +28,15 @@ export default function StaffUsersAdmin() {
   const [staffId, setStaffId] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<"staff" | "admin">("staff");
+  const [roleLabel, setRoleLabel] = useState("Front Desk");
+  const [hourlyRateCents, setHourlyRateCents] = useState(ROLE_OPTIONS[2].rateCents);
   const [pin, setPin] = useState("");
   const [formError, setFormError] = useState("");
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [edits, setEdits] = useState<Record<string, { role_label?: string; hourly_rate_cents?: number }>>({});
 
   async function loadUsers() {
     setLoading(true);
@@ -57,7 +68,7 @@ export default function StaffUsersAdmin() {
       const res = await fetch("/api/staff/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffId, fullName, role, pin }),
+        body: JSON.stringify({ staffId, fullName, role, pin, role_label: roleLabel, hourly_rate_cents: hourlyRateCents }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -67,6 +78,8 @@ export default function StaffUsersAdmin() {
       setStaffId("");
       setFullName("");
       setRole("staff");
+      setRoleLabel("Front Desk");
+      setHourlyRateCents(ROLE_OPTIONS[2].rateCents);
       setPin("");
       await loadUsers();
     } finally {
@@ -150,6 +163,32 @@ export default function StaffUsersAdmin() {
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
           </select>
+          <select
+            value={roleLabel}
+            onChange={(e) => {
+              const next = e.target.value;
+              setRoleLabel(next);
+              const match = ROLE_OPTIONS.find((opt) => opt.label === next);
+              if (match) setHourlyRateCents(match.rateCents);
+            }}
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+          >
+            {ROLE_OPTIONS.map((opt) => (
+              <option key={opt.label} value={opt.label}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <input
+            value={String(hourlyRateCents / 100)}
+            onChange={(e) => {
+              const raw = Number(e.target.value);
+              if (Number.isFinite(raw)) setHourlyRateCents(Math.round(raw * 100));
+            }}
+            placeholder="Hourly rate (USD)"
+            inputMode="decimal"
+            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+          />
           <input
             value={pin}
             onChange={(e) => setPin(e.target.value)}
@@ -198,6 +237,8 @@ export default function StaffUsersAdmin() {
                   <th className="py-2 text-center">Staff ID</th>
                   <th className="py-2 text-center">Name</th>
                   <th className="py-2 text-center">Role</th>
+                  <th className="py-2 text-center">Position</th>
+                  <th className="py-2 text-center">Rate</th>
                   <th className="py-2 text-center">Active</th>
                   <th className="py-2 text-center">Actions</th>
                 </tr>
@@ -208,9 +249,66 @@ export default function StaffUsersAdmin() {
                     <td className="py-2 text-center font-mono text-xs">{r.staff_id}</td>
                     <td className="py-2 text-center">{r.full_name || "—"}</td>
                     <td className="py-2 text-center">{r.role}</td>
+                    <td className="py-2 text-center">
+                      <select
+                        value={edits[String(r.id ?? r.auth_user_id ?? "")]?.role_label ?? r.role_label ?? "Front Desk"}
+                        onChange={(e) => {
+                          const userId = String(r.id ?? r.auth_user_id ?? "");
+                          setEdits((prev) => ({
+                            ...prev,
+                            [userId]: { ...prev[userId], role_label: e.target.value },
+                          }));
+                        }}
+                        className="h-8 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                      >
+                        {ROLE_OPTIONS.map((opt) => (
+                          <option key={opt.label} value={opt.label}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 text-center">
+                      <input
+                        value={String(
+                          (edits[String(r.id ?? r.auth_user_id ?? "")]?.hourly_rate_cents ?? r.hourly_rate_cents ?? 0) / 100
+                        )}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          if (!Number.isFinite(raw)) return;
+                          const userId = String(r.id ?? r.auth_user_id ?? "");
+                          setEdits((prev) => ({
+                            ...prev,
+                            [userId]: { ...prev[userId], hourly_rate_cents: Math.round(raw * 100) },
+                          }));
+                        }}
+                        inputMode="decimal"
+                        className="h-8 w-20 rounded-lg border border-zinc-200 px-2 text-center text-xs text-zinc-900"
+                      />
+                    </td>
                     <td className="py-2 text-center">{r.active ? "Yes" : "No"}</td>
                     <td className="py-2 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const userId = r.id ?? r.auth_user_id;
+                            if (!userId) return;
+                            const pending = edits[String(userId)];
+                            if (!pending) return;
+                            updateUser(String(userId), pending);
+                            setEdits((prev) => {
+                              const next = { ...prev };
+                              delete next[String(userId)];
+                              return next;
+                            });
+                          }}
+                          disabled={!edits[String(r.id ?? r.auth_user_id ?? "")]}
+                          className="inline-flex h-8 min-w-[80px] items-center justify-center rounded-lg border px-3 text-xs font-semibold disabled:opacity-40"
+                          style={{ backgroundColor: "#0ea5e9", borderColor: "#0ea5e9", color: "#ffffff" }}
+                        >
+                          Save
+                        </button>
                         <button
                           type="button"
                           onClick={() => {

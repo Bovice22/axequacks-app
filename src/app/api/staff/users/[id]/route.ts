@@ -28,6 +28,8 @@ export async function PATCH(req: Request, context: RouteContext) {
     const body = await req.json().catch(() => ({}));
     const fullName = body?.fullName != null ? String(body.fullName).trim() : undefined;
     const role = body?.role != null ? String(body.role) : undefined;
+    const roleLabel = body?.role_label != null ? String(body.role_label) : undefined;
+    const hourlyRateCents = body?.hourly_rate_cents != null ? Number(body.hourly_rate_cents) : undefined;
     const staffId = body?.staffId != null ? String(body.staffId).trim().toLowerCase() : undefined;
     const active = body?.active;
     const pin = body?.pin != null ? String(body.pin).trim() : undefined;
@@ -93,6 +95,10 @@ export async function PATCH(req: Request, context: RouteContext) {
     const updates: Record<string, any> = {};
     if (fullName !== undefined) updates.full_name = fullName || null;
     if (role !== undefined) updates.role = role;
+    if (roleLabel !== undefined) updates.role_label = roleLabel || null;
+    if (hourlyRateCents !== undefined) {
+      updates.hourly_rate_cents = Number.isFinite(hourlyRateCents) ? hourlyRateCents : null;
+    }
     if (staffId !== undefined) {
       updates.staff_id = staffId;
       updates.auth_email = `${staffId}@axequacks.local`;
@@ -109,7 +115,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const { data: updated, error: fetchErr } = await sb
       .from("staff_users")
-      .select("id,staff_id,full_name,role,active,created_at")
+      .select("id,staff_id,full_name,role,role_label,hourly_rate_cents,active,created_at")
       .eq("id", staffRow.id)
       .single();
 
