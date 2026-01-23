@@ -215,8 +215,7 @@ export default function BulkBookingsTool() {
                 </td>
                 <td className="px-2 py-2">
                   <input
-                    type="text"
-                    placeholder="4:00 PM"
+                    type="time"
                     value={row.startTime}
                     onChange={(e) => updateRow(idx, { startTime: e.target.value })}
                     className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900 placeholder:text-zinc-400"
