@@ -285,6 +285,110 @@ async function enforceDuckpinPairing(
   }
 }
 
+async function reserveResourcesBypass(
+  sb: ReturnType<typeof supabaseAdmin>,
+  bookingId: string,
+  type: "AXE" | "DUCKPIN",
+  count: number,
+  startTsUtc: string,
+  endTsUtc: string
+) {
+  if (count <= 0) return;
+  const { data: resources, error } = await sb
+    .from("resources")
+    .select("id,type,sort_order,active")
+    .eq("type", type)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+  if (error || !resources?.length) return;
+
+  const active = resources.filter((r: any) => r.active !== false);
+  if (!active.length) return;
+
+  let selected = active.slice(0, count);
+  if (type === "DUCKPIN" && count === 2) {
+    const pairA = active.slice(0, 2);
+    const pairB = active.slice(2, 4);
+    if (pairA.length === 2) selected = pairA;
+    else if (pairB.length === 2) selected = pairB;
+  }
+
+  const inserts = selected.map((r: any) => ({
+    booking_id: bookingId,
+    resource_id: r.id,
+    start_ts: startTsUtc,
+    end_ts: endTsUtc,
+  }));
+
+  if (inserts.length) {
+    await sb.from("resource_reservations").insert(inserts);
+  }
+}
+
+export async function createBookingBypassResources(input: BookingInput) {
+  const sb = supabaseAdmin();
+  const activityDB = mapActivityToDB(input.activity);
+  const needs = computeNeeds(input.activity, input.partySize);
+  const partyAreas = normalizePartyAreas(input.partyAreas);
+  const partyAreaMinutes =
+    partyAreas.length && Number.isFinite(input.partyAreaMinutes)
+      ? Math.min(480, Math.max(60, Math.round(Number(input.partyAreaMinutes) / 60) * 60))
+      : 0;
+
+  const comboAxeMinutes = input.comboAxeMinutes ?? 60;
+  const comboDuckpinMinutes = input.comboDuckpinMinutes ?? 60;
+  const comboTotalMinutes = comboAxeMinutes + comboDuckpinMinutes;
+  const effectiveDuration = input.activity === "Combo Package" ? comboTotalMinutes : input.durationMinutes;
+  const endMin = input.startMin + effectiveDuration;
+  const partyAreaTiming: PartyAreaTiming = input.partyAreaTiming ?? "DURING";
+  const partyWindowMinutes = partyAreaMinutes || effectiveDuration;
+  const partyAreaStartMin =
+    partyAreaTiming === "BEFORE"
+      ? input.startMin - partyWindowMinutes
+      : partyAreaTiming === "AFTER"
+      ? input.startMin + effectiveDuration
+      : input.startMin;
+  const partyAreaEndMin = partyAreaStartMin + partyWindowMinutes;
+
+  const startTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, input.startMin);
+  const endTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, endMin);
+  const partyAreaStartTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, partyAreaStartMin);
+  const partyAreaEndTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, partyAreaEndMin);
+
+  const hasOverride = Number.isFinite(input.totalCentsOverride);
+  const totalCentsValue = hasOverride
+    ? Math.max(0, Number(input.totalCentsOverride))
+    : totalCents(input.activity, input.partySize, input.durationMinutes, {
+        axeMinutes: comboAxeMinutes,
+        duckpinMinutes: comboDuckpinMinutes,
+      });
+
+  const insertPayload: Record<string, any> = {
+    activity: activityDB,
+    duration_minutes: effectiveDuration,
+    party_size: input.partySize,
+    start_ts: startTsUtc,
+    end_ts: endTsUtc,
+    total_cents: totalCentsValue,
+    customer_name: input.customerName,
+    customer_email: input.customerEmail,
+    tz: "America/New_York",
+    combo_order: input.comboOrder ?? null,
+  };
+
+  const { data: bookingRow, error } = await sb.from("bookings").insert(insertPayload).select("id").single();
+  if (error) throw new Error(error.message || "Failed to create booking");
+
+  const bookingId = bookingRow?.id as string;
+  const customerId = await ensureCustomerAndLinkBooking(input, bookingId);
+
+  await reserveResourcesBypass(sb, bookingId, "AXE", needs.axeBays, startTsUtc, endTsUtc);
+  await reserveResourcesBypass(sb, bookingId, "DUCKPIN", needs.lanes, startTsUtc, endTsUtc);
+  await reservePartyAreas(sb, bookingId, partyAreas, partyAreaStartTsUtc, partyAreaEndTsUtc);
+
+  return { bookingId, needs, customerId };
+}
+
 export async function createBookingWithResources(input: BookingInput) {
   const sb = supabaseAdmin();
   const activityDB = mapActivityToDB(input.activity);

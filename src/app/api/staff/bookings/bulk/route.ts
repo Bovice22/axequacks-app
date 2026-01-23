@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createBookingWithResources, type ActivityUI, type ComboOrder, type BookingInput } from "@/lib/server/bookingService";
+import { createBookingBypassResources, type ActivityUI, type ComboOrder, type BookingInput } from "@/lib/server/bookingService";
 import { canonicalPartyAreaName, type PartyAreaName, MAX_PARTY_SIZES } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
@@ -234,7 +234,7 @@ export async function POST(req: Request) {
         partyAreaMinutes: row.partyAreaMinutes,
       };
 
-      const result = await createBookingWithResources(bookingInput);
+      const result = await createBookingBypassResources(bookingInput);
       const importNote = row.notes ? `IMPORTED_FROM_SQUARE | ${row.notes}` : "IMPORTED_FROM_SQUARE";
       const { error: updateErr } = await sb
         .from("bookings")
