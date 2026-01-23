@@ -2240,7 +2240,16 @@ export default function BookingsTable() {
                         >
                           Refund
                         </button>
-                      ) : null}
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openPayModal(r.id)}
+                          disabled={actionLoadingId === r.id}
+                          className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                        >
+                          Pay Now
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => deleteBooking(r.id)}
