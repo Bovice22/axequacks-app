@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
+import { canonicalPartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
@@ -170,6 +171,8 @@ export async function POST(req: Request) {
             errors.push(`Row ${idx + 1}: Missing customer email.`);
             return null;
           }
+          const canonicalPartyArea = row.partyArea ? canonicalPartyAreaName(String(row.partyArea)) : null;
+          const partyAreas: PartyAreaName[] = canonicalPartyArea ? [canonicalPartyArea] : [];
           return {
             activity: row.activity,
             partySize: Number(row.partySize),
@@ -181,7 +184,7 @@ export async function POST(req: Request) {
             customerPhone: row.customerPhone,
             paid: !!row.paid,
             notes: "",
-            partyAreas: row.partyArea ? [row.partyArea] : [],
+            partyAreas,
             partyAreaMinutes: Number.isFinite(Number(row.partyAreaMinutes)) ? Number(row.partyAreaMinutes) : undefined,
             comboAxeMinutes: Number.isFinite(Number(row.comboAxeMinutes)) ? Number(row.comboAxeMinutes) : undefined,
             comboDuckpinMinutes: Number.isFinite(Number(row.comboDuckpinMinutes)) ? Number(row.comboDuckpinMinutes) : undefined,
