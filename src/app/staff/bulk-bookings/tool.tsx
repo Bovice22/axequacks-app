@@ -194,7 +194,6 @@ export default function BulkBookingsTool() {
                     value={row.partyAreaMinutes}
                     onChange={(e) => updateRow(idx, { partyAreaMinutes: Number(e.target.value || 0) })}
                     className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
-                    disabled={!row.partyArea}
                   />
                 </td>
                 <td className="px-2 py-2">

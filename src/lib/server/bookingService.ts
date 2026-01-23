@@ -176,6 +176,85 @@ async function reservePartyAreas(
   }
 }
 
+async function enforceDuckpinPairing(
+  sb: ReturnType<typeof supabaseAdmin>,
+  bookingId: string,
+  startTsUtc: string,
+  endTsUtc: string,
+  lanesNeeded: number
+) {
+  if (lanesNeeded !== 2) return;
+
+  const { data: resources, error: resErr } = await sb
+    .from("resources")
+    .select("id,type,name,sort_order,active")
+    .eq("type", "DUCKPIN")
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (resErr || !resources?.length) {
+    return;
+  }
+
+  const activeLanes = resources.filter((r: any) => r.active !== false);
+  if (activeLanes.length < 2) return;
+
+  const pairs = [
+    activeLanes.slice(0, 2),
+    activeLanes.slice(2, 4),
+  ].filter((pair) => pair.length === 2);
+
+  if (!pairs.length) return;
+
+  const { data: currentReservations } = await sb
+    .from("resource_reservations")
+    .select("id,resource_id,resources(type,name,sort_order)")
+    .eq("booking_id", bookingId);
+
+  const currentDuckpinIds = (currentReservations || [])
+    .filter((row: any) => row.resources?.type === "DUCKPIN")
+    .map((row: any) => row.resource_id);
+
+  if (currentDuckpinIds.length !== 2) return;
+
+  const currentPairKey = currentDuckpinIds.slice().sort().join("|");
+  const desiredPair = pairs.find((pair) => {
+    const ids = pair.map((r: any) => r.id);
+    return ids.slice().sort().join("|") === currentPairKey;
+  });
+  if (desiredPair) return;
+
+  for (const pair of pairs) {
+    const pairIds = pair.map((r: any) => r.id);
+    const { data: conflicts } = await sb
+      .from("resource_reservations")
+      .select("id,resource_id")
+      .in("resource_id", pairIds)
+      .neq("booking_id", bookingId)
+      .lt("start_ts", endTsUtc)
+      .gt("end_ts", startTsUtc);
+
+    if (conflicts && conflicts.length > 0) {
+      continue;
+    }
+
+    await sb
+      .from("resource_reservations")
+      .delete()
+      .eq("booking_id", bookingId)
+      .in("resource_id", currentDuckpinIds);
+
+    const inserts = pairIds.map((resourceId: string) => ({
+      booking_id: bookingId,
+      resource_id: resourceId,
+      start_ts: startTsUtc,
+      end_ts: endTsUtc,
+    }));
+    await sb.from("resource_reservations").insert(inserts);
+    return;
+  }
+}
+
 export async function createBookingWithResources(input: BookingInput) {
   const sb = supabaseAdmin();
   const activityDB = mapActivityToDB(input.activity);
@@ -266,6 +345,7 @@ export async function createBookingWithResources(input: BookingInput) {
     if (error) throw new Error(error.message || "Failed to create combo booking");
     const customerId = await ensureCustomerAndLinkBooking(input, bookingId as string);
     await reservePartyAreas(sb, bookingId as string, partyAreas, partyAreaStartTsUtc, partyAreaEndTsUtc);
+    await enforceDuckpinPairing(sb, bookingId as string, duckpinStart, duckpinEnd, needs.lanes);
     return { bookingId, needs, customerId };
   }
 
@@ -284,5 +364,6 @@ export async function createBookingWithResources(input: BookingInput) {
   if (error) throw new Error(error.message || "Failed to create booking");
   const customerId = await ensureCustomerAndLinkBooking(input, bookingId as string);
   await reservePartyAreas(sb, bookingId as string, partyAreas, partyAreaStartTsUtc, partyAreaEndTsUtc);
+  await enforceDuckpinPairing(sb, bookingId as string, startTsUtc, endTsUtc, needs.lanes);
   return { bookingId, needs, customerId };
 }
