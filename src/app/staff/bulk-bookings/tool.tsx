@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PARTY_AREA_OPTIONS } from "@/lib/bookingLogic";
 
 type Row = {
@@ -13,6 +13,7 @@ type Row = {
   partySize: number;
   dateKey: string;
   startTime: string;
+  customerId: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -30,6 +31,7 @@ const DEFAULT_ROW: Row = {
   partySize: 2,
   dateKey: "",
   startTime: "",
+  customerId: "",
   customerName: "",
   customerEmail: "",
   customerPhone: "",
@@ -37,14 +39,45 @@ const DEFAULT_ROW: Row = {
   totalDollars: "",
 };
 
+type CustomerOption = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
 export default function BulkBookingsTool() {
   const [rows, setRows] = useState<Row[]>([{ ...DEFAULT_ROW }]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
 
   const partyAreas = useMemo(() => {
     return PARTY_AREA_OPTIONS.filter((option) => option.visible);
+  }, []);
+
+  const customerMap = useMemo(() => {
+    const map = new Map<string, CustomerOption>();
+    for (const c of customers) map.set(c.id, c);
+    return map;
+  }, [customers]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/staff/customers", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return;
+        setCustomers(json.customers || []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCustomers([]);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   function updateRow(index: number, patch: Partial<Row>) {
@@ -111,6 +144,7 @@ export default function BulkBookingsTool() {
               <th className="px-2 py-2">Party Size</th>
               <th className="px-2 py-2">Date</th>
               <th className="px-2 py-2">Start Time</th>
+              <th className="px-2 py-2">Customer</th>
               <th className="px-2 py-2">Customer Name</th>
               <th className="px-2 py-2">Customer Email</th>
               <th className="px-2 py-2">Phone</th>
@@ -220,6 +254,29 @@ export default function BulkBookingsTool() {
                     onChange={(e) => updateRow(idx, { startTime: e.target.value })}
                     className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900 placeholder:text-zinc-400"
                   />
+                </td>
+                <td className="px-2 py-2">
+                  <select
+                    value={row.customerId}
+                    onChange={(e) => {
+                      const customerId = e.target.value;
+                      const customer = customerMap.get(customerId);
+                      updateRow(idx, {
+                        customerId,
+                        customerName: customer?.full_name || "",
+                        customerEmail: customer?.email || "",
+                        customerPhone: customer?.phone || "",
+                      });
+                    }}
+                    className="h-9 w-44 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                  >
+                    <option value="">Select customer</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.full_name || customer.email || customer.id}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-2 py-2">
                   <input
