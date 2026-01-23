@@ -6,6 +6,8 @@ import { PARTY_AREA_OPTIONS } from "@/lib/bookingLogic";
 type Row = {
   activity: "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
   durationMinutes: number;
+  comboAxeMinutes: number;
+  comboDuckpinMinutes: number;
   partyArea: string;
   partyAreaMinutes: number;
   partySize: number;
@@ -15,11 +17,14 @@ type Row = {
   customerEmail: string;
   customerPhone: string;
   paid: boolean;
+  totalDollars: string;
 };
 
 const DEFAULT_ROW: Row = {
   activity: "Axe Throwing",
   durationMinutes: 60,
+  comboAxeMinutes: 60,
+  comboDuckpinMinutes: 60,
   partyArea: "",
   partyAreaMinutes: 60,
   partySize: 2,
@@ -29,6 +34,7 @@ const DEFAULT_ROW: Row = {
   customerEmail: "",
   customerPhone: "",
   paid: false,
+  totalDollars: "",
 };
 
 export default function BulkBookingsTool() {
@@ -60,7 +66,18 @@ export default function BulkBookingsTool() {
     const res = await fetch("/api/staff/bookings/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows }),
+      body: JSON.stringify({
+        rows: rows.map((row) => {
+          const isCombo = row.activity === "Combo Package";
+          const durationMinutes = isCombo ? row.comboAxeMinutes + row.comboDuckpinMinutes : row.durationMinutes;
+          const totalCents = row.totalDollars ? Math.round(Number(row.totalDollars) * 100) : undefined;
+          return {
+            ...row,
+            durationMinutes,
+            totalCentsOverride: Number.isFinite(totalCents) ? totalCents : undefined,
+          };
+        }),
+      }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -87,6 +104,8 @@ export default function BulkBookingsTool() {
             <tr>
               <th className="px-2 py-2">Activity</th>
               <th className="px-2 py-2">Duration</th>
+              <th className="px-2 py-2">Axe Minutes</th>
+              <th className="px-2 py-2">Duck Minutes</th>
               <th className="px-2 py-2">Party Area</th>
               <th className="px-2 py-2">Party Area Minutes</th>
               <th className="px-2 py-2">Party Size</th>
@@ -96,6 +115,7 @@ export default function BulkBookingsTool() {
               <th className="px-2 py-2">Customer Email</th>
               <th className="px-2 py-2">Phone</th>
               <th className="px-2 py-2">Paid</th>
+              <th className="px-2 py-2">Total ($)</th>
               <th className="px-2 py-2">Actions</th>
             </tr>
           </thead>
@@ -121,6 +141,29 @@ export default function BulkBookingsTool() {
                     value={row.durationMinutes}
                     onChange={(e) => updateRow(idx, { durationMinutes: Number(e.target.value || 0) })}
                     className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                    disabled={row.activity === "Combo Package"}
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="number"
+                    min="15"
+                    step="15"
+                    value={row.comboAxeMinutes}
+                    onChange={(e) => updateRow(idx, { comboAxeMinutes: Number(e.target.value || 0) })}
+                    className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                    disabled={row.activity !== "Combo Package"}
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="number"
+                    min="15"
+                    step="15"
+                    value={row.comboDuckpinMinutes}
+                    onChange={(e) => updateRow(idx, { comboDuckpinMinutes: Number(e.target.value || 0) })}
+                    className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                    disabled={row.activity !== "Combo Package"}
                   />
                 </td>
                 <td className="px-2 py-2">
@@ -207,6 +250,15 @@ export default function BulkBookingsTool() {
                     <option value="UNPAID">UNPAID</option>
                     <option value="PAID">PAID</option>
                   </select>
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="text"
+                    value={row.totalDollars}
+                    onChange={(e) => updateRow(idx, { totalDollars: e.target.value })}
+                    placeholder="0.00"
+                    className="h-9 w-24 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900 placeholder:text-zinc-400"
+                  />
                 </td>
                 <td className="px-2 py-2">
                   <button

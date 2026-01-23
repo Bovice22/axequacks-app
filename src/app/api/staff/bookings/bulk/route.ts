@@ -18,6 +18,8 @@ type ParsedRow = {
   comboAxeMinutes?: number;
   comboDuckpinMinutes?: number;
   totalCentsOverride?: number;
+  partyAreas?: string[];
+  partyAreaMinutes?: number;
 };
 
 function parseMinutesFromTime(input: string) {
@@ -131,6 +133,8 @@ function parseRows(raw: string) {
 type IncomingRow = {
   activity: ActivityUI;
   durationMinutes: number;
+  comboAxeMinutes?: number;
+  comboDuckpinMinutes?: number;
   partyArea?: string | null;
   partyAreaMinutes?: number | null;
   partySize: number;
@@ -140,6 +144,7 @@ type IncomingRow = {
   customerEmail: string;
   customerPhone?: string;
   paid?: boolean;
+  totalCentsOverride?: number;
 };
 
 export async function POST(req: Request) {
@@ -178,6 +183,9 @@ export async function POST(req: Request) {
             notes: "",
             partyAreas: row.partyArea ? [row.partyArea] : [],
             partyAreaMinutes: Number.isFinite(Number(row.partyAreaMinutes)) ? Number(row.partyAreaMinutes) : undefined,
+            comboAxeMinutes: Number.isFinite(Number(row.comboAxeMinutes)) ? Number(row.comboAxeMinutes) : undefined,
+            comboDuckpinMinutes: Number.isFinite(Number(row.comboDuckpinMinutes)) ? Number(row.comboDuckpinMinutes) : undefined,
+            totalCentsOverride: Number.isFinite(Number(row.totalCentsOverride)) ? Number(row.totalCentsOverride) : undefined,
           } as ParsedRow;
         })
         .filter(Boolean) as ParsedRow[];
@@ -215,6 +223,8 @@ export async function POST(req: Request) {
         customerPhone: row.customerPhone,
         comboOrder: row.comboOrder,
         totalCentsOverride: row.totalCentsOverride,
+        partyAreas: row.partyAreas,
+        partyAreaMinutes: row.partyAreaMinutes,
       };
 
       const result = await createBookingWithResources(bookingInput);
@@ -223,6 +233,7 @@ export async function POST(req: Request) {
         .update({
           paid: row.paid,
           notes: row.notes || null,
+          status: "IMPORTED",
         })
         .eq("id", result.bookingId);
       results.push({ bookingId: result.bookingId, line: i + 1 });
