@@ -225,14 +225,18 @@ export async function POST(req: Request) {
       };
 
       const result = await createBookingWithResources(bookingInput);
-      await sb
+      const importNote = row.notes ? `IMPORTED_FROM_SQUARE | ${row.notes}` : "IMPORTED_FROM_SQUARE";
+      const { error: updateErr } = await sb
         .from("bookings")
         .update({
           paid: row.paid,
-          notes: row.notes || null,
-          status: "IMPORTED",
+          notes: importNote,
         })
         .eq("id", result.bookingId);
+      if (updateErr) {
+        console.error("bulk booking update error:", updateErr);
+        throw new Error(updateErr.message || "Failed to finalize bulk booking");
+      }
       results.push({ bookingId: result.bookingId, line: i + 1 });
     }
 

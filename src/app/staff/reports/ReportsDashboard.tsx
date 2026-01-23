@@ -213,7 +213,12 @@ export default function ReportsDashboard() {
   }, [cashSales]);
 
   const filtered = useMemo(() => {
-    return [...bookings, ...cashAsBookings].filter((b) => b.status !== "CANCELLED" && b.status !== "IMPORTED");
+    return [...bookings, ...cashAsBookings].filter((b) => {
+      if (b.status === "CANCELLED") return false;
+      const notes = (b as any)?.notes || "";
+      if (String(notes).includes("IMPORTED_FROM_SQUARE")) return false;
+      return true;
+    });
   }, [bookings, cashAsBookings]);
 
   const categoryOptions = useMemo(() => {
