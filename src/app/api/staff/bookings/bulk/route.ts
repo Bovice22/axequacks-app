@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBookingWithResources, type ActivityUI, type ComboOrder, type BookingInput } from "@/lib/server/bookingService";
-import { canonicalPartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
+import { canonicalPartyAreaName, type PartyAreaName, MAX_PARTY_SIZES } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
@@ -100,6 +100,10 @@ function parseRows(raw: string) {
       errors.push(`Line ${idx + 1}: Missing or invalid required fields.`);
       continue;
     }
+    if (partySize > 100) {
+      errors.push(`Line ${idx + 1}: Group size must be 100 or less.`);
+      continue;
+    }
     const normalizedEmail = customerEmail ? customerEmail.trim() : "";
 
     const comboOrder = comboOrderRaw ? parseComboOrder(comboOrderRaw) : undefined;
@@ -164,6 +168,10 @@ export async function POST(req: Request) {
             errors.push(`Row ${idx + 1}: Missing required fields.`);
             return null;
           }
+          if (Number(row.partySize) > 100) {
+            errors.push(`Row ${idx + 1}: Group size must be 100 or less.`);
+            return null;
+          }
           const customerEmail = row.customerEmail ? String(row.customerEmail).trim() : "";
           const canonicalPartyArea = row.partyArea ? canonicalPartyAreaName(String(row.partyArea)) : null;
           const partyAreas: PartyAreaName[] = canonicalPartyArea ? [canonicalPartyArea] : [];
@@ -207,9 +215,11 @@ export async function POST(req: Request) {
 
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i];
+      const activityMax = MAX_PARTY_SIZES[row.activity] ?? 24;
+      const partySizeForResources = Math.min(row.partySize, activityMax);
       const bookingInput: BookingInput = {
         activity: row.activity,
-        partySize: row.partySize,
+        partySize: partySizeForResources,
         dateKey: row.dateKey,
         startMin: row.startMin,
         durationMinutes: row.durationMinutes,
@@ -229,6 +239,7 @@ export async function POST(req: Request) {
       const { error: updateErr } = await sb
         .from("bookings")
         .update({
+          party_size: row.partySize,
           paid: row.paid,
           notes: importNote,
         })
