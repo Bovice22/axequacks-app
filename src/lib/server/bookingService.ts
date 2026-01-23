@@ -54,6 +54,36 @@ async function upsertCustomer(input: BookingInput) {
   const fullName = input.customerName.trim();
   const phone = input.customerPhone?.trim() || null;
 
+  if (!email) {
+    const { data, error } = await sb
+      .from("customers")
+      .insert({
+        email: null,
+        full_name: fullName || null,
+        phone,
+      })
+      .select("id")
+      .single();
+    if (!error && data?.id) return data.id as string;
+    if (error) {
+      console.error("customer insert without email error:", error);
+    }
+    const fallbackEmail = `no-email+${Date.now()}@axequacks.local`;
+    const fallback = await sb
+      .from("customers")
+      .insert({
+        email: fallbackEmail,
+        full_name: fullName || null,
+        phone,
+      })
+      .select("id")
+      .single();
+    if (fallback.error) {
+      throw new Error(fallback.error.message || "Failed to insert customer");
+    }
+    return fallback.data?.id as string;
+  }
+
   const { data, error } = await sb
     .from("customers")
     .upsert(

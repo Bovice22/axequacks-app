@@ -100,10 +100,7 @@ function parseRows(raw: string) {
       errors.push(`Line ${idx + 1}: Missing or invalid required fields.`);
       continue;
     }
-    if (!customerEmail) {
-      errors.push(`Line ${idx + 1}: Missing customer email.`);
-      continue;
-    }
+    const normalizedEmail = customerEmail ? customerEmail.trim() : "";
 
     const comboOrder = comboOrderRaw ? parseComboOrder(comboOrderRaw) : undefined;
     const comboAxeMinutes = comboAxeRaw ? Number(comboAxeRaw) : undefined;
@@ -117,7 +114,7 @@ function parseRows(raw: string) {
       startMin,
       durationMinutes,
       customerName: customerName || "Customer",
-      customerEmail,
+      customerEmail: normalizedEmail,
       customerPhone,
       paid,
       notes,
@@ -167,10 +164,7 @@ export async function POST(req: Request) {
             errors.push(`Row ${idx + 1}: Missing required fields.`);
             return null;
           }
-          if (!row.customerEmail) {
-            errors.push(`Row ${idx + 1}: Missing customer email.`);
-            return null;
-          }
+          const customerEmail = row.customerEmail ? String(row.customerEmail).trim() : "";
           const canonicalPartyArea = row.partyArea ? canonicalPartyAreaName(String(row.partyArea)) : null;
           const partyAreas: PartyAreaName[] = canonicalPartyArea ? [canonicalPartyArea] : [];
           return {
@@ -180,7 +174,7 @@ export async function POST(req: Request) {
             startMin,
             durationMinutes: Number(row.durationMinutes),
             customerName: row.customerName || "Customer",
-            customerEmail: row.customerEmail,
+            customerEmail,
             customerPhone: row.customerPhone,
             paid: !!row.paid,
             notes: "",
