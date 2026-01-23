@@ -145,26 +145,32 @@ export default function BulkBookingsTool() {
                   />
                 </td>
                 <td className="px-2 py-2">
-                  <input
-                    type="number"
-                    min="15"
-                    step="15"
-                    value={row.comboAxeMinutes}
-                    onChange={(e) => updateRow(idx, { comboAxeMinutes: Number(e.target.value || 0) })}
-                    className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
-                    disabled={row.activity !== "Combo Package"}
-                  />
+                  {row.activity === "Combo Package" ? (
+                    <input
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={row.comboAxeMinutes}
+                      onChange={(e) => updateRow(idx, { comboAxeMinutes: Number(e.target.value || 0) })}
+                      className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                    />
+                  ) : (
+                    <div className="text-center text-xs text-zinc-400">—</div>
+                  )}
                 </td>
                 <td className="px-2 py-2">
-                  <input
-                    type="number"
-                    min="15"
-                    step="15"
-                    value={row.comboDuckpinMinutes}
-                    onChange={(e) => updateRow(idx, { comboDuckpinMinutes: Number(e.target.value || 0) })}
-                    className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
-                    disabled={row.activity !== "Combo Package"}
-                  />
+                  {row.activity === "Combo Package" ? (
+                    <input
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={row.comboDuckpinMinutes}
+                      onChange={(e) => updateRow(idx, { comboDuckpinMinutes: Number(e.target.value || 0) })}
+                      className="h-9 w-20 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                    />
+                  ) : (
+                    <div className="text-center text-xs text-zinc-400">—</div>
+                  )}
                 </td>
                 <td className="px-2 py-2">
                   <select
