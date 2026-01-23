@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createBookingWithResources, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
+import { createBookingWithResources, type ActivityUI, type ComboOrder, type BookingInput } from "@/lib/server/bookingService";
 import { canonicalPartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
@@ -19,7 +19,7 @@ type ParsedRow = {
   comboAxeMinutes?: number;
   comboDuckpinMinutes?: number;
   totalCentsOverride?: number;
-  partyAreas?: string[];
+  partyAreas?: PartyAreaName[];
   partyAreaMinutes?: number;
 };
 
@@ -213,7 +213,7 @@ export async function POST(req: Request) {
 
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i];
-      const bookingInput = {
+      const bookingInput: BookingInput = {
         activity: row.activity,
         partySize: row.partySize,
         dateKey: row.dateKey,
@@ -226,7 +226,7 @@ export async function POST(req: Request) {
         customerPhone: row.customerPhone,
         comboOrder: row.comboOrder,
         totalCentsOverride: row.totalCentsOverride,
-        partyAreas: row.partyAreas,
+        partyAreas: row.partyAreas as PartyAreaName[] | undefined,
         partyAreaMinutes: row.partyAreaMinutes,
       };
 
