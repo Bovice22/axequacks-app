@@ -229,8 +229,9 @@ function getOpenWindowForDateKey(dateKey: string): { openMin: number; closeMin: 
 function MonthCalendar(props: {
   selectedDateKey: string;
   onSelectDateKey: (dateKey: string) => void;
+  allowPast?: boolean;
 }) {
-  const { selectedDateKey, onSelectDateKey } = props;
+  const { selectedDateKey, onSelectDateKey, allowPast = false } = props;
   const [cursor, setCursor] = useState(() => {
     const base = selectedDateKey ? fromDateKey(selectedDateKey) : new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
@@ -293,7 +294,7 @@ function MonthCalendar(props: {
           const dk = toDateKey(cell.date);
           const selected = selectedDateKey === dk;
           const isPast = dk < todayKey;
-          const disabled = isPast;
+          const disabled = !allowPast && isPast;
 
           return (
             <button
@@ -1765,7 +1766,11 @@ export default function BookingsTable() {
             </a>
           </div>
           <div className="flex justify-center">
-            <MonthCalendar selectedDateKey={selectedDateKey} onSelectDateKey={setSelectedDateKey} />
+            <MonthCalendar
+              selectedDateKey={selectedDateKey}
+              onSelectDateKey={setSelectedDateKey}
+              allowPast={staffRole === "admin"}
+            />
           </div>
         </div>
 
