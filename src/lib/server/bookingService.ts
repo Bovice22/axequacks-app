@@ -9,6 +9,13 @@ import {
   totalCents,
 } from "@/lib/bookingLogic";
 
+function minutesToTimeString(totalMinutes: number) {
+  const mins = Math.max(0, Math.floor(totalMinutes));
+  const hours = Math.floor(mins / 60) % 24;
+  const rem = mins % 60;
+  return `${String(hours).padStart(2, "0")}:${String(rem).padStart(2, "0")}`;
+}
+
 export type ActivityUI = "Axe Throwing" | "Duckpin Bowling" | "Combo Package";
 export type ComboOrder = "DUCKPIN_FIRST" | "AXE_FIRST";
 export type PartyAreaTiming = "BEFORE" | "DURING" | "AFTER";
@@ -370,6 +377,8 @@ export async function createBookingBypassResources(input: BookingInput) {
     date: input.dateKey,
     start_ts: startTsUtc,
     end_ts: endTsUtc,
+    start_time: minutesToTimeString(input.startMin),
+    end_time: minutesToTimeString(endMin),
     total_cents: totalCentsValue,
     customer_name: input.customerName,
     customer_email: input.customerEmail,
