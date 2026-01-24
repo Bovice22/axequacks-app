@@ -367,6 +367,7 @@ export async function createBookingBypassResources(input: BookingInput) {
     activity: activityDB,
     duration_minutes: effectiveDuration,
     party_size: input.partySize,
+    date: input.dateKey,
     start_ts: startTsUtc,
     end_ts: endTsUtc,
     total_cents: totalCentsValue,
