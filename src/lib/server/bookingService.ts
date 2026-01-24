@@ -372,7 +372,6 @@ export async function createBookingBypassResources(input: BookingInput) {
     total_cents: totalCentsValue,
     customer_name: input.customerName,
     customer_email: input.customerEmail,
-    tz: "America/New_York",
     combo_order: input.comboOrder ?? null,
   };
 
