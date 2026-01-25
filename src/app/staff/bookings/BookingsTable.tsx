@@ -353,6 +353,7 @@ export default function BookingsTable() {
   const [editBlockedStartMins, setEditBlockedStartMins] = useState<number[]>([]);
   const [editAvailabilityLoading, setEditAvailabilityLoading] = useState(false);
   const [editNotes, setEditNotes] = useState("");
+  const [editTotal, setEditTotal] = useState("");
   const [editAssignedStaffId, setEditAssignedStaffId] = useState("");
   const [editSnapshot, setEditSnapshot] = useState<{
     activity: string;
@@ -714,6 +715,25 @@ export default function BookingsTable() {
     }
   }
 
+  async function togglePaidStatus(bookingId: string, nextPaid: boolean) {
+    setActionLoadingId(bookingId);
+    try {
+      const res = await fetch(`/api/staff/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: bookingId, paid: nextPaid }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(json?.error || "Failed to update payment status.");
+        return;
+      }
+      setRows((prev) => prev.map((row) => (row.id === bookingId ? { ...row, paid: nextPaid } : row)));
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   useEffect(() => {
     loadBookings(order);
   }, [order]);
@@ -920,6 +940,7 @@ export default function BookingsTable() {
       setEditComboOrder(b?.combo_order || null);
       setEditNotes(b?.notes || "");
       setEditAssignedStaffId(b?.assigned_staff_id || "");
+      setEditTotal(((Number(b?.total_cents || 0) || 0) / 100).toFixed(2));
       const dk = dateKeyFromIsoNY(b?.start_ts) || todayKey;
       setEditDateKey(dk);
       const startMin = minutesFromIsoNY(b?.start_ts);
@@ -995,6 +1016,10 @@ export default function BookingsTable() {
     setSavingEdit(true);
     setEditError("");
     try {
+      const totalCents =
+        editingRow?.paid === false && editTotal.trim()
+          ? Math.max(0, Math.round(Number(editTotal) * 100))
+          : undefined;
       const res = await fetch(`/api/staff/bookings/${editingBookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1009,6 +1034,7 @@ export default function BookingsTable() {
           startMin: editStartMin,
           durationMinutes: editDuration,
           assigned_staff_id: editAssignedStaffId || null,
+          ...(totalCents != null && Number.isFinite(totalCents) ? { total_cents: totalCents } : {}),
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -1347,6 +1373,20 @@ export default function BookingsTable() {
             className="min-h-[80px] rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
             disabled={editLoading}
           />
+          {editingRow?.paid === false ? (
+            <label className="text-xs font-semibold text-zinc-600">
+              <span className="mb-1 block text-xs font-semibold text-zinc-600">Unpaid Total ($)</span>
+              <input
+                value={editTotal}
+                onChange={(e) => setEditTotal(e.target.value)}
+                type="number"
+                min="0"
+                step="0.01"
+                className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+                disabled={editLoading}
+              />
+            </label>
+          ) : null}
           {staffRole === "admin" ? (
             <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
               <label className="text-xs font-semibold text-zinc-600">
@@ -2086,6 +2126,33 @@ export default function BookingsTable() {
                                 Pay Now
                               </button>
                             ) : null}
+                            <button
+                              type="button"
+                              aria-label={booking?.paid ? "Mark unpaid" : "Mark paid"}
+                              className="rounded-full px-3 py-1 text-[10px] font-bold"
+                              style={{
+                                border: "1px solid rgba(0,0,0,0.35)",
+                                color: "#111",
+                                backgroundColor: "#fff",
+                              }}
+                              data-booking-id={resv.booking_id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                togglePaidStatus(resv.booking_id, !booking?.paid);
+                              }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                              }}
+                              onPointerDown={(e) => {
+                                e.stopPropagation();
+                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                              }}
+                              data-action-button="true"
+                            >
+                              {booking?.paid ? "Mark Unpaid" : "Mark Paid"}
+                            </button>
                           </div>
                           {hoveredNoteId === resv.booking_id &&
                           (booking?.notes || "").trim() &&
@@ -2255,6 +2322,14 @@ export default function BookingsTable() {
                           Pay Now
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => togglePaidStatus(r.id, !r.paid)}
+                        disabled={actionLoadingId === r.id}
+                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                      >
+                        {r.paid ? "Mark Unpaid" : "Mark Paid"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => deleteBooking(r.id)}

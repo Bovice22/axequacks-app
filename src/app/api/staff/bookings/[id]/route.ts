@@ -234,6 +234,20 @@ export async function PATCH(req: Request, context: RouteContext) {
     }
 
     const sb = getSupabaseAdmin();
+    if (body?.total_cents != null) {
+      const totalCents = Number(body.total_cents);
+      if (!Number.isFinite(totalCents) || totalCents < 0) {
+        return NextResponse.json({ error: "Invalid total amount" }, { status: 400 });
+      }
+      const { data: paidRow, error: paidErr } = await sb.from("bookings").select("paid").eq("id", id).single();
+      if (paidErr) {
+        return NextResponse.json({ error: "Failed to validate payment status" }, { status: 500 });
+      }
+      if (paidRow?.paid) {
+        return NextResponse.json({ error: "Total amount can only be edited for unpaid bookings" }, { status: 400 });
+      }
+      updates.total_cents = Math.round(totalCents);
+    }
 
     const dateKey = String(body?.dateKey || "").trim();
     const startMin = Number(body?.startMin);
