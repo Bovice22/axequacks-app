@@ -251,7 +251,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const dateKey = String(body?.dateKey || "").trim();
     const startMin = Number(body?.startMin);
-    const reschedule = !!dateKey || Number.isFinite(startMin);
+    const reschedule = body?.reschedule === true;
 
     if (reschedule) {
       if (!dateKey || !Number.isFinite(startMin)) {

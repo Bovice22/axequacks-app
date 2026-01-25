@@ -1047,6 +1047,7 @@ export default function BookingsTable() {
             dateKey: editDateKey,
             startMin: editStartMin,
             durationMinutes: editDuration,
+            reschedule: true,
           }
         : {};
       const res = await fetch(`/api/staff/bookings/${editingBookingId}`, {
