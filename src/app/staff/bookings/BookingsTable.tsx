@@ -1042,6 +1042,13 @@ export default function BookingsTable() {
         editingRow?.paid === false && editTotal.trim()
           ? Math.max(0, Math.round(Number(editTotal) * 100))
           : undefined;
+      const timePayload = timeChanged
+        ? {
+            dateKey: editDateKey,
+            startMin: editStartMin,
+            durationMinutes: editDuration,
+          }
+        : {};
       const res = await fetch(`/api/staff/bookings/${editingBookingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1052,9 +1059,7 @@ export default function BookingsTable() {
           notes: editNotes,
           party_size: editPartySize || 1,
           activity: editActivity,
-          dateKey: editDateKey,
-          startMin: editStartMin,
-          durationMinutes: editDuration,
+          ...timePayload,
           assigned_staff_id: editAssignedStaffId || null,
           ...(totalCents != null && Number.isFinite(totalCents) ? { total_cents: totalCents } : {}),
         }),
