@@ -1215,12 +1215,25 @@ export default function BookingsTable() {
     }
 
     const synthetic: ReservationRow[] = [];
-    const pickResource = (activity: string | null | undefined) => {
+    const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+      new Date(aStart).getTime() < new Date(bEnd).getTime() &&
+      new Date(aEnd).getTime() > new Date(bStart).getTime();
+
+    const pickResource = (activity: string | null | undefined, startTs: string, endTs: string) => {
       const label = String(activity || "").toUpperCase();
       let type = "AXE";
       if (label.includes("DUCK")) type = "DUCKPIN";
       if (label.includes("COMBO")) type = "AXE";
-      const resource = resourceColumns.find((r) => r.type === type) || resourceColumns[0];
+      const candidates = resourceColumns.filter((r) => r.type === type);
+      if (!candidates.length) return resourceColumns[0]?.id || null;
+      const used = new Set<string>();
+      for (const resv of filtered) {
+        if (resv?.resource_id && overlaps(resv.start_ts, resv.end_ts, startTs, endTs)) {
+          used.add(resv.resource_id);
+        }
+      }
+      const free = candidates.find((r) => !used.has(r.id));
+      const resource = free || candidates[0];
       return resource?.id || null;
     };
 
@@ -1229,7 +1242,7 @@ export default function BookingsTable() {
       if (existingByBooking.has(booking.id)) continue;
       if (dateKeyFromIsoNY(booking.start_ts) !== selectedDateKey) continue;
       if ((booking.status ?? "CONFIRMED") === "CANCELLED") continue;
-      const resourceId = pickResource(booking.activity);
+      const resourceId = pickResource(booking.activity, booking.start_ts, booking.end_ts);
       if (!resourceId) continue;
       synthetic.push({
         id: `synthetic-${booking.id}`,
