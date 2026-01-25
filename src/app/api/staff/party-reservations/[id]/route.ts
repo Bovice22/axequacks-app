@@ -7,14 +7,14 @@ function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
   return new Date(aStart).getTime() < new Date(bEnd).getTime() && new Date(aEnd).getTime() > new Date(bStart).getTime();
 }
 
-export async function PATCH(req: Request, context: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const reservationId = context?.params?.id || "";
+    const reservationId = params?.id || "";
     if (!reservationId) return NextResponse.json({ error: "Missing reservation id" }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
