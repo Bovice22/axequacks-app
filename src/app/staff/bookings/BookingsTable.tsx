@@ -1203,12 +1203,45 @@ export default function BookingsTable() {
   }, [resourceColumns]);
 
   const reservationsForDay = useMemo(() => {
-    return reservations.filter((r) => {
+    const filtered = reservations.filter((r) => {
       if (dateKeyFromIsoNY(r.start_ts) !== selectedDateKey) return false;
       const booking = bookingById.get(r.booking_id);
       return (booking?.status ?? "CONFIRMED") !== "CANCELLED";
     });
-  }, [reservations, selectedDateKey, bookingById]);
+
+    const existingByBooking = new Set<string>();
+    for (const resv of filtered) {
+      if (resv?.booking_id) existingByBooking.add(resv.booking_id);
+    }
+
+    const synthetic: ReservationRow[] = [];
+    const pickResource = (activity: string | null | undefined) => {
+      const label = String(activity || "").toUpperCase();
+      let type = "AXE";
+      if (label.includes("DUCK")) type = "DUCKPIN";
+      if (label.includes("COMBO")) type = "AXE";
+      const resource = resourceColumns.find((r) => r.type === type) || resourceColumns[0];
+      return resource?.id || null;
+    };
+
+    for (const booking of bookingById.values()) {
+      if (!booking?.id) continue;
+      if (existingByBooking.has(booking.id)) continue;
+      if (dateKeyFromIsoNY(booking.start_ts) !== selectedDateKey) continue;
+      if ((booking.status ?? "CONFIRMED") === "CANCELLED") continue;
+      const resourceId = pickResource(booking.activity);
+      if (!resourceId) continue;
+      synthetic.push({
+        id: `synthetic-${booking.id}`,
+        booking_id: booking.id,
+        resource_id: resourceId,
+        start_ts: booking.start_ts,
+        end_ts: booking.end_ts,
+      } as ReservationRow);
+    }
+
+    return [...filtered, ...synthetic];
+  }, [reservations, selectedDateKey, bookingById, resourceColumns]);
 
   const bookingColorById = useMemo(() => {
     const palette = [
