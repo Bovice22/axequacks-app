@@ -24,6 +24,7 @@ type ActivityDB = "AXE" | "DUCKPIN" | "COMBO";
 export type BookingInput = {
   activity: ActivityUI;
   partySize: number;
+  partySizeForResources?: number;
   dateKey: string;
   startMin: number;
   durationMinutes: number;
@@ -53,6 +54,12 @@ function mapActivityToDB(activity: ActivityUI): ActivityDB {
   if (activity === "Axe Throwing") return "AXE";
   if (activity === "Duckpin Bowling") return "DUCKPIN";
   return "COMBO";
+}
+
+function mapActivityToUI(activity: ActivityDB | string | null): ActivityUI {
+  if (activity === "AXE") return "Axe Throwing";
+  if (activity === "DUCKPIN") return "Duckpin Bowling";
+  return "Combo Package";
 }
 
 async function upsertCustomer(input: BookingInput) {
@@ -332,10 +339,36 @@ async function reserveResourcesBypass(
   }
 }
 
+export async function repairBookingReservations(bookingId: string) {
+  const sb = supabaseAdmin();
+  const { data: booking, error } = await sb
+    .from("bookings")
+    .select("id,activity,party_size,start_ts,end_ts")
+    .eq("id", bookingId)
+    .single();
+
+  if (error || !booking) {
+    throw new Error("Booking not found");
+  }
+
+  await sb.from("resource_reservations").delete().eq("booking_id", bookingId);
+
+  const activityUi = mapActivityToUI(booking.activity);
+  const needs = computeNeeds(activityUi, Number(booking.party_size) || 1);
+  const startTsUtc = booking.start_ts;
+  const endTsUtc = booking.end_ts;
+
+  await reserveResourcesBypass(sb, bookingId, "AXE", needs.axeBays, startTsUtc, endTsUtc);
+  await reserveResourcesBypass(sb, bookingId, "DUCKPIN", needs.lanes, startTsUtc, endTsUtc);
+
+  return { bookingId };
+}
+
 export async function createBookingBypassResources(input: BookingInput) {
   const sb = supabaseAdmin();
   const activityDB = mapActivityToDB(input.activity);
-  const needs = computeNeeds(input.activity, input.partySize);
+  const resourcePartySize = input.partySizeForResources ?? input.partySize;
+  const needs = computeNeeds(input.activity, resourcePartySize);
   const partyAreas = normalizePartyAreas(input.partyAreas);
   const partyAreaMinutes =
     partyAreas.length && Number.isFinite(input.partyAreaMinutes)
@@ -401,7 +434,8 @@ export async function createBookingBypassResources(input: BookingInput) {
 export async function createBookingWithResources(input: BookingInput) {
   const sb = supabaseAdmin();
   const activityDB = mapActivityToDB(input.activity);
-  const needs = computeNeeds(input.activity, input.partySize);
+  const resourcePartySize = input.partySizeForResources ?? input.partySize;
+  const needs = computeNeeds(input.activity, resourcePartySize);
   const partyAreas = normalizePartyAreas(input.partyAreas);
   const partyAreaMinutes =
     partyAreas.length && Number.isFinite(input.partyAreaMinutes)

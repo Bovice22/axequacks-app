@@ -389,6 +389,13 @@ export default function BookingsTable() {
   const [compactMode, setCompactMode] = useState(false);
   const todayKey = todayDateKeyNY();
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
+  const reservationsByBookingId = useMemo(() => {
+    const set = new Set<string>();
+    for (const resv of reservations) {
+      if (resv?.booking_id) set.add(resv.booking_id);
+    }
+    return set;
+  }, [reservations]);
   const actionBarClickRef = useRef(false);
   const editIntentRef = useRef(false);
   const [terminalReaders, setTerminalReaders] = useState<Reader[]>([]);
@@ -729,6 +736,21 @@ export default function BookingsTable() {
         return;
       }
       setRows((prev) => prev.map((row) => (row.id === bookingId ? { ...row, paid: nextPaid } : row)));
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function repairBookingBlock(bookingId: string) {
+    setActionLoadingId(bookingId);
+    try {
+      const res = await fetch(`/api/staff/bookings/${bookingId}/repair`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(json?.error || "Failed to repair booking block.");
+        return;
+      }
+      await loadBookings(order);
     } finally {
       setActionLoadingId(null);
     }
@@ -2330,6 +2352,16 @@ export default function BookingsTable() {
                       >
                         {r.paid ? "Mark Unpaid" : "Mark Paid"}
                       </button>
+                      {!reservationsByBookingId.has(r.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => repairBookingBlock(r.id)}
+                          disabled={actionLoadingId === r.id}
+                          className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                        >
+                          Repair Block
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => deleteBooking(r.id)}
