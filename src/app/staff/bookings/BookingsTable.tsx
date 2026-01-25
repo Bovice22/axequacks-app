@@ -169,6 +169,24 @@ function minutesToLabel(mins: number) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+function minutesToTimeInput(mins: number | null) {
+  if (!Number.isFinite(mins as number)) return "";
+  const total = Math.max(0, Math.floor(mins as number));
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function timeInputToMinutes(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
 function timeRangeLabel(startMin: number, durationMinutes: number) {
   const endMin = startMin + durationMinutes;
   return `${minutesToLabel(startMin)} – ${minutesToLabel(endMin)}`;
@@ -354,6 +372,12 @@ export default function BookingsTable() {
   const [editAvailabilityLoading, setEditAvailabilityLoading] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [editTotal, setEditTotal] = useState("");
+  const [partyEditReservation, setPartyEditReservation] = useState<ReservationRow | null>(null);
+  const [partyEditDateKey, setPartyEditDateKey] = useState("");
+  const [partyEditStart, setPartyEditStart] = useState("");
+  const [partyEditEnd, setPartyEditEnd] = useState("");
+  const [partyEditError, setPartyEditError] = useState("");
+  const [partyEditLoading, setPartyEditLoading] = useState(false);
   const [editAssignedStaffId, setEditAssignedStaffId] = useState("");
   const [editSnapshot, setEditSnapshot] = useState<{
     activity: string;
@@ -753,6 +777,53 @@ export default function BookingsTable() {
       await loadBookings(order);
     } finally {
       setActionLoadingId(null);
+    }
+  }
+
+  function openPartyEdit(resv: ReservationRow) {
+    if (!resv.id || String(resv.id).startsWith("synthetic-")) {
+      alert("This party block cannot be edited yet. Please repair the booking block first.");
+      return;
+    }
+    const dk = dateKeyFromIsoNY(resv.start_ts) || todayKey;
+    const startMin = minutesFromIsoNY(resv.start_ts);
+    const endMin = minutesFromIsoNY(resv.end_ts);
+    setPartyEditReservation(resv);
+    setPartyEditDateKey(dk);
+    setPartyEditStart(minutesToTimeInput(startMin));
+    setPartyEditEnd(minutesToTimeInput(endMin));
+    setPartyEditError("");
+  }
+
+  async function savePartyEdit() {
+    if (!partyEditReservation) return;
+    const startMin = timeInputToMinutes(partyEditStart);
+    const endMin = timeInputToMinutes(partyEditEnd);
+    if (!partyEditDateKey || startMin == null || endMin == null || endMin <= startMin) {
+      setPartyEditError("Enter a valid date and time range.");
+      return;
+    }
+    setPartyEditLoading(true);
+    setPartyEditError("");
+    try {
+      const res = await fetch(`/api/staff/party-reservations/${partyEditReservation.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dateKey: partyEditDateKey,
+          startMin,
+          endMin,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPartyEditError(json?.error || "Failed to update party reservation.");
+        return;
+      }
+      setPartyEditReservation(null);
+      await loadBookings(order);
+    } finally {
+      setPartyEditLoading(false);
     }
   }
 
@@ -1616,7 +1687,72 @@ export default function BookingsTable() {
       </div>
     </div>
   ) : null;
-  const modal = modalContent;
+  const partyModal = partyEditReservation ? (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 px-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setPartyEditReservation(null);
+        }
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-zinc-900">Edit Party Area Block</div>
+            <div className="mt-1 text-xs text-zinc-500">Move the party area reservation.</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPartyEditReservation(null)}
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-white"
+            style={{ backgroundColor: "#7c3aed" }}
+          >
+            Close
+          </button>
+        </div>
+        <div className="mt-3 space-y-3">
+          <label className="text-xs font-semibold text-zinc-600">
+            Date
+            <input
+              type="date"
+              value={partyEditDateKey}
+              onChange={(e) => setPartyEditDateKey(e.target.value)}
+              className="mt-1 h-9 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+            />
+          </label>
+          <label className="text-xs font-semibold text-zinc-600">
+            Start Time
+            <input
+              type="time"
+              value={partyEditStart}
+              onChange={(e) => setPartyEditStart(e.target.value)}
+              className="mt-1 h-9 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+            />
+          </label>
+          <label className="text-xs font-semibold text-zinc-600">
+            End Time
+            <input
+              type="time"
+              value={partyEditEnd}
+              onChange={(e) => setPartyEditEnd(e.target.value)}
+              className="mt-1 h-9 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+            />
+          </label>
+          {partyEditError ? <div className="text-xs text-red-600">{partyEditError}</div> : null}
+          <button
+            type="button"
+            onClick={savePartyEdit}
+            className="w-full rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white"
+            disabled={partyEditLoading}
+          >
+            {partyEditLoading ? "Saving..." : "Save Party Block"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const modal = modalContent || partyModal;
   const refundModal = refundBooking ? (
     <div
       style={{
@@ -2128,8 +2264,12 @@ export default function BookingsTable() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                editIntentRef.current = true;
-                                openEditForBooking(resv.booking_id);
+                                if (isPartyArea) {
+                                  openPartyEdit(resv);
+                                } else {
+                                  editIntentRef.current = true;
+                                  openEditForBooking(resv.booking_id);
+                                }
                               }}
                               onMouseDown={(e) => {
                                 e.stopPropagation();
@@ -2141,7 +2281,7 @@ export default function BookingsTable() {
                               }}
                               data-action-button="true"
                             >
-                              Edit
+                              {isPartyArea ? "Edit Party" : "Edit"}
                             </button>
                             <button
                               type="button"
