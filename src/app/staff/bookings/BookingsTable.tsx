@@ -2224,33 +2224,35 @@ export default function BookingsTable() {
                               }, 0);
                             }}
                           >
-                            <button
-                              type="button"
-                              aria-label="Open tab"
-                              className="rounded-full px-3 py-1 text-[10px] font-bold"
-                              style={{
-                                border: "1px solid rgba(0,0,0,0.35)",
-                                color: "#111",
-                                backgroundColor: "#fff",
-                              }}
-                              data-booking-id={resv.booking_id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                openTabForBooking(resv.booking_id);
-                              }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              }}
-                              onPointerDown={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              }}
-                              data-action-button="true"
-                            >
-                              Tab
-                            </button>
+                            {!isPartyArea ? (
+                              <button
+                                type="button"
+                                aria-label="Open tab"
+                                className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                style={{
+                                  border: "1px solid rgba(0,0,0,0.35)",
+                                  color: "#111",
+                                  backgroundColor: "#fff",
+                                }}
+                                data-booking-id={resv.booking_id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  openTabForBooking(resv.booking_id);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                }}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                }}
+                                data-action-button="true"
+                              >
+                                Tab
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               aria-label="Edit booking"
@@ -2283,35 +2285,37 @@ export default function BookingsTable() {
                             >
                               {isPartyArea ? "Edit Party" : "Edit"}
                             </button>
-                            <button
-                              type="button"
-                              aria-label="Assign staff"
-                              className="rounded-full px-3 py-1 text-[10px] font-bold"
-                              style={{
-                                border: "1px solid rgba(0,0,0,0.35)",
-                                color: "#111",
-                                backgroundColor: "#fff",
-                              }}
-                              data-booking-id={resv.booking_id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                editIntentRef.current = true;
-                                openEditForBooking(resv.booking_id);
-                              }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              }}
-                              onPointerDown={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              }}
-                              data-action-button="true"
-                            >
-                              Assign Staff
-                            </button>
-                            {showPayNow ? (
+                            {!isPartyArea ? (
+                              <button
+                                type="button"
+                                aria-label="Assign staff"
+                                className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                style={{
+                                  border: "1px solid rgba(0,0,0,0.35)",
+                                  color: "#111",
+                                  backgroundColor: "#fff",
+                                }}
+                                data-booking-id={resv.booking_id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  editIntentRef.current = true;
+                                  openEditForBooking(resv.booking_id);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                }}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                }}
+                                data-action-button="true"
+                              >
+                                Assign Staff
+                              </button>
+                            ) : null}
+                            {showPayNow && !isPartyArea ? (
                               <button
                                 type="button"
                                 aria-label="Pay now"
