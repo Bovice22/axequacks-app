@@ -2340,33 +2340,6 @@ export default function BookingsTable() {
                                 Pay Now
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              aria-label={booking?.paid ? "Mark unpaid" : "Mark paid"}
-                              className="rounded-full px-3 py-1 text-[10px] font-bold"
-                              style={{
-                                border: "1px solid rgba(0,0,0,0.35)",
-                                color: "#111",
-                                backgroundColor: "#fff",
-                              }}
-                              data-booking-id={resv.booking_id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                togglePaidStatus(resv.booking_id, !booking?.paid);
-                              }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              }}
-                              onPointerDown={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              }}
-                              data-action-button="true"
-                            >
-                              {booking?.paid ? "Mark Unpaid" : "Mark Paid"}
-                            </button>
                           </div>
                           {hoveredNoteId === resv.booking_id &&
                           (booking?.notes || "").trim() &&
@@ -2536,14 +2509,6 @@ export default function BookingsTable() {
                           Pay Now
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => togglePaidStatus(r.id, !r.paid)}
-                        disabled={actionLoadingId === r.id}
-                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
-                      >
-                        {r.paid ? "Mark Unpaid" : "Mark Paid"}
-                      </button>
                       {!reservationsByBookingId.has(r.id) ? (
                         <button
                           type="button"
