@@ -24,7 +24,7 @@ export default function PublicLayout({
       </div>
       <header className="relative z-10">
         <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <a href="/" className="flex items-center gap-3">
+          <a href="https://www.axequacks.com" className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.35)] sm:h-14 sm:w-14">
               <img src="/logo.png?v=2" alt="Axe Quacks" className="h-9 w-9 object-contain sm:h-10 sm:w-10" />
             </span>
@@ -32,7 +32,15 @@ export default function PublicLayout({
               Axe Quacks
             </span>
           </a>
-          <PublicNav />
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="https://www.axequacks.com"
+              className="rounded-full border border-white/30 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.2em] text-white transition hover:bg-white/10"
+            >
+              Back to Home
+            </a>
+            <PublicNav />
+          </div>
         </div>
       </header>
       <main className="relative z-10 min-h-[calc(100vh-72px)]">{children}</main>
