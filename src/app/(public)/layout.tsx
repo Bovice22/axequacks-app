@@ -1,5 +1,4 @@
 import { League_Spartan } from "next/font/google";
-import Script from "next/script";
 import PublicOverlayCleanup from "@/components/PublicOverlayCleanup";
 import PublicNav from "@/components/PublicNav";
 
@@ -13,23 +12,10 @@ const leagueSpartan = League_Spartan({
 export default function PublicLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
-}>) {
+      children: React.ReactNode;
+  }>) {
   return (
     <div className={`${leagueSpartan.variable} public-shell relative min-h-screen`}>
-      <Script id="tawk-to" strategy="afterInteractive">
-        {`
-          var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
-          (function() {
-            var s1 = document.createElement("script"), s0 = document.getElementsByTagName("script")[0];
-            s1.async = true;
-            s1.src = "https://embed.tawk.to/69713b3add396719806f7f83/1jfh4unst";
-            s1.charset = "UTF-8";
-            s1.setAttribute("crossorigin", "*");
-            s0.parentNode.insertBefore(s1, s0);
-          })();
-        `}
-      </Script>
       <PublicOverlayCleanup />
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -right-40 top-[-120px] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(0,174,239,0.35),rgba(0,0,0,0))]" />
