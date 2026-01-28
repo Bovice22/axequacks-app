@@ -3,6 +3,8 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
 
+const REPORTS_CUTOFF_DATE = "2026-02-01";
+
 export async function GET(req: Request) {
   try {
     const staff = await getStaffUserFromCookies();
@@ -11,6 +13,16 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const startDate = url.searchParams.get("startDate");
     const endDate = url.searchParams.get("endDate");
+
+    if (endDate && endDate < REPORTS_CUTOFF_DATE) {
+      return NextResponse.json(
+        { bookings: [], cashSales: [], posItems: [], tips: [], staffUsers: [] },
+        { status: 200 }
+      );
+    }
+
+    const reportStartDate =
+      startDate && startDate >= REPORTS_CUTOFF_DATE ? startDate : REPORTS_CUTOFF_DATE;
 
     const sb = supabaseServer();
     const baseFields = [
@@ -29,8 +41,8 @@ export async function GET(req: Request) {
 
     let query = sb.from("bookings").select(selectWithPayment).order("start_ts", { ascending: true }).limit(5000);
 
-    if (startDate) {
-      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
       query = query.gte("start_ts", startIso);
     }
     if (endDate) {
@@ -68,8 +80,8 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: true })
       .limit(5000);
 
-    if (startDate) {
-      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
       cashQuery = cashQuery.gte("created_at", startIso);
     }
     if (endDate) {
@@ -89,8 +101,8 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: true })
       .limit(5000);
 
-    if (startDate) {
-      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
       posItemsQuery = posItemsQuery.gte("created_at", startIso);
     }
     if (endDate) {
@@ -114,8 +126,8 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: true })
       .limit(5000);
 
-    if (startDate) {
-      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
       tipsQuery = tipsQuery.gte("created_at", startIso);
     }
     if (endDate) {
@@ -138,8 +150,8 @@ export async function GET(req: Request) {
       .order("start_ts", { ascending: true })
       .limit(5000);
 
-    if (startDate) {
-      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(startDate, 0);
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
       bookingTipsQuery = bookingTipsQuery.gte("start_ts", startIso);
     }
     if (endDate) {

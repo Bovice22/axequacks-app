@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
+const REPORTS_CUTOFF_DATE = "2026-02-01";
+
 type SummaryRow = {
   staff_id: string;
   full_name: string | null;
@@ -30,13 +32,20 @@ export async function GET(req: Request) {
     const startDate = parseDateParam(url.searchParams.get("startDate"));
     const endDate = parseDateParam(url.searchParams.get("endDate"));
 
+    if (endDate && endDate < REPORTS_CUTOFF_DATE) {
+      return NextResponse.json({ summary: [] }, { status: 200 });
+    }
+
+    const reportStartDate =
+      startDate && startDate >= REPORTS_CUTOFF_DATE ? startDate : REPORTS_CUTOFF_DATE;
+
     const sb = supabaseServer();
     let query = sb
       .from("staff_time_entries")
       .select("id,staff_user_id,clock_in_ts,clock_out_ts,staff_users(staff_id,full_name,role_label,hourly_rate_cents)");
 
-    if (startDate) {
-      query = query.gte("clock_in_ts", `${startDate}T00:00:00`);
+    if (reportStartDate) {
+      query = query.gte("clock_in_ts", `${reportStartDate}T00:00:00`);
     }
     if (endDate) {
       query = query.lte("clock_in_ts", `${endDate}T23:59:59`);
