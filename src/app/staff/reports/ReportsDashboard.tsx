@@ -216,13 +216,9 @@ export default function ReportsDashboard() {
   }
 
   useEffect(() => {
-    loadBookings();
-    loadAllBookings();
-  }, []);
-
-  useEffect(() => {
     if (!startDate && !endDate) return;
     loadBookings();
+    loadAllBookings();
   }, [startDate, endDate]);
 
   async function loadTimeClockSummary() {
