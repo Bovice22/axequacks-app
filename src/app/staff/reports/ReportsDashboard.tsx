@@ -100,10 +100,21 @@ function monthLabelNY(date: Date) {
   return label;
 }
 
-function parseDateInput(value: string) {
+function normalizeDateInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (trimmed.includes("/")) {
+    const [mm, dd, yyyy] = trimmed.split("/");
+    if (!mm || !dd || !yyyy) return null;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  return trimmed;
+}
+
+function parseDateInput(value: string) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) return null;
+  const parsed = new Date(`${normalized}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
 }

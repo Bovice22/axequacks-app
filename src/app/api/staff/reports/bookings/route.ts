@@ -5,13 +5,24 @@ import { nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
 
 const REPORTS_CUTOFF_DATE = "2026-02-01";
 
-function parseDateInput(value: string | null) {
+function normalizeDateInput(value: string | null) {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (trimmed.includes("/")) {
+    const [mm, dd, yyyy] = trimmed.split("/");
+    if (!mm || !dd || !yyyy) return null;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+  return trimmed;
+}
+
+function parseDateInput(value: string | null) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) return null;
+  const parsed = new Date(`${normalized}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return null;
-  return { raw: trimmed, date: parsed };
+  return { raw: normalized, date: parsed };
 }
 
 function isBeforeCutoff(value: string | null) {
@@ -27,8 +38,8 @@ export async function GET(req: Request) {
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const url = new URL(req.url);
-    const startDate = url.searchParams.get("startDate");
-    const endDate = url.searchParams.get("endDate");
+    const startDate = normalizeDateInput(url.searchParams.get("startDate"));
+    const endDate = normalizeDateInput(url.searchParams.get("endDate"));
 
     if (isBeforeCutoff(endDate)) {
       return NextResponse.json(
