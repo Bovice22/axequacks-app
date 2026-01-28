@@ -4,6 +4,22 @@ import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
 const REPORTS_CUTOFF_DATE = "2026-02-01";
 
+function parseDateInput(value: string | null) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return { raw: trimmed, date: parsed };
+}
+
+function isBeforeCutoff(value: string | null) {
+  const parsed = parseDateInput(value);
+  if (!parsed) return false;
+  const cutoff = new Date(`${REPORTS_CUTOFF_DATE}T00:00:00`);
+  return parsed.date.getTime() < cutoff.getTime();
+}
+
 function csvEscape(value: string) {
   if (value.includes('"') || value.includes(",") || value.includes("\n")) {
     return `"${value.replace(/"/g, '""')}"`;
@@ -20,7 +36,7 @@ export async function GET(req: Request) {
     const start = url.searchParams.get("start");
     const end = url.searchParams.get("end");
 
-    if (end && end < REPORTS_CUTOFF_DATE) {
+    if (isBeforeCutoff(end)) {
       const headers = [
         "id",
         "activity",
@@ -43,7 +59,10 @@ export async function GET(req: Request) {
       });
     }
 
-    const reportStart = start && start >= REPORTS_CUTOFF_DATE ? start : REPORTS_CUTOFF_DATE;
+    const parsedStart = parseDateInput(start);
+    const cutoffDate = new Date(`${REPORTS_CUTOFF_DATE}T00:00:00`);
+    const reportStart =
+      parsedStart && parsedStart.date.getTime() >= cutoffDate.getTime() ? parsedStart.raw : REPORTS_CUTOFF_DATE;
 
     const sb = supabaseServer();
     let query = sb

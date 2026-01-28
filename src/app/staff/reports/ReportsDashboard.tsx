@@ -52,6 +52,7 @@ type ViewMode = "day" | "week" | "month" | "year";
 
 const INVESTMENT_CENTS = 160_000 * 100;
 const PAYMENT_LOG_STORAGE_KEY = "axequacks:payment-log";
+const REPORTS_CUTOFF_DATE = "2026-02-01";
 
 function toNYDateParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -99,6 +100,21 @@ function monthLabelNY(date: Date) {
   return label;
 }
 
+function parseDateInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isBeforeCutoff(value: string) {
+  const parsed = parseDateInput(value);
+  if (!parsed) return false;
+  const cutoff = new Date(`${REPORTS_CUTOFF_DATE}T00:00:00`);
+  return parsed.getTime() < cutoff.getTime();
+}
+
 function formatMoney(cents: number) {
   return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
@@ -143,6 +159,16 @@ export default function ReportsDashboard() {
   async function loadBookings() {
     setLoading(true);
     setError("");
+    if (endDate && isBeforeCutoff(endDate)) {
+      setBookings([]);
+      setCashSales([]);
+      setPosItems([]);
+      setTips([]);
+      setStaffUsers([]);
+      setTimeClockSummary([]);
+      setLoading(false);
+      return;
+    }
     const params = new URLSearchParams();
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
@@ -165,6 +191,11 @@ export default function ReportsDashboard() {
   }
 
   async function loadAllBookings() {
+    if (endDate && isBeforeCutoff(endDate)) {
+      setAllBookings([]);
+      setAllCashSales([]);
+      return;
+    }
     const res = await fetch("/api/staff/reports/bookings", { cache: "no-store" });
     const json = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -184,6 +215,10 @@ export default function ReportsDashboard() {
   }, [startDate, endDate]);
 
   async function loadTimeClockSummary() {
+    if (endDate && isBeforeCutoff(endDate)) {
+      setTimeClockSummary([]);
+      return;
+    }
     const params = new URLSearchParams();
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
