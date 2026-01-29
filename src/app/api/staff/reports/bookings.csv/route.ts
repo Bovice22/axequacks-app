@@ -153,7 +153,9 @@ export async function GET(req: Request) {
     if (reportStart) query = query.gte("start_ts", reportStart);
     if (end) query = query.lte("start_ts", end);
 
-    let { data, error } = await query;
+    let data: any[] | null = null;
+    let error: any = null;
+    ({ data, error } = await query);
     if (error) {
       console.error("bookings report error:", error);
       return NextResponse.json({ error: "Failed to load bookings report" }, { status: 500 });
@@ -174,7 +176,7 @@ export async function GET(req: Request) {
     ];
 
     if (rangeOverlapsManual(start, end)) {
-      data = (data ?? []).filter((row) => !isWithinManualRange(row.start_ts));
+      data = (data ?? []).filter((row: any) => !isWithinManualRange(row.start_ts));
       data = [...buildManualBookings(), ...(data ?? [])];
     }
 
