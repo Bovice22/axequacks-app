@@ -1110,8 +1110,9 @@ function BookPageContent() {
     if (!pricing) return;
 
     if (isStaffMode) {
+      setSelectedReaderId("");
       setShowTerminalPanel(true);
-      setAutoStartTerminal(true);
+      setAutoStartTerminal(false);
       loadTerminalReaders();
       return;
     }
@@ -1257,9 +1258,6 @@ function BookPageContent() {
         return;
       }
       setTerminalReaders(json.readers || []);
-      if (!selectedReaderId && json.readers?.length) {
-        setSelectedReaderId(json.readers[0].id);
-      }
     } catch (e: any) {
       setTerminalError(e?.message || "Failed to load card readers.");
     }
@@ -1423,13 +1421,11 @@ function BookPageContent() {
     if (terminalLoading) return;
     if (!terminalReaders.length) return;
 
-    const readerId = selectedReaderId || terminalReaders[0]?.id || "";
-    if (!readerId) return;
     if (!selectedReaderId) {
-      setSelectedReaderId(readerId);
+      return;
     }
     setAutoStartTerminal(false);
-    handleTerminalPayment(readerId);
+    handleTerminalPayment(selectedReaderId);
   }, [autoStartTerminal, showTerminalPanel, terminalReaders, selectedReaderId, terminalLoading]);
 
   useEffect(() => {
@@ -2710,10 +2706,10 @@ function BookPageContent() {
                   setAutoStartTerminal(false);
                   handleTerminalPayment();
                 }}
-                disabled={terminalLoading}
+                disabled={terminalLoading || !selectedReaderId}
                 className={cx(
                   "rounded-2xl border border-zinc-900 bg-zinc-900 px-5 py-3 text-sm font-extrabold text-white hover:bg-zinc-800",
-                  terminalLoading && "cursor-not-allowed opacity-60"
+                  (terminalLoading || !selectedReaderId) && "cursor-not-allowed opacity-60"
                 )}
               >
                 {terminalLoading ? "Processing…" : "Collect Payment"}
