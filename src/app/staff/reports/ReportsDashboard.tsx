@@ -52,7 +52,7 @@ type ViewMode = "day" | "week" | "month" | "year";
 
 const INVESTMENT_CENTS = 160_000 * 100;
 const PAYMENT_LOG_STORAGE_KEY = "axequacks:payment-log";
-const REPORTS_CUTOFF_DATE = "2026-02-01";
+const REPORTS_CUTOFF_DATE = "2026-01-01";
 
 function toNYDateParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {

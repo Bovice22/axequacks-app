@@ -2,7 +2,22 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-const REPORTS_CUTOFF_DATE = "2026-02-01";
+const REPORTS_CUTOFF_DATE = "2026-01-01";
+const MANUAL_REPORT_START = "2026-01-01";
+const MANUAL_REPORT_END = "2026-01-28";
+const MANUAL_PAYMENT_INTENT_ID = "manual-report-jan-2026";
+
+const MANUAL_BOOKINGS: Array<{
+  activity: string;
+  total_cents: number;
+}> = [
+  { activity: "AXE", total_cents: 10720 * 100 },
+  { activity: "DUCKPIN", total_cents: 6244 * 100 },
+  { activity: "Alcohol", total_cents: 1718 * 100 },
+  { activity: "Beverages", total_cents: 554 * 100 },
+  { activity: "Concessions", total_cents: 10975 },
+  { activity: "Merchandise", total_cents: 10 * 100 },
+];
 
 function normalizeDateInput(value: string | null) {
   if (!value) return null;
@@ -29,6 +44,45 @@ function isBeforeCutoff(value: string | null) {
   if (!parsed) return false;
   const cutoff = new Date(`${REPORTS_CUTOFF_DATE}T00:00:00`);
   return parsed.date.getTime() < cutoff.getTime();
+}
+
+function getManualRange() {
+  const start = new Date(`${MANUAL_REPORT_START}T00:00:00`);
+  const end = new Date(`${MANUAL_REPORT_END}T23:59:59`);
+  return { start, end };
+}
+
+function rangeOverlapsManual(startDate: string | null, endDate: string | null) {
+  const manual = getManualRange();
+  const start = parseDateInput(startDate)?.date ?? manual.start;
+  const end = parseDateInput(endDate)?.date ?? manual.end;
+  return start.getTime() <= manual.end.getTime() && end.getTime() >= manual.start.getTime();
+}
+
+function isWithinManualRange(ts: string) {
+  const manual = getManualRange();
+  const parsed = new Date(ts);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() >= manual.start.getTime() && parsed.getTime() <= manual.end.getTime();
+}
+
+function buildManualBookings() {
+  const startTs = `${MANUAL_REPORT_START}T12:00:00+00:00`;
+  return MANUAL_BOOKINGS.map((row, index) => ({
+    id: `manual-${index}-${MANUAL_REPORT_START}`,
+    activity: row.activity,
+    party_size: 0,
+    duration_minutes: 0,
+    total_cents: row.total_cents,
+    customer_name: "Manual Report Override",
+    customer_email: null,
+    start_ts: startTs,
+    end_ts: null,
+    status: "CONFIRMED",
+    created_at: startTs,
+    paid: true,
+    payment_intent_id: MANUAL_PAYMENT_INTENT_ID,
+  }));
 }
 
 function csvEscape(value: string) {
@@ -99,7 +153,7 @@ export async function GET(req: Request) {
     if (reportStart) query = query.gte("start_ts", reportStart);
     if (end) query = query.lte("start_ts", end);
 
-    const { data, error } = await query;
+    let { data, error } = await query;
     if (error) {
       console.error("bookings report error:", error);
       return NextResponse.json({ error: "Failed to load bookings report" }, { status: 500 });
@@ -118,6 +172,11 @@ export async function GET(req: Request) {
       "status",
       "created_at",
     ];
+
+    if (rangeOverlapsManual(start, end)) {
+      data = (data ?? []).filter((row) => !isWithinManualRange(row.start_ts));
+      data = [...buildManualBookings(), ...(data ?? [])];
+    }
 
     const lines = [headers.join(",")];
     for (const row of data ?? []) {

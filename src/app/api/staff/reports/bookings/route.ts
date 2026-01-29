@@ -3,7 +3,22 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { nyLocalDateKeyPlusMinutesToUTCISOString } from "@/lib/bookingLogic";
 
-const REPORTS_CUTOFF_DATE = "2026-02-01";
+const REPORTS_CUTOFF_DATE = "2026-01-01";
+const MANUAL_REPORT_START = "2026-01-01";
+const MANUAL_REPORT_END = "2026-01-28";
+const MANUAL_PAYMENT_INTENT_ID = "manual-report-jan-2026";
+
+const MANUAL_BOOKINGS: Array<{
+  activity: string;
+  total_cents: number;
+}> = [
+  { activity: "AXE", total_cents: 10720 * 100 },
+  { activity: "DUCKPIN", total_cents: 6244 * 100 },
+  { activity: "Alcohol", total_cents: 1718 * 100 },
+  { activity: "Beverages", total_cents: 554 * 100 },
+  { activity: "Concessions", total_cents: 10975 },
+  { activity: "Merchandise", total_cents: 10 * 100 },
+];
 
 function normalizeDateInput(value: string | null) {
   if (!value) return null;
@@ -30,6 +45,43 @@ function isBeforeCutoff(value: string | null) {
   if (!parsed) return false;
   const cutoff = new Date(`${REPORTS_CUTOFF_DATE}T00:00:00`);
   return parsed.date.getTime() < cutoff.getTime();
+}
+
+function getManualRange() {
+  const start = new Date(`${MANUAL_REPORT_START}T00:00:00`);
+  const end = new Date(`${MANUAL_REPORT_END}T23:59:59`);
+  return { start, end };
+}
+
+function rangeOverlapsManual(startDate: string | null, endDate: string | null) {
+  const manual = getManualRange();
+  const start = parseDateInput(startDate)?.date ?? manual.start;
+  const end = parseDateInput(endDate)?.date ?? manual.end;
+  return start.getTime() <= manual.end.getTime() && end.getTime() >= manual.start.getTime();
+}
+
+function isWithinManualRange(ts: string) {
+  const manual = getManualRange();
+  const parsed = new Date(ts);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() >= manual.start.getTime() && parsed.getTime() <= manual.end.getTime();
+}
+
+function buildManualBookings() {
+  const startTs = nyLocalDateKeyPlusMinutesToUTCISOString(MANUAL_REPORT_START, 12 * 60);
+  return MANUAL_BOOKINGS.map((row, index) => ({
+    id: `manual-${index}-${MANUAL_REPORT_START}`,
+    activity: row.activity,
+    party_size: 0,
+    duration_minutes: 0,
+    total_cents: row.total_cents,
+    start_ts: startTs,
+    status: "CONFIRMED",
+    customer_name: "Manual Report Override",
+    customer_email: null,
+    paid: true,
+    payment_intent_id: MANUAL_PAYMENT_INTENT_ID,
+  }));
 }
 
 export async function GET(req: Request) {
@@ -118,7 +170,7 @@ export async function GET(req: Request) {
       cashQuery = cashQuery.lte("created_at", endIso);
     }
 
-    const { data: cashSales, error: cashErr } = await cashQuery;
+    let { data: cashSales, error: cashErr } = await cashQuery;
     if (cashErr) {
       console.error("reports cash sales error:", cashErr);
       return NextResponse.json({ error: "Failed to load cash sales report" }, { status: 500 });
@@ -139,7 +191,7 @@ export async function GET(req: Request) {
       posItemsQuery = posItemsQuery.lte("created_at", endIso);
     }
 
-    const { data: posItems, error: posItemsErr } = await posItemsQuery;
+    let { data: posItems, error: posItemsErr } = await posItemsQuery;
     if (posItemsErr) {
       console.error("reports pos items error:", posItemsErr);
       // Allow reports to load even if POS items table isn't available yet.
@@ -164,7 +216,7 @@ export async function GET(req: Request) {
       tipsQuery = tipsQuery.lte("created_at", endIso);
     }
 
-    const { data: tips, error: tipsErr } = await tipsQuery;
+    let { data: tips, error: tipsErr } = await tipsQuery;
     if (tipsErr) {
       console.error("reports tips error:", tipsErr);
       return NextResponse.json(
@@ -193,7 +245,7 @@ export async function GET(req: Request) {
       console.error("reports booking tips error:", bookingTipsErr);
     }
 
-    const mergedTips = [
+    let mergedTips = [
       ...(tips ?? []),
       ...((bookingTips ?? []).map((row: any) => ({
         staff_id: row.tip_staff_id,
@@ -201,6 +253,14 @@ export async function GET(req: Request) {
         created_at: row.start_ts,
       })) as any[]),
     ];
+
+    if (rangeOverlapsManual(startDate, endDate)) {
+      data = (data ?? []).filter((row) => !isWithinManualRange(row.start_ts));
+      cashSales = (cashSales ?? []).filter((row) => !isWithinManualRange(row.created_at));
+      posItems = (posItems ?? []).filter((row) => !isWithinManualRange(row.created_at));
+      mergedTips = (mergedTips ?? []).filter((row) => !isWithinManualRange(row.created_at));
+      data = [...buildManualBookings(), ...(data ?? [])];
+    }
 
     const { data: staffUsers, error: staffErr } = await sb
       .from("staff_users")
