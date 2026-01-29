@@ -338,11 +338,24 @@ export default function ReportsDashboard() {
   }, [filteredByCategory]);
 
   const paymentBreakdown = useMemo(() => {
+    const manualStart = new Date("2026-01-01T00:00:00");
+    const manualEnd = new Date("2026-01-28T23:59:59");
+    const filterManualRange = (ts: string | null | undefined) => {
+      if (!ts) return false;
+      const parsed = new Date(ts);
+      if (Number.isNaN(parsed.getTime())) return false;
+      return parsed.getTime() >= manualStart.getTime() && parsed.getTime() <= manualEnd.getTime();
+    };
+
     const paidBookings = bookings.filter((row) => (row.status ?? "CONFIRMED") !== "CANCELLED" && row.paid === true);
     let cardBookingCents = 0;
     let cashBookingCents = 0;
     for (const row of paidBookings) {
       const cents = Number(row.total_cents || 0);
+      if (filterManualRange(row.start_ts)) {
+        cardBookingCents += cents;
+        continue;
+      }
       if (row.payment_intent_id) {
         cardBookingCents += cents;
       } else {
