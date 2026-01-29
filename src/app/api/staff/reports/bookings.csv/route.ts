@@ -52,6 +52,16 @@ function getManualRange() {
   return { start, end };
 }
 
+function clampEndDateForManual(startDate: string | null, endDate: string | null) {
+  if (endDate) return endDate;
+  const manual = getManualRange();
+  const start = parseDateInput(startDate)?.date;
+  if (start && start.getTime() <= manual.end.getTime()) {
+    return MANUAL_REPORT_END;
+  }
+  return null;
+}
+
 function rangeOverlapsManual(startDate: string | null, endDate: string | null) {
   const manual = getManualRange();
   const start = parseDateInput(startDate)?.date ?? manual.start;
@@ -99,7 +109,8 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url);
     const start = normalizeDateInput(url.searchParams.get("start"));
-    const end = normalizeDateInput(url.searchParams.get("end"));
+    const rawEnd = normalizeDateInput(url.searchParams.get("end"));
+    const end = clampEndDateForManual(start, rawEnd) ?? rawEnd;
 
     if (isBeforeCutoff(end)) {
       const headers = [

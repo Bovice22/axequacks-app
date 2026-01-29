@@ -139,12 +139,25 @@ function normalizeActivity(activity: string) {
 }
 
 function parsePaymentAmountCents(entry: string) {
-  const match = entry.match(/\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/);
-  if (!match) return 0;
-  const raw = match[1].replace(/,/g, "");
-  const amount = Number(raw);
-  if (!Number.isFinite(amount)) return 0;
-  return Math.round(amount * 100);
+  const dollarMatches = entry.match(/\$[0-9][0-9,]*\.?[0-9]{0,2}/g);
+  if (dollarMatches && dollarMatches.length) {
+    return dollarMatches.reduce((sum, match) => {
+      const raw = match.replace(/[^0-9.]/g, "");
+      const amount = Number(raw);
+      if (!Number.isFinite(amount)) return sum;
+      return sum + Math.round(amount * 100);
+    }, 0);
+  }
+
+  const paidMatch = entry.match(/paid\s+\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i);
+  if (paidMatch) {
+    const raw = paidMatch[1].replace(/,/g, "");
+    const amount = Number(raw);
+    if (!Number.isFinite(amount)) return 0;
+    return Math.round(amount * 100);
+  }
+
+  return 0;
 }
 
 export default function ReportsDashboard() {
