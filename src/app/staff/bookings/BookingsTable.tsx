@@ -425,7 +425,10 @@ export default function BookingsTable() {
   const [terminalReaders, setTerminalReaders] = useState<Reader[]>([]);
   const [selectedReaderId, setSelectedReaderId] = useState("");
   const [terminalError, setTerminalError] = useState("");
-  const [terminalPhase, setTerminalPhase] = useState<"idle" | "connecting" | "collecting" | "processing">("idle");
+  const [terminalPhase, setTerminalPhase] = useState<
+    "idle" | "connecting" | "connected" | "collecting" | "processing"
+  >("idle");
+  const [connectedReaderId, setConnectedReaderId] = useState<string | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const terminalReadyRef = useRef(false);
   const staffNameById = useMemo(() => {
@@ -600,6 +603,10 @@ export default function BookingsTable() {
         setTerminalError("Stripe Terminal not initialized.");
         return;
       }
+      if (!connectedReaderId || connectedReaderId !== selectedReaderId) {
+        setTerminalError("Connect a reader before charging.");
+        return;
+      }
       if (!selectedReaderId) {
         setTerminalError("Select a reader to continue.");
         return;
@@ -607,14 +614,6 @@ export default function BookingsTable() {
       const reader = terminalReaders.find((r) => r.id === selectedReaderId);
       if (!reader) {
         setTerminalError("Reader not found.");
-        return;
-      }
-
-      setTerminalPhase("connecting");
-      const connectResult = await terminalRef.current.connectReader(reader);
-      if ("error" in connectResult && connectResult.error) {
-        setTerminalError(connectResult.error.message || "Failed to connect reader.");
-        setTerminalPhase("idle");
         return;
       }
 
@@ -685,6 +684,33 @@ export default function BookingsTable() {
       setPayLoading(null);
       setTerminalPhase("idle");
     }
+  }
+
+  async function connectSelectedReader() {
+    setTerminalError("");
+    if (!terminalRef.current) {
+      setTerminalError("Stripe Terminal not initialized.");
+      return;
+    }
+    if (!selectedReaderId) {
+      setTerminalError("Select a reader to continue.");
+      return;
+    }
+    const reader = terminalReaders.find((r) => r.id === selectedReaderId);
+    if (!reader) {
+      setTerminalError("Reader not found.");
+      return;
+    }
+    setTerminalPhase("connecting");
+    const connectResult = await terminalRef.current.connectReader(reader);
+    if ("error" in connectResult && connectResult.error) {
+      setTerminalError(connectResult.error.message || "Failed to connect reader.");
+      setTerminalPhase("idle");
+      setConnectedReaderId(null);
+      return;
+    }
+    setConnectedReaderId(reader.id);
+    setTerminalPhase("connected");
   }
 
   async function submitRefund() {
@@ -1942,9 +1968,10 @@ export default function BookingsTable() {
             onClick={() => payWithCard(payModalBooking.id)}
             disabled={
               payLoading !== null ||
-              terminalPhase !== "idle" ||
+              terminalPhase !== "connected" ||
               !selectedReaderId ||
               !terminalReaders.length ||
+              connectedReaderId !== selectedReaderId ||
               (payGiftApplied ? payGiftApplied.remainingCents <= 0 : false)
             }
             className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
@@ -1957,7 +1984,11 @@ export default function BookingsTable() {
             Card Reader
             <select
               value={selectedReaderId}
-              onChange={(e) => setSelectedReaderId(e.target.value)}
+              onChange={(e) => {
+                setSelectedReaderId(e.target.value);
+                setConnectedReaderId(null);
+                setTerminalPhase("idle");
+              }}
               className="mt-1 h-9 w-full rounded-lg border border-zinc-200 px-2 text-xs"
             >
               <option value="">Select a reader</option>
@@ -1968,10 +1999,22 @@ export default function BookingsTable() {
               ))}
             </select>
           </label>
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={connectSelectedReader}
+              disabled={terminalPhase !== "idle" || !selectedReaderId || !terminalReaders.length}
+              className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+            >
+              {terminalPhase === "connecting" ? "Connecting..." : "Connect Reader"}
+            </button>
+          </div>
           {terminalPhase !== "idle" ? (
             <div className="mt-2 text-[11px] text-zinc-500">
               {terminalPhase === "connecting"
                 ? "Connecting reader..."
+                : terminalPhase === "connected"
+                ? "Reader connected."
                 : terminalPhase === "collecting"
                 ? "Collecting payment..."
                 : "Processing payment..."}
