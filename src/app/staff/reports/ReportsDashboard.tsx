@@ -138,6 +138,15 @@ function normalizeActivity(activity: string) {
   return activity;
 }
 
+function parsePaymentAmountCents(entry: string) {
+  const match = entry.match(/\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/);
+  if (!match) return 0;
+  const raw = match[1].replace(/,/g, "");
+  const amount = Number(raw);
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round(amount * 100);
+}
+
 export default function ReportsDashboard() {
   const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [allBookings, setAllBookings] = useState<BookingRow[]>([]);
@@ -469,9 +478,13 @@ export default function ReportsDashboard() {
   const rickShareCents = Math.round(duckpinRevenueCents * 0.5);
   const jasonShareCents = Math.min(Math.round(duckpinRevenueCents * 0.5), INVESTMENT_CENTS);
 
-  const payoffAmountCents = Math.max(INVESTMENT_CENTS - duckpinRevenueCents, 0);
   const [paymentLogNote, setPaymentLogNote] = useState("");
   const [paymentLogEntries, setPaymentLogEntries] = useState<string[]>([]);
+  const paymentLogTotalCents = useMemo(
+    () => paymentLogEntries.reduce((sum, entry) => sum + parsePaymentAmountCents(entry), 0),
+    [paymentLogEntries]
+  );
+  const payoffAmountCents = Math.max(INVESTMENT_CENTS - paymentLogTotalCents, 0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -500,7 +513,7 @@ export default function ReportsDashboard() {
     lines.push(`Jason's Share (50%),${formatMoney(jasonShareCents)}`);
     lines.push(`Total Pay-Off Amount,${formatMoney(payoffAmountCents)}`);
     lines.push("");
-    lines.push("Revenue by Activity,Amount");
+    lines.push("Revenue by Category,Amount");
     for (const [name, cents] of revenueByActivity) {
       lines.push(`${name},${formatMoney(cents)}`);
     }
@@ -751,7 +764,6 @@ export default function ReportsDashboard() {
               <div>Duckpin Bowling Revenue: {formatMoney(duckpinRevenueCents)}</div>
               <div>Rick's Share (50%): {formatMoney(rickShareCents)}</div>
               <div>Jason's Share (50%): {formatMoney(jasonShareCents)}</div>
-              <div>Total Pay-Off Amount: {formatMoney(payoffAmountCents)}</div>
               <div className="pt-2">
                 <div className="text-xs font-semibold text-zinc-900">Payment Log</div>
                 <div className="mt-1 flex gap-2">
@@ -793,12 +805,13 @@ export default function ReportsDashboard() {
                   </div>
                 ) : null}
               </div>
+              <div>Total Pay-Off Amount: {formatMoney(payoffAmountCents)}</div>
             </div>
           )}
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="text-sm font-extrabold text-zinc-900">Revenue by Activity</div>
+          <div className="text-sm font-extrabold text-zinc-900">Revenue by Category</div>
           {loading ? (
             <div className="mt-3 text-sm text-zinc-900">Loading…</div>
           ) : (
