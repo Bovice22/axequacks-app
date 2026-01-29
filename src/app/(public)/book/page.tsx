@@ -1807,7 +1807,7 @@ function BookPageContent() {
 
             {activity === "Combo Package" && (
               <div className="mb-6">
-                <div className="text-sm font-medium mb-2">Order</div>
+                <div className="mb-2 text-sm font-semibold text-black">Activity Order</div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-200 bg-white p-3">
                     <div className="text-xs font-semibold text-zinc-500">1)</div>
