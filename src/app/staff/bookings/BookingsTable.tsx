@@ -595,7 +595,6 @@ export default function BookingsTable() {
     setPayLoading("card");
     setPayError("");
     setTerminalError("");
-    setTerminalPhase("connecting");
     try {
       if (!terminalRef.current) {
         setTerminalError("Stripe Terminal not initialized.");
@@ -611,6 +610,7 @@ export default function BookingsTable() {
         return;
       }
 
+      setTerminalPhase("connecting");
       const connectResult = await terminalRef.current.connectReader(reader);
       if ("error" in connectResult && connectResult.error) {
         setTerminalError(connectResult.error.message || "Failed to connect reader.");
@@ -1940,7 +1940,13 @@ export default function BookingsTable() {
           <button
             type="button"
             onClick={() => payWithCard(payModalBooking.id)}
-            disabled={payLoading !== null || (payGiftApplied ? payGiftApplied.remainingCents <= 0 : false)}
+            disabled={
+              payLoading !== null ||
+              terminalPhase !== "idle" ||
+              !selectedReaderId ||
+              !terminalReaders.length ||
+              (payGiftApplied ? payGiftApplied.remainingCents <= 0 : false)
+            }
             className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {payLoading === "card" ? "Charging..." : "Pay With Card"}
