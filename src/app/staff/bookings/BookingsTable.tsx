@@ -901,7 +901,7 @@ export default function BookingsTable() {
   useEffect(() => {
     const interval = setInterval(() => {
       void loadBookings(order);
-    }, 60000);
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [order]);
 
