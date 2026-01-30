@@ -1211,7 +1211,7 @@ export default function BookingsTable() {
       const recalculatedTotalCents = partySizeIncreased
         ? totalCents(editActivity as Activity, editPartySize || 1, editDuration)
         : undefined;
-      const totalCents =
+      const totalCentsOverride =
         partySizeIncreased && recalculatedTotalCents && recalculatedTotalCents > previousTotalCents
           ? recalculatedTotalCents
           : editingRow?.paid === false && editTotal.trim()
@@ -1237,7 +1237,9 @@ export default function BookingsTable() {
           activity: editActivity,
           ...timePayload,
           assigned_staff_id: editAssignedStaffId || null,
-          ...(totalCents != null && Number.isFinite(totalCents) ? { total_cents: totalCents } : {}),
+          ...(totalCentsOverride != null && Number.isFinite(totalCentsOverride)
+            ? { total_cents: totalCentsOverride }
+            : {}),
         }),
       });
       const json = await res.json().catch(() => ({}));
