@@ -47,11 +47,21 @@ export async function POST(req: Request, context: RouteContext) {
     const giftCode = String(body?.gift_code || "").trim();
 
     const sb = getSupabaseAdmin();
-    const { data: booking, error: bookingErr } = await sb
+    let { data: booking, error: bookingErr } = await sb
       .from("bookings")
       .select("id,customer_email,total_cents,paid")
       .eq("id", id)
       .single();
+    if ((bookingErr || !booking) && id) {
+      const { data: resv } = await sb.from("resource_reservations").select("booking_id").eq("id", id).single();
+      if (resv?.booking_id) {
+        ({ data: booking, error: bookingErr } = await sb
+          .from("bookings")
+          .select("id,customer_email,total_cents,paid")
+          .eq("id", resv.booking_id)
+          .single());
+      }
+    }
     if (bookingErr || !booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }

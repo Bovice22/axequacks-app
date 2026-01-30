@@ -51,11 +51,24 @@ export async function POST(req: Request) {
     if (!bookingId) return NextResponse.json({ error: "Missing booking_id" }, { status: 400 });
 
     const sb = supabaseServer();
-    const { data: booking, error } = await sb
+    let { data: booking, error } = await sb
       .from("bookings")
       .select("id,activity,party_size,duration_minutes,start_ts,customer_name,customer_email,customer_phone,total_cents,combo_order,paid")
       .eq("id", bookingId)
       .single();
+
+    if ((error || !booking) && bookingId) {
+      const { data: resv } = await sb.from("resource_reservations").select("booking_id").eq("id", bookingId).single();
+      if (resv?.booking_id) {
+        ({ data: booking, error } = await sb
+          .from("bookings")
+          .select(
+            "id,activity,party_size,duration_minutes,start_ts,customer_name,customer_email,customer_phone,total_cents,combo_order,paid"
+          )
+          .eq("id", resv.booking_id)
+          .single());
+      }
+    }
 
     if (error || !booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
