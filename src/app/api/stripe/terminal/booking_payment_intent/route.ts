@@ -93,6 +93,23 @@ export async function POST(req: Request) {
       }
     }
 
+    if ((error || !booking) && bookingSnapshot?.total_cents) {
+      booking = {
+        id: bookingId,
+        activity: bookingSnapshot.activity || "AXE",
+        party_size: bookingSnapshot.party_size || 0,
+        duration_minutes: bookingSnapshot.duration_minutes || 0,
+        start_ts: bookingSnapshot.start_ts,
+        customer_name: bookingSnapshot.customer_name || "",
+        customer_email: bookingSnapshot.customer_email || "",
+        customer_phone: "",
+        total_cents: Number(bookingSnapshot.total_cents || 0),
+        combo_order: "DUCKPIN_FIRST",
+        paid: false,
+      } as any;
+      error = null;
+    }
+
     if (error || !booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
@@ -192,6 +209,9 @@ export async function POST(req: Request) {
         customer_name: String(booking.customer_name || ""),
         customer_email: String(booking.customer_email || ""),
         customer_phone: String(booking.customer_phone || ""),
+        lookup_start_ts: String(booking.start_ts || ""),
+        lookup_customer_name: String(booking.customer_name || ""),
+        lookup_customer_email: String(booking.customer_email || ""),
         combo_order: String(booking.combo_order || "DUCKPIN_FIRST"),
         ui_mode: "staff",
         staff_id: staff.staff_id,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, type PartyAreaName } from "@/lib/bookingLogic";
+import { PARTY_AREA_OPTIONS, canonicalPartyAreaName, normalizePartyAreaName, nyLocalDateKeyPlusMinutesToUTCISOString, type PartyAreaName } from "@/lib/bookingLogic";
 import { getStripeTerminal } from "@/lib/server/stripe";
 import { createBookingWithResources, ensureCustomerAndLinkBooking, type ActivityUI, type ComboOrder } from "@/lib/server/bookingService";
 import { sendBookingConfirmationEmail, sendOwnerBookingConfirmationEmail } from "@/lib/server/mailer";
@@ -101,6 +101,37 @@ function formatTimeFromMinutes(minsFromMidnight: number) {
   const ampm = h24 >= 12 ? "PM" : "AM";
   const h12 = ((h24 + 11) % 12) + 1;
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+async function resolveBookingIdFromMetadata(sb: ReturnType<typeof supabaseServer>, metadata: Record<string, any>) {
+  const bookingId = String(metadata?.booking_id || "").trim();
+  if (bookingId) {
+    const { data } = await sb.from("bookings").select("id").eq("id", bookingId).maybeSingle();
+    if (data?.id) return data.id as string;
+  }
+
+  const dateKey = String(metadata?.date_key || "").trim();
+  const startMin = Number(metadata?.start_min);
+  let startTs = String(metadata?.lookup_start_ts || "").trim();
+  if (!startTs && dateKey && Number.isFinite(startMin)) {
+    startTs = nyLocalDateKeyPlusMinutesToUTCISOString(dateKey, startMin);
+  }
+  if (!startTs) return "";
+  const parsed = new Date(startTs);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const windowStart = new Date(parsed.getTime() - 10 * 60 * 1000).toISOString();
+  const windowEnd = new Date(parsed.getTime() + 10 * 60 * 1000).toISOString();
+
+  let query = sb.from("bookings").select("id").gte("start_ts", windowStart).lte("start_ts", windowEnd).limit(1);
+  const email = String(metadata?.lookup_customer_email || metadata?.customer_email || "").trim();
+  const name = String(metadata?.lookup_customer_name || metadata?.customer_name || "").trim();
+  if (email) {
+    query = query.ilike("customer_email", email);
+  } else if (name) {
+    query = query.ilike("customer_name", name);
+  }
+  const { data } = await query.maybeSingle();
+  return data?.id ? String(data.id) : "";
 }
 
 async function markBookingPaid(bookingId: string) {
@@ -223,11 +254,16 @@ export async function POST(req: Request) {
 
     const stripe = getStripeTerminal();
     const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const sb = supabaseServer();
 
     const bookingInput = parseBookingMetadata(intent.metadata || {});
 
     if (intent.metadata?.booking_id) {
-      const bookingId = intent.metadata.booking_id as string;
+      const bookingId = await resolveBookingIdFromMetadata(sb, intent.metadata || {});
+      if (!bookingId) {
+        console.error("booking finalize error: unable to resolve booking id", intent.metadata);
+        return NextResponse.json({ ok: true, warning: "Booking not found to update." }, { status: 200 });
+      }
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
       await markBookingPaymentIntent(bookingId, paymentIntentId);
