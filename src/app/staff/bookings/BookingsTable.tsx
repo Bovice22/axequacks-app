@@ -2581,23 +2581,34 @@ export default function BookingsTable() {
                               </div>
                             </div>
                           ) : null}
-                          <div className="font-semibold">
-                            {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
-                          </div>
-                          <div>{displayActivity}</div>
-                          <div className="text-[10px] text-zinc-300">{resourceLabel}</div>
-                          <div className="text-[10px] text-zinc-200">
-                            {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
-                          </div>
-                          {booking?.assigned_staff_id ? (
-                            <div className="text-[10px] text-zinc-200">
-                              Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
-                            </div>
-                          ) : null}
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
-                            {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
-                          </div>
+                          {isCompact ? (
+                            <>
+                              <div className="text-[11px] font-semibold">
+                                {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                              </div>
+                              <div className="text-[11px]">{displayActivity}</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-semibold">
+                                {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                              </div>
+                              <div>{displayActivity}</div>
+                              <div className="text-[10px] text-zinc-300">{resourceLabel}</div>
+                              <div className="text-[10px] text-zinc-200">
+                                {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
+                              </div>
+                              {booking?.assigned_staff_id ? (
+                                <div className="text-[10px] text-zinc-200">
+                                  Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
+                                </div>
+                              ) : null}
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                                {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
