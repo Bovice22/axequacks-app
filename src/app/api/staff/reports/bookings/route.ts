@@ -91,6 +91,7 @@ function buildManualBookings() {
     customer_email: null,
     paid: true,
     payment_intent_id: MANUAL_PAYMENT_INTENT_ID,
+    tip_cents: 0,
   }));
 }
 
@@ -127,6 +128,7 @@ export async function GET(req: Request) {
       "status",
       "customer_name",
       "customer_email",
+      "tip_cents",
     ];
     const selectWithPayment = [...baseFields, "paid", "payment_intent_id"].join(",");
     const selectWithPaid = [...baseFields, "paid"].join(",");

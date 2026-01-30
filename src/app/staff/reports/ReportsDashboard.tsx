@@ -15,6 +15,7 @@ type BookingRow = {
   customer_email?: string | null;
   paid?: boolean | null;
   payment_intent_id?: string | null;
+  tip_cents?: number | null;
 };
 type CashSaleRow = {
   activity: string | null;
@@ -498,6 +499,7 @@ export default function ReportsDashboard() {
           method: row.payment_intent_id ? "Card" : "Cash",
           activity: normalizeActivity(row.activity),
           amount: Number(row.total_cents || 0),
+          tip: Number(row.tip_cents || 0),
           customer: row.customer_name?.trim() || row.customer_email?.trim() || "Walk-in",
           staff: "—",
         };
@@ -513,6 +515,7 @@ export default function ReportsDashboard() {
         method: "Card",
         activity: "POS",
         amount: Number(row.total_cents || 0),
+        tip: Number(row.tip_cents || 0),
         customer: "Walk-in",
         staff: row.staff_id ? staffNameById.get(row.staff_id) || row.staff_id : "—",
       }));
@@ -526,6 +529,7 @@ export default function ReportsDashboard() {
         method: "Cash",
         activity: "POS",
         amount: Number(row.total_cents || 0),
+        tip: 0,
         customer: "Walk-in",
         staff: row.staff_id ? staffNameById.get(row.staff_id) || row.staff_id : "—",
       }));
@@ -1060,6 +1064,7 @@ export default function ReportsDashboard() {
                   <th className="px-3 py-2">Customer</th>
                   <th className="px-3 py-2">Staff</th>
                   <th className="px-3 py-2">Amount</th>
+                  <th className="px-3 py-2">Tip</th>
                 </tr>
               </thead>
               <tbody>
@@ -1076,12 +1081,13 @@ export default function ReportsDashboard() {
                       <td className="px-3 py-2 text-center">{row.customer}</td>
                       <td className="px-3 py-2 text-center">{row.staff}</td>
                       <td className="px-3 py-2 text-center">{formatMoney(row.amount)}</td>
+                      <td className="px-3 py-2 text-center">{formatMoney(row.tip || 0)}</td>
                     </tr>
                   );
                 })}
                 {!transactions.length ? (
                   <tr>
-                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={7}>
+                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={8}>
                       No transactions in this range.
                     </td>
                   </tr>
