@@ -29,6 +29,27 @@ type PosItemRow = {
   line_total_cents: number | null;
   created_at: string;
 };
+type PosSaleRow = {
+  id: string;
+  staff_id: string | null;
+  subtotal_cents: number | null;
+  tax_cents: number | null;
+  total_cents: number | null;
+  tip_cents: number | null;
+  payment_intent_id: string | null;
+  status: string | null;
+  created_at: string;
+};
+type PosCashSaleRow = {
+  id: string;
+  staff_id: string | null;
+  subtotal_cents: number | null;
+  tax_cents: number | null;
+  total_cents: number | null;
+  tab_id: string | null;
+  status: string | null;
+  created_at: string;
+};
 type TipRow = {
   staff_id: string | null;
   tip_cents: number | null;
@@ -166,6 +187,8 @@ export default function ReportsDashboard() {
   const [cashSales, setCashSales] = useState<CashSaleRow[]>([]);
   const [allCashSales, setAllCashSales] = useState<CashSaleRow[]>([]);
   const [posItems, setPosItems] = useState<PosItemRow[]>([]);
+  const [posSales, setPosSales] = useState<PosSaleRow[]>([]);
+  const [posCashSales, setPosCashSales] = useState<PosCashSaleRow[]>([]);
   const [tips, setTips] = useState<TipRow[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffUserRow[]>([]);
   const [timeClockSummary, setTimeClockSummary] = useState<TimeClockSummaryRow[]>([]);
@@ -215,6 +238,8 @@ export default function ReportsDashboard() {
     setBookings(json.bookings || []);
     setCashSales(json.cashSales || []);
     setPosItems(json.posItems || []);
+    setPosSales(json.posSales || []);
+    setPosCashSales(json.posCashSales || []);
     setTips(json.tips || []);
     setStaffUsers(json.staffUsers || []);
     if (json.timeClockSummary) {
@@ -452,6 +477,67 @@ export default function ReportsDashboard() {
       .filter((row) => row.quantity > 0)
       .sort((a, b) => b.revenue - a.revenue);
   }, [posItems, cashSales]);
+
+  const transactions = useMemo(() => {
+    const staffNameById = new Map<string, string>();
+    for (const staff of staffUsers) {
+      if (staff.staff_id) {
+        staffNameById.set(staff.staff_id, staff.full_name || staff.staff_id);
+      }
+    }
+
+    const bookingIntentIds = new Set<string>();
+    const bookingRows = bookings
+      .filter((row) => (row.status ?? "CONFIRMED") !== "CANCELLED" && row.paid === true)
+      .map((row) => {
+        if (row.payment_intent_id) bookingIntentIds.add(row.payment_intent_id);
+        return {
+          id: row.id,
+          date: row.start_ts,
+          source: "Booking",
+          method: row.payment_intent_id ? "Card" : "Cash",
+          activity: normalizeActivity(row.activity),
+          amount: Number(row.total_cents || 0),
+          customer: row.customer_name?.trim() || row.customer_email?.trim() || "Walk-in",
+          staff: "—",
+        };
+      });
+
+    const posRows = posSales
+      .filter((row) => (row.status || "PAID").toUpperCase() === "PAID")
+      .filter((row) => !row.payment_intent_id || !bookingIntentIds.has(row.payment_intent_id))
+      .map((row) => ({
+        id: `pos-${row.id}`,
+        date: row.created_at,
+        source: "POS Sale",
+        method: "Card",
+        activity: "POS",
+        amount: Number(row.total_cents || 0),
+        customer: "Walk-in",
+        staff: row.staff_id ? staffNameById.get(row.staff_id) || row.staff_id : "—",
+      }));
+
+    const posCashRows = posCashSales
+      .filter((row) => (row.status || "PAID").toUpperCase() === "PAID")
+      .map((row) => ({
+        id: `pos-cash-${row.id}`,
+        date: row.created_at,
+        source: row.tab_id ? "Tab Sale" : "POS Sale",
+        method: "Cash",
+        activity: "POS",
+        amount: Number(row.total_cents || 0),
+        customer: "Walk-in",
+        staff: row.staff_id ? staffNameById.get(row.staff_id) || row.staff_id : "—",
+      }));
+
+    const all = [...bookingRows, ...posRows, ...posCashRows];
+    all.sort((a, b) => {
+      const aTime = a.date ? new Date(a.date).getTime() : 0;
+      const bTime = b.date ? new Date(b.date).getTime() : 0;
+      return bTime - aTime;
+    });
+    return all;
+  }, [bookings, posSales, posCashSales, staffUsers]);
 
   const revenueByPeriod = useMemo(() => {
     const map = new Map<string, { label: string; sortKey: number; total: number }>();
@@ -949,6 +1035,54 @@ export default function ReportsDashboard() {
                   <tr>
                     <td className="px-3 py-3 text-center text-sm text-zinc-900" colSpan={3}>
                       No POS items sold in this range.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="text-sm font-extrabold text-zinc-900">Transactions</div>
+        {loading ? (
+          <div className="mt-3 text-sm text-zinc-600">Loading…</div>
+        ) : (
+          <div className="mt-3 overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-center text-zinc-600">
+                <tr>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Source</th>
+                  <th className="px-3 py-2">Method</th>
+                  <th className="px-3 py-2">Activity</th>
+                  <th className="px-3 py-2">Customer</th>
+                  <th className="px-3 py-2">Staff</th>
+                  <th className="px-3 py-2">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((row) => {
+                  const dateLabel = row.date
+                    ? new Date(row.date).toLocaleString("en-US")
+                    : "—";
+                  return (
+                    <tr key={row.id} className="border-t border-zinc-100 text-zinc-900">
+                      <td className="px-3 py-2 text-center">{dateLabel}</td>
+                      <td className="px-3 py-2 text-center">{row.source}</td>
+                      <td className="px-3 py-2 text-center">{row.method}</td>
+                      <td className="px-3 py-2 text-center">{row.activity}</td>
+                      <td className="px-3 py-2 text-center">{row.customer}</td>
+                      <td className="px-3 py-2 text-center">{row.staff}</td>
+                      <td className="px-3 py-2 text-center">{formatMoney(row.amount)}</td>
+                    </tr>
+                  );
+                })}
+                {!transactions.length ? (
+                  <tr>
+                    <td className="px-3 py-3 text-center text-sm text-zinc-600" colSpan={7}>
+                      No transactions in this range.
                     </td>
                   </tr>
                 ) : null}

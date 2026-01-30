@@ -106,7 +106,7 @@ export async function GET(req: Request) {
 
     if (isBeforeCutoff(endDate)) {
       return NextResponse.json(
-        { bookings: [], cashSales: [], posItems: [], tips: [], staffUsers: [] },
+        { bookings: [], cashSales: [], posItems: [], posSales: [], posCashSales: [], tips: [], staffUsers: [] },
         { status: 200 }
       );
     }
@@ -207,7 +207,63 @@ export async function GET(req: Request) {
       console.error("reports pos items error:", posItemsErr);
       // Allow reports to load even if POS items table isn't available yet.
       return NextResponse.json(
-        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: [], tips: [], staffUsers: [] },
+        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: [], posSales: [], posCashSales: [], tips: [], staffUsers: [] },
+        { status: 200 }
+      );
+    }
+
+    let posSalesQuery = sb
+      .from("pos_sales")
+      .select("id,staff_id,subtotal_cents,tax_cents,total_cents,tip_cents,payment_intent_id,status,created_at")
+      .order("created_at", { ascending: true })
+      .limit(5000);
+
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
+      posSalesQuery = posSalesQuery.gte("created_at", startIso);
+    }
+    if (endDate) {
+      const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(endDate, 24 * 60 - 1);
+      posSalesQuery = posSalesQuery.lte("created_at", endIso);
+    }
+
+    let { data: posSales, error: posSalesErr } = await posSalesQuery;
+    if (posSalesErr) {
+      console.error("reports pos sales error:", posSalesErr);
+      return NextResponse.json(
+        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [], posSales: [], posCashSales: [], tips: [], staffUsers: [] },
+        { status: 200 }
+      );
+    }
+
+    let posCashSalesQuery = sb
+      .from("pos_cash_sales")
+      .select("id,staff_id,subtotal_cents,tax_cents,total_cents,tab_id,status,created_at")
+      .order("created_at", { ascending: true })
+      .limit(5000);
+
+    if (reportStartDate) {
+      const startIso = nyLocalDateKeyPlusMinutesToUTCISOString(reportStartDate, 0);
+      posCashSalesQuery = posCashSalesQuery.gte("created_at", startIso);
+    }
+    if (endDate) {
+      const endIso = nyLocalDateKeyPlusMinutesToUTCISOString(endDate, 24 * 60 - 1);
+      posCashSalesQuery = posCashSalesQuery.lte("created_at", endIso);
+    }
+
+    let { data: posCashSales, error: posCashSalesErr } = await posCashSalesQuery;
+    if (posCashSalesErr) {
+      console.error("reports pos cash sales error:", posCashSalesErr);
+      return NextResponse.json(
+        {
+          bookings: data ?? [],
+          cashSales: cashSales ?? [],
+          posItems: posItems ?? [],
+          posSales: posSales ?? [],
+          posCashSales: [],
+          tips: [],
+          staffUsers: [],
+        },
         { status: 200 }
       );
     }
@@ -231,7 +287,15 @@ export async function GET(req: Request) {
     if (tipsErr) {
       console.error("reports tips error:", tipsErr);
       return NextResponse.json(
-        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [], tips: [], staffUsers: [] },
+        {
+          bookings: data ?? [],
+          cashSales: cashSales ?? [],
+          posItems: posItems ?? [],
+          posSales: posSales ?? [],
+          posCashSales: posCashSales ?? [],
+          tips: [],
+          staffUsers: [],
+        },
         { status: 200 }
       );
     }
@@ -269,6 +333,8 @@ export async function GET(req: Request) {
       data = (data ?? []).filter((row) => !isWithinManualRange(row.start_ts));
       cashSales = (cashSales ?? []).filter((row) => !isWithinManualRange(row.created_at));
       posItems = (posItems ?? []).filter((row) => !isWithinManualRange(row.created_at));
+      posSales = (posSales ?? []).filter((row) => !isWithinManualRange(row.created_at));
+      posCashSales = (posCashSales ?? []).filter((row) => !isWithinManualRange(row.created_at));
       mergedTips = (mergedTips ?? []).filter((row) => !isWithinManualRange(row.created_at));
       data = [...buildManualBookings(), ...(data ?? [])];
     }
@@ -281,7 +347,15 @@ export async function GET(req: Request) {
     if (staffErr) {
       console.error("reports staff users error:", staffErr);
       return NextResponse.json(
-        { bookings: data ?? [], cashSales: cashSales ?? [], posItems: posItems ?? [], tips: tips ?? [], staffUsers: [] },
+        {
+          bookings: data ?? [],
+          cashSales: cashSales ?? [],
+          posItems: posItems ?? [],
+          posSales: posSales ?? [],
+          posCashSales: posCashSales ?? [],
+          tips: tips ?? [],
+          staffUsers: [],
+        },
         { status: 200 }
       );
     }
@@ -291,6 +365,8 @@ export async function GET(req: Request) {
         bookings: data ?? [],
         cashSales: cashSales ?? [],
         posItems: posItems ?? [],
+        posSales: posSales ?? [],
+        posCashSales: posCashSales ?? [],
         tips: mergedTips,
         staffUsers: staffUsers ?? [],
       },
