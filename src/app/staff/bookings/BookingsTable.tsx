@@ -372,6 +372,9 @@ export default function BookingsTable() {
   const [editAvailabilityLoading, setEditAvailabilityLoading] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [editTotal, setEditTotal] = useState("");
+  const [editResourceAssignments, setEditResourceAssignments] = useState<Record<string, string>>({});
+  const [editResourceError, setEditResourceError] = useState("");
+  const [editResourceLoading, setEditResourceLoading] = useState(false);
   const [partyEditReservation, setPartyEditReservation] = useState<ReservationRow | null>(null);
   const [partyEditDateKey, setPartyEditDateKey] = useState("");
   const [partyEditStart, setPartyEditStart] = useState("");
@@ -438,6 +441,13 @@ export default function BookingsTable() {
     }
     return map;
   }, [staffUsers]);
+  const resourceById = useMemo(() => {
+    const map = new Map<string, ResourceRow>();
+    for (const resource of resources) {
+      map.set(resource.id, resource);
+    }
+    return map;
+  }, [resources]);
 
   async function loadBookings(nextOrder: "upcoming" | "newest") {
     setLoading(true);
@@ -529,6 +539,19 @@ export default function BookingsTable() {
     setPayGiftCode("");
     setPayGiftApplied(null);
     setPayGiftStatus("");
+  }
+
+  function initResourceAssignments(bookingId: string) {
+    const assignments: Record<string, string> = {};
+    for (const resv of reservations) {
+      if (resv.booking_id !== bookingId || !resv.id) continue;
+      const resource = resourceById.get(resv.resource_id);
+      if (!resource) continue;
+      if (resource.type !== "AXE" && resource.type !== "DUCKPIN") continue;
+      assignments[resv.id] = resv.resource_id;
+    }
+    setEditResourceAssignments(assignments);
+    setEditResourceError("");
   }
 
   async function applyPayGiftCode(booking: BookingRow) {
@@ -1029,6 +1052,7 @@ export default function BookingsTable() {
         partySize: booking.party_size || 1,
         assignedStaffId: booking.assigned_staff_id || "",
       });
+      initResourceAssignments(bookingId);
       return;
     }
 
@@ -1075,6 +1099,7 @@ export default function BookingsTable() {
         partySize: b?.party_size || 1,
         assignedStaffId: b?.assigned_staff_id || "",
       });
+      initResourceAssignments(bookingId);
     } finally {
       setEditLoading(false);
     }
@@ -1171,6 +1196,50 @@ export default function BookingsTable() {
       setEditingBookingId(null);
     } finally {
       setSavingEdit(false);
+    }
+  }
+
+  async function saveResourceAssignments() {
+    if (!editingBookingId) return;
+    const currentAssignments: Record<string, string> = {};
+    for (const resv of reservations) {
+      if (resv.booking_id !== editingBookingId || !resv.id) continue;
+      const resource = resourceById.get(resv.resource_id);
+      if (!resource || (resource.type !== "AXE" && resource.type !== "DUCKPIN")) continue;
+      currentAssignments[resv.id] = resv.resource_id;
+    }
+    const updates = Object.entries(editResourceAssignments)
+      .filter(([id, resourceId]) => currentAssignments[id] && currentAssignments[id] !== resourceId)
+      .map(([reservationId, resourceId]) => ({ reservation_id: reservationId, resource_id: resourceId }));
+
+    if (!updates.length) {
+      setEditResourceError("No resource changes to save.");
+      return;
+    }
+
+    setEditResourceLoading(true);
+    setEditResourceError("");
+    try {
+      const res = await fetch("/api/staff/resource-reservations/reassign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: editingBookingId, updates }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEditResourceError(json?.error || "Failed to update resources.");
+        return;
+      }
+      const updateMap = new Map(updates.map((u) => [u.reservation_id, u.resource_id]));
+      setReservations((prev) =>
+        prev.map((row) =>
+          row.id && updateMap.has(row.id) ? { ...row, resource_id: updateMap.get(row.id)! } : row
+        )
+      );
+    } catch (err: any) {
+      setEditResourceError(err?.message || "Failed to update resources.");
+    } finally {
+      setEditResourceLoading(false);
     }
   }
 
@@ -1587,6 +1656,61 @@ export default function BookingsTable() {
               ) : null}
             </div>
           ) : null}
+          <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+            <div className="text-xs font-semibold text-zinc-600">Resource Allocation</div>
+            <div className="mt-2 space-y-2 text-xs text-zinc-700">
+              {(() => {
+                const rows = reservations
+                  .filter((resv) => resv.booking_id === editingBookingId && resv.id)
+                  .map((resv) => {
+                    const resource = resourceById.get(resv.resource_id);
+                    if (!resource || (resource.type !== "AXE" && resource.type !== "DUCKPIN")) return null;
+                    const options = resources
+                      .filter((r) => r.type === resource.type && r.active !== false)
+                      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                      .map((r) => ({ id: r.id, label: r.name || r.id }));
+                    const key = resv.id as string;
+                    const selected = editResourceAssignments[key] || resv.resource_id;
+                    const typeLabel = resource.type === "AXE" ? "Axe Bay" : "Duckpin Lane";
+                    return (
+                      <label key={key} className="flex flex-col gap-1 rounded-lg border border-zinc-200 bg-white p-2">
+                        <div className="text-[11px] font-semibold text-zinc-600">
+                          {typeLabel} · {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                        </div>
+                        <select
+                          value={selected}
+                          onChange={(e) =>
+                            setEditResourceAssignments((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          className="h-9 rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                        >
+                          {options.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })
+                  .filter(Boolean);
+
+                if (!rows.length) {
+                  return <div className="text-xs text-zinc-500">No lanes or bays assigned yet.</div>;
+                }
+                return rows;
+              })()}
+            </div>
+            {editResourceError ? <div className="mt-2 text-xs text-red-600">{editResourceError}</div> : null}
+            <button
+              type="button"
+              onClick={saveResourceAssignments}
+              disabled={editResourceLoading}
+              className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+            >
+              {editResourceLoading ? "Saving..." : "Save Resource Changes"}
+            </button>
+          </div>
         </div>
         {refundRequired ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
