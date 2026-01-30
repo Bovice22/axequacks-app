@@ -260,6 +260,27 @@ export default function PosScreen() {
     closeTabModal();
   }
 
+  async function deleteActiveTab() {
+    if (!activeTabId) return;
+    if (!window.confirm("Delete this tab? This cannot be undone.")) return;
+    setError("");
+    try {
+      const res = await fetch(`/api/staff/tabs/${activeTabId}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json?.error || "Failed to delete tab.");
+        return;
+      }
+      await loadTabs();
+      setActiveTabId("");
+      setTabItems([]);
+      setActiveTabName("");
+      setActiveTabStatus("");
+    } catch (e: any) {
+      setError(e?.message || "Failed to delete tab.");
+    }
+  }
+
   async function loadReaders() {
     try {
       const res = await fetch("/api/stripe/terminal/readers");
@@ -1083,6 +1104,15 @@ export default function PosScreen() {
                 >
                   Open New Tab
                 </button>
+                {activeTabId ? (
+                  <button
+                    type="button"
+                    onClick={deleteActiveTab}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Delete Tab
+                  </button>
+                ) : null}
                 {activeTabId ? (
                   <span className="text-xs font-semibold text-zinc-700">
                     Tab: {activeTabName || "Customer"}

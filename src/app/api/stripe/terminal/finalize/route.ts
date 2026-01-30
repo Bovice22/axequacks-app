@@ -33,6 +33,25 @@ function parsePartyAreas(value?: string | null) {
   }
 }
 
+type TabLineItem = {
+  item_id: string;
+  name: string;
+  price_cents: number;
+  quantity: number;
+  line_total_cents: number;
+};
+
+function parseTabItems(raw?: string | null) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as TabLineItem[];
+  } catch {
+    return [];
+  }
+}
+
 function parseBookingMetadata(metadata: Record<string, string | null | undefined>) {
   const activity = metadata.activity as ActivityUI | undefined;
   const partySize = Number(metadata.party_size);
@@ -130,6 +149,72 @@ async function recordBookingTip(bookingId: string, intent: any) {
   }
 }
 
+async function recordTabSaleForBooking(intent: any) {
+  const tabId = String(intent?.metadata?.tab_id || "");
+  const tabItems = parseTabItems(intent?.metadata?.tab_items);
+  if (!tabId || !tabItems.length) return;
+
+  const subtotalCents = Number(intent.metadata?.tab_subtotal_cents || 0);
+  const taxCents = Number(intent.metadata?.tab_tax_cents || 0);
+  const totalCents = Number(intent.metadata?.tab_total_cents || 0);
+
+  const sb = supabaseServer();
+  const { data: existing } = await sb
+    .from("pos_sales")
+    .select("id")
+    .eq("payment_intent_id", intent.id)
+    .maybeSingle();
+  if (existing?.id) return;
+
+  const staffId = String(intent?.metadata?.staff_id || "");
+  const { data: sale, error: saleErr } = await sb
+    .from("pos_sales")
+    .insert({
+      staff_id: staffId || null,
+      subtotal_cents: subtotalCents,
+      tax_cents: taxCents,
+      total_cents: totalCents,
+      tip_cents: 0,
+      payment_intent_id: intent.id,
+      status: "PAID",
+    })
+    .select("id")
+    .single();
+  if (saleErr || !sale) {
+    console.error("tab sale create error:", saleErr);
+    return;
+  }
+
+  const rows = tabItems.map((item) => ({
+    sale_id: sale.id,
+    item_id: item.item_id,
+    name: item.name,
+    price_cents: item.price_cents,
+    quantity: item.quantity,
+    line_total_cents: item.line_total_cents,
+  }));
+  const { error: itemsErr } = await sb.from("pos_sale_items").insert(rows);
+  if (itemsErr) {
+    console.error("tab sale items error:", itemsErr);
+  }
+
+  const { error: tabErr } = await sb.from("booking_tabs").update({ status: "CLOSED" }).eq("id", tabId);
+  if (tabErr) {
+    console.error("tab close error:", tabErr);
+  }
+}
+
+async function updateBookingTotalWithTab(bookingId: string, intent: any) {
+  const bookingTotal = Number(intent?.metadata?.booking_total_after_discount || 0);
+  const tabTotal = Number(intent?.metadata?.tab_total_cents || 0);
+  if (!Number.isFinite(bookingTotal) || !Number.isFinite(tabTotal) || tabTotal <= 0) return;
+  const sb = supabaseServer();
+  const { error } = await sb.from("bookings").update({ total_cents: bookingTotal + tabTotal }).eq("id", bookingId);
+  if (error) {
+    console.error("booking total update error:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -146,6 +231,8 @@ export async function POST(req: Request) {
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
       await markBookingPaymentIntent(bookingId, paymentIntentId);
+      await updateBookingTotalWithTab(bookingId, intent);
+      await recordTabSaleForBooking(intent);
       await recordBookingTip(bookingId, intent);
       if (bookingInput && intent.metadata?.promo_code) {
         await recordPromoRedemption({

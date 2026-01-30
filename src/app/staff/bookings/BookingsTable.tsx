@@ -23,6 +23,9 @@ type BookingRow = {
   assigned_staff_id?: string | null;
   tip_cents?: number | null;
   tip_staff_id?: string | null;
+  tab_status?: string | null;
+  tab_id?: string | null;
+  tab_total_cents?: number | null;
 };
 
 type ResourceRow = {
@@ -80,19 +83,34 @@ function comboOrderLabel(order: string | null | undefined) {
   return order;
 }
 
-function paymentLabel(status: string | null | undefined, paid: boolean | null | undefined) {
+function bookingPaymentLabel(status: string | null | undefined, paid: boolean | null | undefined) {
   if ((status ?? "CONFIRMED") === "CANCELLED") return "CANCELLED";
-  return paid ? "PAID" : "UNPAID";
+  return paid ? "BOOKING PAID" : "BOOKING UNPAID";
 }
 
-function paymentBadge(status: string | null | undefined, paid: boolean | null | undefined, className?: string) {
-  const label = paymentLabel(status, paid);
+function bookingPaymentBadge(status: string | null | undefined, paid: boolean | null | undefined, className?: string) {
+  const label = bookingPaymentLabel(status, paid);
   const style =
-    label === "PAID"
+    label === "BOOKING PAID"
       ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-      : label === "UNPAID"
+      : label === "BOOKING UNPAID"
       ? "bg-red-100 text-red-800 border-red-200"
       : "bg-zinc-100 text-zinc-700 border-zinc-200";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style} ${className ?? ""}`}>
+      {label}
+    </span>
+  );
+}
+
+function tabPaymentBadge(tabStatus: string | null | undefined, className?: string) {
+  if (!tabStatus) return null;
+  const normalized = String(tabStatus).toUpperCase();
+  const label = normalized === "OPEN" ? "TAB UNPAID" : "TAB PAID";
+  const style =
+    normalized === "OPEN"
+      ? "bg-red-100 text-red-800 border-red-200"
+      : "bg-emerald-100 text-emerald-800 border-emerald-200";
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style} ${className ?? ""}`}>
       {label}
@@ -598,8 +616,8 @@ export default function BookingsTable() {
     setPayLoading("cash");
     setPayError("");
     try {
-      const res = await fetch(`/api/staff/bookings/${bookingId}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/staff/bookings/${bookingId}/cash-pay`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paid: true, gift_code: payGiftApplied?.code || "" }),
       });
@@ -608,7 +626,7 @@ export default function BookingsTable() {
         setPayError(json?.error || "Failed to mark booking paid.");
         return;
       }
-      setRows((prev) => prev.map((row) => (row.id === bookingId ? { ...row, paid: true } : row)));
+      await loadBookings(order);
       closePayModal();
     } catch (err: any) {
       setPayError(err?.message || "Failed to mark booking paid.");
@@ -2009,10 +2027,11 @@ export default function BookingsTable() {
     </div>
   ) : null;
   const payModalBooking = payModalBookingId ? bookingById.get(payModalBookingId) || null : null;
+  const payModalTabTotalCents = payModalBooking?.tab_total_cents || 0;
   const payModalTotalCents = payModalBooking
     ? payGiftApplied
-      ? payGiftApplied.remainingCents
-      : payModalBooking.total_cents
+      ? payGiftApplied.remainingCents + payModalTabTotalCents
+      : payModalBooking.total_cents + payModalTabTotalCents
     : 0;
   const payModal = payModalBooking ? (
     <div
@@ -2048,6 +2067,11 @@ export default function BookingsTable() {
           {payModalBooking.customer_name || "Customer"} · ${(payModalTotalCents / 100).toFixed(2)} ·{" "}
           {activityLabel(payModalBooking.activity)}
         </div>
+        {payModalTabTotalCents > 0 ? (
+          <div className="mt-1 text-[11px] font-semibold text-zinc-700">
+            Includes tab items: ${(payModalTabTotalCents / 100).toFixed(2)}
+          </div>
+        ) : null}
         {payGiftApplied ? (
           <div className="mt-2 text-[11px] font-semibold text-emerald-700">
             Gift {payGiftApplied.code}: -${(payGiftApplied.amountOffCents / 100).toFixed(2)}
@@ -2551,7 +2575,10 @@ export default function BookingsTable() {
                                   Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
                                 </div>
                               ) : null}
-                              {paymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                                {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
+                              </div>
                             </div>
                           ) : null}
                           <div className="font-semibold">
@@ -2567,7 +2594,10 @@ export default function BookingsTable() {
                               Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
                             </div>
                           ) : null}
-                          {paymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                            {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
+                          </div>
                         </div>
                       );
                     })}
@@ -2654,9 +2684,14 @@ export default function BookingsTable() {
                   <td className="py-2 text-center text-zinc-900">{comboOrderLabel(r.combo_order)}</td>
                   <td className="py-2 text-center text-zinc-900">{displayPartySize(r)}</td>
                   <td className="py-2 text-center text-zinc-900">
-                    {(r.status ?? "CONFIRMED") === "CANCELLED" ? "CANCELLED" : r.paid ? "PAID" : "UNPAID"}
+                    <div className="flex flex-wrap justify-center gap-1">
+                      {bookingPaymentBadge(r.status, r.paid, "text-[10px]")}
+                      {tabPaymentBadge(r.tab_status, "text-[10px]")}
+                    </div>
                   </td>
-                  <td className="py-2 text-center text-zinc-900">${(r.total_cents / 100).toFixed(2)}</td>
+                  <td className="py-2 text-center text-zinc-900">
+                    ${((r.total_cents + (r.tab_total_cents || 0)) / 100).toFixed(2)}
+                  </td>
                   <td className="py-2 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <button

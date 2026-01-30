@@ -142,8 +142,82 @@ export async function GET(req: Request) {
       }
     }
 
+    const TAX_RATE = 0.0725;
+    let tabStatusByBooking = new Map<string, { status: string; tabId: string | null; totalCents: number }>();
+    if (bookingIds.length > 0) {
+      const { data: tabs, error: tabErr } = await sb
+        .from("booking_tabs")
+        .select("id,booking_id,status")
+        .in("booking_id", bookingIds);
+      if (tabErr) {
+        console.error("tab lookup error:", tabErr);
+      } else {
+        const openTabs = (tabs ?? []).filter((row) => String(row.status || "").toUpperCase() === "OPEN");
+        const closedTabs = (tabs ?? []).filter((row) => String(row.status || "").toUpperCase() === "CLOSED");
+        for (const row of openTabs) {
+          if (!row?.booking_id) continue;
+          tabStatusByBooking.set(row.booking_id, { status: "OPEN", tabId: row.id, totalCents: 0 });
+        }
+        for (const row of closedTabs) {
+          if (!row?.booking_id) continue;
+          if (!tabStatusByBooking.has(row.booking_id)) {
+            tabStatusByBooking.set(row.booking_id, { status: "CLOSED", tabId: row.id, totalCents: 0 });
+          }
+        }
+      }
+    }
+
+    if (tabStatusByBooking.size > 0) {
+      const openTabIds = Array.from(tabStatusByBooking.values())
+        .filter((row) => row.status === "OPEN" && row.tabId)
+        .map((row) => row.tabId as string);
+      if (openTabIds.length > 0) {
+        const { data: tabItems, error: tabItemsErr } = await sb
+          .from("booking_tab_items")
+          .select("id,tab_id,item_id,quantity")
+          .in("tab_id", openTabIds);
+        if (tabItemsErr) {
+          console.error("tab items load error:", tabItemsErr);
+        } else {
+          const itemIds = Array.from(new Set((tabItems ?? []).map((row) => row.item_id).filter(Boolean)));
+          const { data: addons, error: addonsErr } = await sb
+            .from("add_ons")
+            .select("id,price_cents")
+            .in("id", itemIds);
+          if (addonsErr) {
+            console.error("tab addons load error:", addonsErr);
+          } else {
+            const addonById = new Map((addons ?? []).map((row) => [row.id, row]));
+            const totalsByTab = new Map<string, number>();
+            for (const item of tabItems ?? []) {
+              const addon = addonById.get(item.item_id);
+              if (!addon) continue;
+              const lineTotal = (Number(addon.price_cents || 0) || 0) * (Number(item.quantity || 0) || 0);
+              totalsByTab.set(item.tab_id, (totalsByTab.get(item.tab_id) || 0) + lineTotal);
+            }
+            for (const row of tabStatusByBooking.values()) {
+              if (!row.tabId) continue;
+              const subtotal = totalsByTab.get(row.tabId) || 0;
+              const tax = Math.round(subtotal * TAX_RATE);
+              row.totalCents = subtotal + tax;
+            }
+          }
+        }
+      }
+    }
+
+    const enriched = (data ?? []).map((row) => {
+      const tabInfo = tabStatusByBooking.get(row.id);
+      return {
+        ...row,
+        tab_status: tabInfo?.status || null,
+        tab_id: tabInfo?.tabId || null,
+        tab_total_cents: tabInfo?.totalCents || 0,
+      };
+    });
+
     return NextResponse.json(
-      { bookings: data ?? [], resources: resources ?? [], reservations, eventRequests },
+      { bookings: enriched, resources: resources ?? [], reservations, eventRequests },
       { status: 200 }
     );
   } catch (err: any) {

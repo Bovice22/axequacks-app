@@ -44,6 +44,8 @@ export async function POST(req: Request) {
     const staff = await getStaffUserFromCookies();
     if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const TAX_RATE = 0.0725;
+
     const body = await req.json().catch(() => ({}));
     const bookingId = String(body?.booking_id || "").trim();
     if (!bookingId) return NextResponse.json({ error: "Missing booking_id" }, { status: 400 });
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
     const sb = supabaseServer();
     const { data: booking, error } = await sb
       .from("bookings")
-      .select("id,activity,party_size,duration_minutes,start_ts,customer_name,customer_email,customer_phone,total_cents,combo_order")
+      .select("id,activity,party_size,duration_minutes,start_ts,customer_name,customer_email,customer_phone,total_cents,combo_order,paid")
       .eq("id", bookingId)
       .single();
 
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
     const baseAmount = Number(booking.total_cents || 0);
     const giftCode = String(body?.gift_code || "").trim();
     let giftMeta: { code: string; amountOff: number } | null = null;
-    let amount = baseAmount;
+    let bookingAmount = baseAmount;
     if (giftCode) {
       try {
         const giftResult = await validateGiftCertificate({
@@ -70,25 +72,73 @@ export async function POST(req: Request) {
           customerEmail: String(booking.customer_email || ""),
           amountCents: baseAmount,
         });
-        amount = giftResult.remainingCents;
+        bookingAmount = giftResult.remainingCents;
         giftMeta = { code: giftResult.gift.code, amountOff: giftResult.amountOffCents };
       } catch (giftErr: any) {
         return NextResponse.json({ error: giftErr?.message || "Invalid gift certificate." }, { status: 400 });
       }
     }
 
-    if (giftMeta && amount <= 0) {
+    let tabTotalCents = 0;
+    let tabSubtotalCents = 0;
+    let tabTaxCents = 0;
+    let tabItemsMeta: Array<{ item_id: string; name: string; price_cents: number; quantity: number; line_total_cents: number }> = [];
+    let tabId = "";
+    if (booking.paid !== true) {
+      const { data: tab } = await sb
+        .from("booking_tabs")
+        .select("id,status")
+        .eq("booking_id", bookingId)
+        .eq("status", "OPEN")
+        .maybeSingle();
+      if (tab?.id) {
+        tabId = tab.id;
+        const { data: tabItems } = await sb
+          .from("booking_tab_items")
+          .select("id,tab_id,item_id,quantity")
+          .eq("tab_id", tabId);
+        const itemIds = Array.from(new Set((tabItems ?? []).map((row) => row.item_id).filter(Boolean)));
+        if (itemIds.length) {
+          const { data: addons } = await sb
+            .from("add_ons")
+            .select("id,name,price_cents")
+            .in("id", itemIds);
+          const addonById = new Map((addons ?? []).map((row) => [row.id, row]));
+          for (const item of tabItems ?? []) {
+            const addon = addonById.get(item.item_id);
+            if (!addon) continue;
+            const priceCents = Number(addon.price_cents || 0);
+            const qty = Number(item.quantity || 0);
+            const lineTotal = priceCents * qty;
+            tabItemsMeta.push({
+              item_id: addon.id,
+              name: addon.name,
+              price_cents: priceCents,
+              quantity: qty,
+              line_total_cents: lineTotal,
+            });
+            tabSubtotalCents += lineTotal;
+          }
+          tabTaxCents = Math.round(tabSubtotalCents * TAX_RATE);
+          tabTotalCents = tabSubtotalCents + tabTaxCents;
+        }
+      }
+    }
+
+    const combinedAmount = bookingAmount + tabTotalCents;
+
+    if (giftMeta && combinedAmount <= 0) {
       return NextResponse.json({ error: "Gift certificate covers total. Use cash to record payment." }, { status: 400 });
     }
-    if (giftMeta && amount > 0 && amount < 50) {
+    if (giftMeta && combinedAmount > 0 && combinedAmount < 50) {
       return NextResponse.json({ error: "Remaining balance must be at least $0.50 to pay by card." }, { status: 400 });
     }
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(combinedAmount) || combinedAmount <= 0) {
       return NextResponse.json({ error: "Invalid booking total" }, { status: 400 });
     }
 
-    const cardFee = cardFeeCents(amount);
-    const totalWithFee = amount + cardFee;
+    const cardFee = cardFeeCents(combinedAmount);
+    const totalWithFee = combinedAmount + cardFee;
 
     const stripe = getStripeTerminal();
     const intent = await stripe.paymentIntents.create({
@@ -114,6 +164,12 @@ export async function POST(req: Request) {
         discount_type: giftMeta ? "GIFT" : "",
         gift_code: giftMeta?.code || "",
         gift_amount: giftMeta ? String(giftMeta.amountOff) : "",
+        booking_total_after_discount: String(bookingAmount),
+        tab_id: tabId || "",
+        tab_items: tabItemsMeta.length ? JSON.stringify(tabItemsMeta) : "",
+        tab_subtotal_cents: String(tabSubtotalCents || 0),
+        tab_tax_cents: String(tabTaxCents || 0),
+        tab_total_cents: String(tabTotalCents || 0),
         card_fee_cents: String(cardFee),
         total_with_fee: String(totalWithFee),
       },

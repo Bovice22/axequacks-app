@@ -83,3 +83,31 @@ export async function GET(req: Request, context: RouteContext) {
     return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request, context: RouteContext) {
+  try {
+    const staff = await getStaffUserFromCookies();
+    if (!staff) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const id = (await getRouteId(req, context)) || new URL(req.url).searchParams.get("id") || "";
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const sb = getSupabaseAdmin();
+    const { error: itemsErr } = await sb.from("booking_tab_items").delete().eq("tab_id", id);
+    if (itemsErr) {
+      console.error("tab delete items error:", itemsErr);
+      return NextResponse.json({ error: "Failed to delete tab items" }, { status: 500 });
+    }
+
+    const { error: tabErr } = await sb.from("booking_tabs").delete().eq("id", id);
+    if (tabErr) {
+      console.error("tab delete error:", tabErr);
+      return NextResponse.json({ error: "Failed to delete tab" }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err: any) {
+    console.error("tab delete fatal:", err);
+    return NextResponse.json({ error: err?.message || "Server error" }, { status: 500 });
+  }
+}
