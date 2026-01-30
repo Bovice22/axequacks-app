@@ -246,6 +246,16 @@ async function updateBookingTotalWithTab(bookingId: string, intent: any) {
   }
 }
 
+async function updateBookingTotalFromMetadata(bookingId: string, intent: any) {
+  const bookingTotalNew = Number(intent?.metadata?.booking_total_new || 0);
+  if (!Number.isFinite(bookingTotalNew) || bookingTotalNew <= 0) return;
+  const sb = supabaseServer();
+  const { error } = await sb.from("bookings").update({ total_cents: bookingTotalNew }).eq("id", bookingId);
+  if (error) {
+    console.error("booking total override error:", error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -267,6 +277,7 @@ export async function POST(req: Request) {
       const customerId = bookingInput ? await ensureCustomerAndLinkBooking(bookingInput, bookingId) : "";
       await markBookingPaid(bookingId);
       await markBookingPaymentIntent(bookingId, paymentIntentId);
+      await updateBookingTotalFromMetadata(bookingId, intent);
       await updateBookingTotalWithTab(bookingId, intent);
       await recordTabSaleForBooking(intent);
       await recordBookingTip(bookingId, intent);

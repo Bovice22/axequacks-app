@@ -45,6 +45,8 @@ export async function POST(req: Request, context: RouteContext) {
 
     const body = await req.json().catch(() => ({}));
     const giftCode = String(body?.gift_code || "").trim();
+    const amountOverrideCents = Number(body?.amount_override_cents);
+    const bookingTotalNew = Number(body?.booking_total_cents_new);
 
     const sb = getSupabaseAdmin();
     let { data: booking, error: bookingErr } = await sb
@@ -65,11 +67,14 @@ export async function POST(req: Request, context: RouteContext) {
     if (bookingErr || !booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
-    if (booking.paid) {
+    if (booking.paid && !(Number.isFinite(amountOverrideCents) && amountOverrideCents > 0)) {
       return NextResponse.json({ error: "Booking already paid" }, { status: 400 });
     }
 
     let bookingTotalCents = Number(booking.total_cents || 0);
+    if (Number.isFinite(bookingTotalNew) && bookingTotalNew > bookingTotalCents) {
+      bookingTotalCents = bookingTotalNew;
+    }
     if (giftCode) {
       try {
         const giftResult = await validateGiftCertificate({

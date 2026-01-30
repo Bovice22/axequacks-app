@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
+import { totalCents, type Activity } from "@/lib/bookingLogic";
 
 type BookingRow = {
   id: string;
@@ -429,6 +430,8 @@ export default function BookingsTable() {
     amountOffCents: number;
     remainingCents: number;
   } | null>(null);
+  const [payOverrideCents, setPayOverrideCents] = useState<number | null>(null);
+  const [payOverrideTotalCents, setPayOverrideTotalCents] = useState<number | null>(null);
   const [payGiftStatus, setPayGiftStatus] = useState("");
   const [payGiftLoading, setPayGiftLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
@@ -557,6 +560,8 @@ export default function BookingsTable() {
     setPayGiftCode("");
     setPayGiftApplied(null);
     setPayGiftStatus("");
+    setPayOverrideCents(null);
+    setPayOverrideTotalCents(null);
   }
 
   function initResourceAssignments(bookingId: string) {
@@ -619,7 +624,12 @@ export default function BookingsTable() {
       const res = await fetch(`/api/staff/bookings/${bookingId}/cash-pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paid: true, gift_code: payGiftApplied?.code || "" }),
+        body: JSON.stringify({
+          paid: true,
+          gift_code: payGiftApplied?.code || "",
+          amount_override_cents: payOverrideCents ?? undefined,
+          booking_total_cents_new: payOverrideTotalCents ?? undefined,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -666,6 +676,8 @@ export default function BookingsTable() {
         body: JSON.stringify({
           booking_id: bookingId,
           gift_code: payGiftApplied?.code || "",
+          amount_override_cents: payOverrideCents ?? undefined,
+          booking_total_cents_new: payOverrideTotalCents ?? undefined,
           booking_snapshot: bookingSnapshot
             ? {
                 total_cents: bookingSnapshot.total_cents,
@@ -1193,8 +1205,16 @@ export default function BookingsTable() {
     setSavingEdit(true);
     setEditError("");
     try {
+      const previousTotalCents = editingRow?.total_cents ?? 0;
+      const partySizeIncreased =
+        !!editingRow && editingRow.paid === true && editPartySize > (editingRow.party_size || 0);
+      const recalculatedTotalCents = partySizeIncreased
+        ? totalCents(editActivity as Activity, editPartySize || 1, editDuration)
+        : undefined;
       const totalCents =
-        editingRow?.paid === false && editTotal.trim()
+        partySizeIncreased && recalculatedTotalCents && recalculatedTotalCents > previousTotalCents
+          ? recalculatedTotalCents
+          : editingRow?.paid === false && editTotal.trim()
           ? Math.max(0, Math.round(Number(editTotal) * 100))
           : undefined;
       const timePayload = timeChanged
@@ -1227,6 +1247,16 @@ export default function BookingsTable() {
       }
       await loadBookings(order);
       setEditingBookingId(null);
+      if (
+        partySizeIncreased &&
+        recalculatedTotalCents &&
+        recalculatedTotalCents > previousTotalCents
+      ) {
+        const additionalCents = recalculatedTotalCents - previousTotalCents;
+        setPayOverrideCents(additionalCents);
+        setPayOverrideTotalCents(recalculatedTotalCents);
+        openPayModal(editingBookingId);
+      }
     } finally {
       setSavingEdit(false);
     }
@@ -2043,11 +2073,14 @@ export default function BookingsTable() {
   ) : null;
   const payModalBooking = payModalBookingId ? bookingById.get(payModalBookingId) || null : null;
   const payModalTabTotalCents = payModalBooking?.tab_total_cents || 0;
-  const payModalTotalCents = payModalBooking
-    ? payGiftApplied
-      ? payGiftApplied.remainingCents + payModalTabTotalCents
-      : payModalBooking.total_cents + payModalTabTotalCents
+  const basePayCents = payModalBooking
+    ? payOverrideCents != null
+      ? payOverrideCents
+      : payGiftApplied
+      ? payGiftApplied.remainingCents
+      : payModalBooking.total_cents
     : 0;
+  const payModalTotalCents = basePayCents + payModalTabTotalCents;
   const payModal = payModalBooking ? (
     <div
       style={{
@@ -2085,6 +2118,11 @@ export default function BookingsTable() {
         {payModalTabTotalCents > 0 ? (
           <div className="mt-1 text-[11px] font-semibold text-zinc-700">
             Includes tab items: ${(payModalTabTotalCents / 100).toFixed(2)}
+          </div>
+        ) : null}
+        {payOverrideCents != null ? (
+          <div className="mt-1 text-[11px] font-semibold text-amber-700">
+            Additional guest charge: ${(payOverrideCents / 100).toFixed(2)}
           </div>
         ) : null}
         {payGiftApplied ? (
@@ -2186,7 +2224,30 @@ export default function BookingsTable() {
         </div>
         {payError ? <div className="mt-3 text-xs font-semibold text-red-600">{payError}</div> : null}
         {terminalError ? <div className="mt-2 text-xs font-semibold text-red-600">{terminalError}</div> : null}
-        <div className="mt-4 flex items-center justify-end">
+        <div className="mt-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={async () => {
+              setTerminalError("");
+              try {
+                if (terminalRef.current && terminalPhase !== "idle") {
+                  const result = await terminalRef.current.cancelCollectPaymentMethod();
+                  if ("error" in result && result.error) {
+                    setTerminalError(result.error.message || "Failed to cancel transaction.");
+                  }
+                }
+              } catch (err: any) {
+                setTerminalError(err?.message || "Failed to cancel transaction.");
+              } finally {
+                setTerminalPhase("idle");
+                setPayLoading(null);
+                closePayModal();
+              }
+            }}
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Cancel Transaction
+          </button>
           <button
             type="button"
             onClick={closePayModal}

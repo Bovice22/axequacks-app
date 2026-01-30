@@ -116,8 +116,13 @@ export async function POST(req: Request) {
 
     const baseAmount = Number(booking.total_cents || 0);
     const giftCode = String(body?.gift_code || "").trim();
+    const amountOverrideCents = Number(body?.amount_override_cents);
+    const bookingTotalNew = Number(body?.booking_total_cents_new);
     let giftMeta: { code: string; amountOff: number } | null = null;
     let bookingAmount = baseAmount;
+    if (Number.isFinite(amountOverrideCents) && amountOverrideCents > 0) {
+      bookingAmount = amountOverrideCents;
+    }
     if (giftCode) {
       try {
         const giftResult = await validateGiftCertificate({
@@ -216,6 +221,8 @@ export async function POST(req: Request) {
         ui_mode: "staff",
         staff_id: staff.staff_id,
         total_before_discount: String(baseAmount),
+        booking_total_new: Number.isFinite(bookingTotalNew) ? String(bookingTotalNew) : "",
+        amount_override_cents: Number.isFinite(amountOverrideCents) ? String(amountOverrideCents) : "",
         discount_amount: giftMeta ? String(giftMeta.amountOff) : "0",
         discount_type: giftMeta ? "GIFT" : "",
         gift_code: giftMeta?.code || "",
