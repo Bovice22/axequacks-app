@@ -48,6 +48,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const bookingId = String(body?.booking_id || "").trim();
+    const bookingSnapshot = body?.booking_snapshot || null;
     if (!bookingId) return NextResponse.json({ error: "Missing booking_id" }, { status: 400 });
 
     const sb = supabaseServer();
@@ -67,6 +68,28 @@ export async function POST(req: Request) {
           )
           .eq("id", resv.booking_id)
           .single());
+      }
+    }
+
+    if ((error || !booking) && bookingSnapshot && bookingSnapshot.start_ts) {
+      const startTs = new Date(bookingSnapshot.start_ts);
+      if (!Number.isNaN(startTs.getTime())) {
+        const windowStart = new Date(startTs.getTime() - 10 * 60 * 1000).toISOString();
+        const windowEnd = new Date(startTs.getTime() + 10 * 60 * 1000).toISOString();
+        let lookup = sb
+          .from("bookings")
+          .select(
+            "id,activity,party_size,duration_minutes,start_ts,customer_name,customer_email,customer_phone,total_cents,combo_order,paid"
+          )
+          .gte("start_ts", windowStart)
+          .lte("start_ts", windowEnd)
+          .limit(1);
+        if (bookingSnapshot.customer_email) {
+          lookup = lookup.ilike("customer_email", String(bookingSnapshot.customer_email).trim());
+        } else if (bookingSnapshot.customer_name) {
+          lookup = lookup.ilike("customer_name", String(bookingSnapshot.customer_name).trim());
+        }
+        ({ data: booking, error } = await lookup.single());
       }
     }
 

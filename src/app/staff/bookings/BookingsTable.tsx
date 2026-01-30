@@ -659,10 +659,21 @@ export default function BookingsTable() {
       }
 
       setTerminalPhase("collecting");
+      const bookingSnapshot = rows.find((row) => row.id === bookingId);
       const intentRes = await fetch("/api/stripe/terminal/booking_payment_intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: bookingId, gift_code: payGiftApplied?.code || "" }),
+        body: JSON.stringify({
+          booking_id: bookingId,
+          gift_code: payGiftApplied?.code || "",
+          booking_snapshot: bookingSnapshot
+            ? {
+                start_ts: bookingSnapshot.start_ts,
+                customer_name: bookingSnapshot.customer_name,
+                customer_email: bookingSnapshot.customer_email,
+              }
+            : null,
+        }),
       });
       const intentJson = await intentRes.json().catch(() => ({}));
       if (!intentRes.ok || !intentJson?.client_secret) {
