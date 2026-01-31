@@ -475,6 +475,7 @@ export async function createBookingWithResources(input: BookingInput) {
 
   if (input.activity === "Combo Package") {
     const comboDuration = comboTotalMinutes;
+    const comboDurationForDb = comboDuration === 60 || comboDuration === 120 ? comboDuration : 120;
     const comboEndMin = input.startMin + comboDuration;
 
     const comboStartTsUtc = nyLocalDateKeyPlusMinutesToUTCISOString(input.dateKey, input.startMin);
@@ -504,7 +505,7 @@ export async function createBookingWithResources(input: BookingInput) {
 
     const { data: bookingId, error } = await sb.rpc("create_combo_booking_with_resources", {
       p_activity: activityDB,
-      p_duration_minutes: comboDuration,
+      p_duration_minutes: comboDurationForDb,
       p_party_size: input.partySize,
       p_combo_order: order,
       p_start_ts: comboStartTsUtc,
@@ -523,6 +524,12 @@ export async function createBookingWithResources(input: BookingInput) {
     const customerId = await ensureCustomerAndLinkBooking(input, bookingId as string);
     await reservePartyAreas(sb, bookingId as string, partyAreas, partyAreaStartTsUtc, partyAreaEndTsUtc);
     await enforceDuckpinPairing(sb, bookingId as string, duckpinStart, duckpinEnd, needs.lanes);
+    if (comboDurationForDb !== comboDuration) {
+      await sb
+        .from("bookings")
+        .update({ notes: `Actual combo duration ${comboDuration} mins (Axe ${comboAxeMinutes}/Duckpin ${comboDuckpinMinutes}).` })
+        .eq("id", bookingId as string);
+    }
     return { bookingId, needs, customerId };
   }
 
