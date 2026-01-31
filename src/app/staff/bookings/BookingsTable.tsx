@@ -429,6 +429,7 @@ export default function BookingsTable() {
   const [refundError, setRefundError] = useState("");
   const [resendLoadingId, setResendLoadingId] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState("");
+  const [waiverLoadingId, setWaiverLoadingId] = useState<string | null>(null);
   const [payModalBookingId, setPayModalBookingId] = useState<string | null>(null);
   const [payLoading, setPayLoading] = useState<"cash" | "card" | "gift" | null>(null);
   const [payError, setPayError] = useState("");
@@ -934,6 +935,54 @@ export default function BookingsTable() {
       setResendStatus(err?.message || "Failed to resend confirmation email.");
     } finally {
       setResendLoadingId(null);
+    }
+  }
+
+  async function openWaiverRequest(booking: BookingRow) {
+    if (!booking) return;
+    if (!booking.customer_email) {
+      alert("Customer email missing for waiver request.");
+      return;
+    }
+    if (waiverLoadingId === booking.id) return;
+    setWaiverLoadingId(booking.id);
+    try {
+      const dateKey = dateKeyFromIsoNY(booking.start_ts);
+      const startMin = minutesFromIsoNY(booking.start_ts);
+      let durationMinutes = Number(booking.duration_minutes || 0);
+      if (!durationMinutes && booking.start_ts && booking.end_ts) {
+        const start = new Date(booking.start_ts).getTime();
+        const end = new Date(booking.end_ts).getTime();
+        const diff = Math.round((end - start) / 60000);
+        durationMinutes = diff > 0 ? diff : 0;
+      }
+      const res = await fetch("/api/waivers/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          activity: activityLabel(booking.activity),
+          partySize: booking.party_size || 1,
+          dateKey,
+          startMin,
+          durationMinutes: durationMinutes || 60,
+          customerName: booking.customer_name || "",
+          customerEmail: booking.customer_email || "",
+          customerPhone: "",
+          comboOrder: booking.combo_order || undefined,
+          returnPath: "/staff/bookings",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.waiverUrl) {
+        alert(json?.error || "Failed to open waiver.");
+        return;
+      }
+      window.open(String(json.waiverUrl), "_blank", "noopener");
+    } catch (err: any) {
+      alert(err?.message || "Failed to open waiver.");
+    } finally {
+      setWaiverLoadingId(null);
     }
   }
 
@@ -2817,6 +2866,9 @@ export default function BookingsTable() {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                      if (booking) {
+                                        void openWaiverRequest(booking);
+                                      }
                                     }}
                                     onMouseDown={(e) => {
                                       e.stopPropagation();
@@ -2826,8 +2878,9 @@ export default function BookingsTable() {
                                       e.stopPropagation();
                                       (e.nativeEvent as any)?.stopImmediatePropagation?.();
                                     }}
+                                    disabled={waiverLoadingId === booking?.id}
                                   >
-                                    WAIVER NEEDS SIGNED
+                                    {waiverLoadingId === booking?.id ? "OPENING..." : "WAIVER NEEDS SIGNED"}
                                   </button>
                                 ) : null}
                               </div>
@@ -2837,11 +2890,32 @@ export default function BookingsTable() {
                                 <div className="text-[11px] font-semibold">
                                   {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
                                 </div>
-                                <div className="text-[11px]">{displayActivity}</div>
+                                <div className="text-[11px]">
+                                  {booking?.customer_name || "Walk-in"}
+                                </div>
                                 {waiverMissing ? (
-                                  <div className="mt-1 text-[9px] font-bold text-red-600 animate-pulse">
-                                    WAIVER NEEDS SIGNED
-                                  </div>
+                                  <button
+                                    type="button"
+                                    className="absolute right-2 top-7 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm animate-pulse"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                      if (booking) {
+                                        void openWaiverRequest(booking);
+                                      }
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                    onPointerDown={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                    disabled={waiverLoadingId === booking?.id}
+                                  >
+                                    {waiverLoadingId === booking?.id ? "OPENING..." : "WAIVER NEEDS SIGNED"}
+                                  </button>
                                 ) : null}
                               </>
                             ) : (
@@ -2870,6 +2944,9 @@ export default function BookingsTable() {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                      if (booking) {
+                                        void openWaiverRequest(booking);
+                                      }
                                     }}
                                     onMouseDown={(e) => {
                                       e.stopPropagation();
@@ -2879,8 +2956,9 @@ export default function BookingsTable() {
                                       e.stopPropagation();
                                       (e.nativeEvent as any)?.stopImmediatePropagation?.();
                                     }}
+                                    disabled={waiverLoadingId === booking?.id}
                                   >
-                                    WAIVER NEEDS SIGNED
+                                    {waiverLoadingId === booking?.id ? "OPENING..." : "WAIVER NEEDS SIGNED"}
                                   </button>
                                 ) : null}
                               </>
