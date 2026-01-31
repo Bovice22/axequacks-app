@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> | { id: string } };
+
+export async function PATCH(req: Request, context: RouteContext) {
   try {
     const staff = await getStaffUserFromCookies();
     if (!staff || staff.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const params = await context.params;
     const certificateId = String(params?.id || "").trim();
     if (!certificateId) return NextResponse.json({ error: "Missing certificate id" }, { status: 400 });
 
