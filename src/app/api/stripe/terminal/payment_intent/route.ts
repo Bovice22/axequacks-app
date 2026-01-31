@@ -33,6 +33,7 @@ type TerminalIntentRequest = {
   partyAreaMinutes?: number;
   partyAreaTiming?: "BEFORE" | "DURING" | "AFTER";
   totalCentsOverride?: number;
+  waiveCardFee?: boolean;
 };
 
 function validate(body: TerminalIntentRequest) {
@@ -193,7 +194,8 @@ export async function POST(req: Request) {
     }
 
     const staff = await getStaffUserFromCookies().catch(() => null);
-    const cardFee = cardFeeCents(amount);
+    const waiveFee = Boolean(body.waiveCardFee);
+    const cardFee = waiveFee ? 0 : cardFeeCents(amount);
     const totalBeforeMeta = Number.isFinite(overrideCents) ? overrideCents : baseAmount;
     const amountWithFee = amount + cardFee;
     const intent = await stripe.paymentIntents.create({
@@ -226,6 +228,7 @@ export async function POST(req: Request) {
         gift_amount: giftMeta ? String(giftMeta.amountOff) : "",
         total_before_discount: String(totalBeforeMeta),
         amount_override_cents: Number.isFinite(overrideCents) ? String(overrideCents) : "",
+        waive_card_fee: waiveFee ? "true" : "false",
         card_fee_cents: String(cardFee),
         total_with_fee: String(amountWithFee),
       },

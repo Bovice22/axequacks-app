@@ -424,6 +424,8 @@ function BookPageContent() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [staffCustomAmountOpen, setStaffCustomAmountOpen] = useState(false);
   const [staffCustomAmount, setStaffCustomAmount] = useState("");
+  const [staffOverrideCents, setStaffOverrideCents] = useState<number | null>(null);
+  const [waiveCardFee, setWaiveCardFee] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [confirmation, setConfirmation] = useState<{
     activity: Activity;
@@ -745,14 +747,8 @@ function BookPageContent() {
 
   const totalCents = pricing?.cents ?? 0;
   const discountedTotalCents = promoApplied?.totalCents ?? totalCents;
-  const staffOverrideCents = useMemo(() => {
-    if (!isStaffMode) return null;
-    const value = Number(staffCustomAmount);
-    if (!Number.isFinite(value)) return null;
-    return Math.max(0, Math.round(value * 100));
-  }, [isStaffMode, staffCustomAmount]);
   const finalTotalCents = isStaffMode && staffOverrideCents != null ? staffOverrideCents : discountedTotalCents;
-  const cardFee = cardFeeCents(finalTotalCents);
+  const cardFee = waiveCardFee ? 0 : cardFeeCents(finalTotalCents);
   const cardTotalCents = finalTotalCents + cardFee;
   const discountCents = promoApplied?.amountOffCents ?? 0;
   const cashProvidedCents = useMemo(() => {
@@ -1253,6 +1249,8 @@ function BookPageContent() {
     setPromoStatus("");
     setStaffCustomAmount("");
     setStaffCustomAmountOpen(false);
+    setStaffOverrideCents(null);
+    setWaiveCardFee(false);
     setSubmitError("");
     setSubmitSuccess("");
     setBlockedStartMins([]);
@@ -1324,6 +1322,7 @@ function BookPageContent() {
           comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
           promoCode: promoApplied?.code || "",
           totalCentsOverride: finalTotalCents,
+          waiveCardFee,
         }),
       });
 
@@ -2120,6 +2119,7 @@ function BookPageContent() {
                       type="button"
                       onClick={() => {
                         setStaffCustomAmount("");
+                        setStaffOverrideCents(null);
                         setStaffCustomAmountOpen(false);
                       }}
                       className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-50"
@@ -2127,6 +2127,13 @@ function BookPageContent() {
                       Reset Amount
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setWaiveCardFee((prev) => !prev)}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {waiveCardFee ? "Card Fee Waived" : "Waive Card Fee"}
+                  </button>
                   {staffCustomAmountOpen ? (
                     <div className="flex w-full gap-2">
                       <input
@@ -2143,6 +2150,7 @@ function BookPageContent() {
                         onClick={() => {
                           const value = Number(staffCustomAmount);
                           if (!Number.isFinite(value) || value < 0) return;
+                          setStaffOverrideCents(Math.max(0, Math.round(value * 100)));
                           setPromoApplied(null);
                           setPromoCode("");
                           setPromoStatus("");
