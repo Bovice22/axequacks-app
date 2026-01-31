@@ -29,6 +29,7 @@ type BookingRow = {
   tab_total_cents?: number | null;
   waiver_on_file?: boolean | null;
   waiver_signed_for_booking?: boolean | null;
+  waiver_token?: string | null;
 };
 
 type ResourceRow = {
@@ -940,6 +941,10 @@ export default function BookingsTable() {
 
   async function openWaiverRequest(booking: BookingRow) {
     if (!booking) return;
+    if (booking.waiver_token) {
+      window.open(`/waiver?token=${encodeURIComponent(booking.waiver_token)}`, "_blank", "noopener");
+      return;
+    }
     if (!booking.customer_email) {
       alert("Customer email missing for waiver request.");
       return;

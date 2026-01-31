@@ -123,6 +123,7 @@ export async function GET(req: Request) {
 
     let waiverMeta: Record<string, boolean> = {};
     let waiverSignedByBooking = new Set<string>();
+    let waiverTokenByBooking: Record<string, string> = {};
     const customerIds = (data ?? []).map((row) => row.customer_id).filter(Boolean);
     if (customerIds.length > 0) {
       const { data: waivers, error: waiversErr } = await sb
@@ -141,18 +142,28 @@ export async function GET(req: Request) {
     if (bookingIds.length > 0) {
       const { data: waiverRequests, error: waiverReqErr } = await sb
         .from("waiver_requests")
-        .select("booking_id,status,signed_at")
+        .select("booking_id,status,signed_at,token,created_at")
         .in("booking_id", bookingIds);
       if (waiverReqErr) {
         console.error("booking waiver request meta error:", waiverReqErr);
       } else {
-        for (const row of waiverRequests ?? []) {
+        const sorted = [...(waiverRequests ?? [])].sort((a: any, b: any) => {
+          const aTime = new Date(a?.created_at || 0).getTime();
+          const bTime = new Date(b?.created_at || 0).getTime();
+          return bTime - aTime;
+        });
+        for (const row of sorted) {
           const bookingId = (row as any)?.booking_id as string | null;
           const status = String((row as any)?.status || "").toUpperCase();
           const signedAt = (row as any)?.signed_at as string | null;
+          const token = String((row as any)?.token || "");
           if (!bookingId) continue;
           if (status === "SIGNED" || signedAt) {
             waiverSignedByBooking.add(bookingId);
+            continue;
+          }
+          if (token && !waiverTokenByBooking[bookingId]) {
+            waiverTokenByBooking[bookingId] = token;
           }
         }
       }
@@ -247,6 +258,7 @@ export async function GET(req: Request) {
       const tabInfo = tabStatusByBooking.get(row.id);
       const waiverOnFile = row.customer_id ? waiverMeta[row.customer_id] ?? false : false;
       const waiverSignedForBooking = waiverSignedByBooking.has(row.id);
+      const waiverToken = waiverTokenByBooking[row.id] || null;
       return {
         ...row,
         tab_status: tabInfo?.status || null,
@@ -254,6 +266,7 @@ export async function GET(req: Request) {
         tab_total_cents: tabInfo?.totalCents || 0,
         waiver_on_file: waiverOnFile,
         waiver_signed_for_booking: waiverSignedForBooking,
+        waiver_token: waiverToken,
       };
     });
 
