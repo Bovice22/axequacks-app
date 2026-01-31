@@ -34,6 +34,10 @@ export default function GiftCertificatesTable() {
   const [amountDollars, setAmountDollars] = useState("50");
   const [sendLoadingId, setSendLoadingId] = useState<string | null>(null);
   const [sendStatus, setSendStatus] = useState("");
+  const [adjustTarget, setAdjustTarget] = useState<GiftCertificate | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustError, setAdjustError] = useState("");
+  const [adjustLoading, setAdjustLoading] = useState(false);
 
   async function loadCertificates() {
     setLoading(true);
@@ -104,6 +108,45 @@ export default function GiftCertificatesTable() {
     }
   }
 
+  function openAdjustModal(certificate: GiftCertificate) {
+    setAdjustTarget(certificate);
+    setAdjustAmount("");
+    setAdjustError("");
+  }
+
+  async function submitAdjustment() {
+    if (!adjustTarget) return;
+    setAdjustLoading(true);
+    setAdjustError("");
+    try {
+      const delta = Number(adjustAmount || "0");
+      if (!Number.isFinite(delta) || delta === 0) {
+        setAdjustError("Enter a positive or negative amount.");
+        return;
+      }
+      const deltaCents = Math.round(delta * 100);
+      const res = await fetch(`/api/staff/gift-certificates/${adjustTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta_cents: deltaCents }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAdjustError(json?.error || "Failed to update gift certificate.");
+        return;
+      }
+      if (json?.certificate) {
+        setRows((prev) => prev.map((row) => (row.id === json.certificate.id ? json.certificate : row)));
+      }
+      setAdjustTarget(null);
+      setAdjustAmount("");
+    } catch (err: any) {
+      setAdjustError(err?.message || "Failed to update gift certificate.");
+    } finally {
+      setAdjustLoading(false);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -169,6 +212,7 @@ export default function GiftCertificatesTable() {
                 <th className="py-2 pr-4">Expires</th>
                 <th className="py-2 pr-4">Created</th>
                 <th className="py-2 pr-4">Email</th>
+                <th className="py-2 pr-4">Adjust</th>
               </tr>
             </thead>
             <tbody>
@@ -194,11 +238,20 @@ export default function GiftCertificatesTable() {
                       {sendLoadingId === row.id ? "Sending..." : "Send Email"}
                     </button>
                   </td>
+                  <td className="py-2 pr-4">
+                    <button
+                      type="button"
+                      onClick={() => openAdjustModal(row)}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Edit Amount
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!rows.length ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-sm text-zinc-500">
+                  <td colSpan={9} className="py-6 text-center text-sm text-zinc-500">
                     No gift certificates yet.
                   </td>
                 </tr>
@@ -207,6 +260,44 @@ export default function GiftCertificatesTable() {
           </table>
         </div>
       )}
+      {adjustTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
+            <div className="text-base font-bold text-zinc-900">Adjust Gift Certificate</div>
+            <div className="mt-1 text-xs text-zinc-500">
+              {adjustTarget.code} · Current balance {formatMoney(adjustTarget.balance_cents)}
+            </div>
+            <label className="mt-4 block text-xs font-semibold text-zinc-600">
+              Adjustment Amount (USD)
+              <input
+                value={adjustAmount}
+                onChange={(e) => setAdjustAmount(e.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                placeholder="e.g. 10 or -5"
+                inputMode="decimal"
+              />
+            </label>
+            {adjustError ? <div className="mt-2 text-xs font-semibold text-red-600">{adjustError}</div> : null}
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAdjustTarget(null)}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitAdjustment}
+                disabled={adjustLoading}
+                className="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {adjustLoading ? "Saving..." : "Save Adjustment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
