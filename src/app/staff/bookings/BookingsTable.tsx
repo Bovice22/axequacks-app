@@ -1803,13 +1803,16 @@ export default function BookingsTable() {
               />
             </label>
           </div>
-          <textarea
-            value={editNotes}
-            onChange={(e) => setEditNotes(e.target.value)}
-            placeholder="Internal notes (staff only)"
-            className="min-h-[80px] rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
-            disabled={editLoading}
-          />
+          <label className="text-xs font-semibold text-zinc-600">
+            Booking Notes
+            <textarea
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              placeholder="Internal notes (staff only)"
+              className="mt-1 min-h-[80px] w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-900"
+              disabled={editLoading}
+            />
+          </label>
           {editingRow?.paid === false ? (
             <label className="text-xs font-semibold text-zinc-600">
               <span className="mb-1 block text-xs font-semibold text-zinc-600">Unpaid Total ($)</span>
