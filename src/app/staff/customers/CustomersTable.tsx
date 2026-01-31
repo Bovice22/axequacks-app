@@ -725,6 +725,7 @@ export default function CustomersTable() {
                             <table className="w-full text-xs">
                               <thead className="text-center text-zinc-900">
                                 <tr>
+                                  <th className="py-2 text-center">View</th>
                                   <th className="py-2 text-center">Date/Time</th>
                                   <th className="py-2 text-center">Activity</th>
                                   <th className="py-2 text-center">Combo Order</th>
@@ -734,12 +735,19 @@ export default function CustomersTable() {
                                   <th className="py-2 text-center">Paid</th>
                                   <th className="py-2 text-center">Total</th>
                                   <th className="py-2 text-center">Notes</th>
-                                  <th className="py-2 text-center">View</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {(bookingsByCustomer[r.id] || []).map((b) => (
                                   <tr key={b.id} className="border-t border-zinc-100 text-zinc-900">
+                                    <td className="py-2 text-center">
+                                      <a
+                                        href={`/staff/bookings?bookingId=${encodeURIComponent(b.id)}`}
+                                        className="rounded-full bg-black px-2 py-1 text-[10px] font-semibold text-white hover:bg-zinc-900"
+                                      >
+                                        View
+                                      </a>
+                                    </td>
                                     <td className="py-2 text-center">{formatDateTimeRange(b.start_ts, b.end_ts)}</td>
                                     <td className="py-2 text-center">{b.activity}</td>
                                     <td className="py-2 text-center">{b.combo_order || "—"}</td>
@@ -752,14 +760,6 @@ export default function CustomersTable() {
                                     <td className="py-2 text-center">${(b.total_cents / 100).toFixed(2)}</td>
                                     <td className="py-2 px-2 text-center text-[10px] text-zinc-600">
                                       {b.notes || "—"}
-                                    </td>
-                                    <td className="py-2 text-center">
-                                      <a
-                                        href={`/staff/bookings?bookingId=${encodeURIComponent(b.id)}`}
-                                        className="rounded-full border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-700 hover:bg-zinc-50"
-                                      >
-                                        View
-                                      </a>
                                     </td>
                                   </tr>
                                 ))}
