@@ -2443,7 +2443,7 @@ export default function BookingsTable() {
               type="button"
               onClick={connectSelectedReader}
               disabled={terminalPhase !== "idle" || !selectedReaderId || !terminalReaders.length}
-              className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+              className="h-9 w-full rounded-lg bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-900 disabled:opacity-60"
             >
               {terminalPhase === "connecting" ? "Connecting..." : "Connect Reader"}
             </button>
