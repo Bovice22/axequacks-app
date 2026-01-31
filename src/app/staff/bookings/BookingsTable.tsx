@@ -432,6 +432,8 @@ export default function BookingsTable() {
   } | null>(null);
   const [payOverrideCents, setPayOverrideCents] = useState<number | null>(null);
   const [payOverrideTotalCents, setPayOverrideTotalCents] = useState<number | null>(null);
+  const [payCustomAmountOpen, setPayCustomAmountOpen] = useState(false);
+  const [payCustomAmount, setPayCustomAmount] = useState("");
   const [payGiftStatus, setPayGiftStatus] = useState("");
   const [payGiftLoading, setPayGiftLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
@@ -562,6 +564,8 @@ export default function BookingsTable() {
     setPayGiftStatus("");
     setPayOverrideCents(null);
     setPayOverrideTotalCents(null);
+    setPayCustomAmountOpen(false);
+    setPayCustomAmount("");
   }
 
   function initResourceAssignments(bookingId: string) {
@@ -2117,6 +2121,57 @@ export default function BookingsTable() {
           {payModalBooking.customer_name || "Customer"} · ${(payModalTotalCents / 100).toFixed(2)} ·{" "}
           {activityLabel(payModalBooking.activity)}
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setPayCustomAmountOpen((prev) => !prev)}
+            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-50"
+          >
+            {payCustomAmountOpen ? "Hide Custom Amount" : "Edit Amount"}
+          </button>
+          {payOverrideCents != null ? (
+            <button
+              type="button"
+              onClick={() => {
+                setPayOverrideCents(null);
+                setPayOverrideTotalCents(null);
+                setPayCustomAmount("");
+              }}
+              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-50"
+            >
+              Reset Amount
+            </button>
+          ) : null}
+        </div>
+        {payCustomAmountOpen ? (
+          <div className="mt-2 flex gap-2">
+            <input
+              value={payCustomAmount}
+              onChange={(e) => setPayCustomAmount(e.target.value)}
+              type="number"
+              min="0"
+              step="0.01"
+              className="h-9 w-full rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+              placeholder="Custom amount"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const value = Number(payCustomAmount);
+                if (!Number.isFinite(value) || value < 0) return;
+                const cents = Math.round(value * 100);
+                setPayOverrideCents(cents);
+                setPayOverrideTotalCents(cents);
+                setPayGiftApplied(null);
+                setPayGiftCode("");
+                setPayGiftStatus("");
+              }}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+            >
+              Apply
+            </button>
+          </div>
+        ) : null}
         {payModalTabTotalCents > 0 ? (
           <div className="mt-1 text-[11px] font-semibold text-zinc-700">
             Includes tab items: ${(payModalTabTotalCents / 100).toFixed(2)}

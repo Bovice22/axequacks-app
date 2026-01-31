@@ -72,7 +72,7 @@ export async function POST(req: Request, context: RouteContext) {
     }
 
     let bookingTotalCents = Number(booking.total_cents || 0);
-    if (Number.isFinite(bookingTotalNew) && bookingTotalNew > bookingTotalCents) {
+    if (Number.isFinite(bookingTotalNew)) {
       bookingTotalCents = bookingTotalNew;
     }
     if (giftCode) {
