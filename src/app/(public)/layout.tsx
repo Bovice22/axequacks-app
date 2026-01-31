@@ -1,4 +1,5 @@
 import { League_Spartan } from "next/font/google";
+import { Suspense } from "react";
 import PublicOverlayCleanup from "@/components/PublicOverlayCleanup";
 import PublicHeaderLinks from "@/components/PublicHeaderLinks";
 
@@ -23,7 +24,9 @@ export default function PublicLayout({
         <div className="absolute bottom-[-160px] left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,215,0,0.25),rgba(0,0,0,0))]" />
       </div>
       <header className="relative z-10">
-        <PublicHeaderLinks />
+        <Suspense fallback={null}>
+          <PublicHeaderLinks />
+        </Suspense>
       </header>
       <main className="relative z-10 min-h-[calc(100vh-72px)]">{children}</main>
     </div>
