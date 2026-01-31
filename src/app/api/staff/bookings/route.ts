@@ -121,6 +121,43 @@ export async function GET(req: Request) {
       }
     }
 
+    let waiverMeta: Record<string, boolean> = {};
+    let waiverSignedByBooking = new Set<string>();
+    const customerIds = (data ?? []).map((row) => row.customer_id).filter(Boolean);
+    if (customerIds.length > 0) {
+      const { data: waivers, error: waiversErr } = await sb
+        .from("customer_waivers")
+        .select("customer_id,signed_at")
+        .in("customer_id", customerIds);
+      if (waiversErr) {
+        console.error("bookings waiver meta error:", waiversErr);
+      } else {
+        for (const row of waivers ?? []) {
+          const customerId = (row as any)?.customer_id as string | null;
+          if (customerId) waiverMeta[customerId] = true;
+        }
+      }
+    }
+    if (bookingIds.length > 0) {
+      const { data: waiverRequests, error: waiverReqErr } = await sb
+        .from("waiver_requests")
+        .select("booking_id,status,signed_at")
+        .in("booking_id", bookingIds);
+      if (waiverReqErr) {
+        console.error("booking waiver request meta error:", waiverReqErr);
+      } else {
+        for (const row of waiverRequests ?? []) {
+          const bookingId = (row as any)?.booking_id as string | null;
+          const status = String((row as any)?.status || "").toUpperCase();
+          const signedAt = (row as any)?.signed_at as string | null;
+          if (!bookingId) continue;
+          if (status === "SIGNED" || signedAt) {
+            waiverSignedByBooking.add(bookingId);
+          }
+        }
+      }
+    }
+
     const eventRequestIds = (data ?? [])
       .map((row) => {
         const note = String((row as any)?.notes || "");
@@ -208,11 +245,15 @@ export async function GET(req: Request) {
 
     const enriched = (data ?? []).map((row) => {
       const tabInfo = tabStatusByBooking.get(row.id);
+      const waiverOnFile = row.customer_id ? waiverMeta[row.customer_id] ?? false : false;
+      const waiverSignedForBooking = waiverSignedByBooking.has(row.id);
       return {
         ...row,
         tab_status: tabInfo?.status || null,
         tab_id: tabInfo?.tabId || null,
         tab_total_cents: tabInfo?.totalCents || 0,
+        waiver_on_file: waiverOnFile,
+        waiver_signed_for_booking: waiverSignedForBooking,
       };
     });
 

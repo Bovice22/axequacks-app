@@ -1678,24 +1678,21 @@ export default function BookingsTable() {
       }}
     >
       <div className="pointer-events-auto relative z-[100000] w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-lg font-semibold text-zinc-900">Edit Booking</div>
-            <div className="mt-1 text-xs text-zinc-500">Update appointment details and reschedule.</div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="text-lg font-semibold text-zinc-900">Edit Booking</div>
+          <div className="text-xs text-zinc-500">Update appointment details and reschedule.</div>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => setEditingBookingId(null)}
-              className="rounded-lg px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ backgroundColor: "#7c3aed" }}
+              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
             >
               Back
             </button>
             <button
               type="button"
               onClick={saveBookingEdits}
-              className="rounded-lg bg-zinc-900 px-3 py-1 text-xs font-semibold text-white"
+              className="rounded-full bg-zinc-900 px-4 py-1 text-xs font-semibold text-white disabled:opacity-60"
             >
               {savingEdit ? "Saving..." : "Save Booking"}
             </button>
@@ -1703,49 +1700,62 @@ export default function BookingsTable() {
               type="button"
               onClick={cancelBooking}
               disabled={cancelLoading || savingEdit || editLoading}
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
+              className="rounded-full border border-red-200 bg-red-50 px-4 py-1 text-xs font-semibold text-red-700 disabled:opacity-60"
             >
               {cancelLoading ? "Cancelling..." : "Cancel Booking"}
             </button>
           </div>
         </div>
         <div className="mt-4 max-h-[70vh] space-y-3 overflow-y-auto pr-1">
-          <select
-            value={editActivity}
-            onChange={(e) => setEditActivity(e.target.value)}
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
-            disabled={editLoading}
-          >
-            <option value="">Select activity</option>
-            <option value="Axe Throwing">Axe Throwing</option>
-            <option value="Duckpin Bowling">Duckpin Bowling</option>
-            <option value="Combo Package">Combo Package</option>
-          </select>
-          <input
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            placeholder="Customer name"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
-            disabled={editLoading}
-          />
-          <input
-            value={editEmail}
-            onChange={(e) => setEditEmail(e.target.value)}
-            placeholder="Customer email"
-            className="h-10 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
-            disabled={editLoading}
-          />
-          <label className="text-xs font-semibold text-zinc-600">
-            <span className="mb-1 block text-xs font-semibold text-zinc-600">Group Size</span>
-            <input
-              value={editPartySize}
-              onChange={(e) => setEditPartySize(Number(e.target.value || 0))}
-              type="number"
-              min="1"
-              className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
-              disabled={editLoading}
-            />
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-zinc-600">
+              Activity
+              <select
+                value={editActivity}
+                onChange={(e) => setEditActivity(e.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+                disabled={editLoading}
+              >
+                <option value="">Select activity</option>
+                <option value="Axe Throwing">Axe Throwing</option>
+                <option value="Duckpin Bowling">Duckpin Bowling</option>
+                <option value="Combo Package">Combo Package</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-zinc-600">
+              Group Size
+              <input
+                value={editPartySize}
+                onChange={(e) => setEditPartySize(Number(e.target.value || 0))}
+                type="number"
+                min="1"
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+                disabled={editLoading}
+              />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-zinc-600">
+              Customer Name
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Customer name"
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+                disabled={editLoading}
+              />
+            </label>
+            <label className="text-xs font-semibold text-zinc-600">
+              Customer Email
+              <input
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="Customer email"
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900 placeholder:text-zinc-900"
+                disabled={editLoading}
+              />
+            </label>
+          </div>
           <textarea
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
