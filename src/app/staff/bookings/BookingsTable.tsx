@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
 import { totalCents, type Activity } from "@/lib/bookingLogic";
@@ -431,6 +432,8 @@ export default function BookingsTable() {
   const [resendLoadingId, setResendLoadingId] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState("");
   const [waiverLoadingId, setWaiverLoadingId] = useState<string | null>(null);
+  const [highlightBookingId, setHighlightBookingId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
   const [payModalBookingId, setPayModalBookingId] = useState<string | null>(null);
   const [payLoading, setPayLoading] = useState<"cash" | "card" | "gift" | null>(null);
   const [payError, setPayError] = useState("");
@@ -1090,6 +1093,35 @@ export default function BookingsTable() {
       setShowSchedule(false);
     }
   }, []);
+
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const targetBookingId = searchParams?.get("bookingId") || "";
+    if (!targetBookingId) return;
+    const booking = rows.find((row) => row.id === targetBookingId);
+    if (!booking) return;
+    const dk = dateKeyFromIsoNY(booking.start_ts);
+    if (dk && dk !== selectedDateKey) {
+      setSelectedDateKey(dk);
+    }
+    setShowSchedule(true);
+    setHighlightBookingId(targetBookingId);
+    if (highlightTimerRef.current) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    const attemptScroll = (attempt = 0) => {
+      const el = document.querySelector(`[data-booking-id="${targetBookingId}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      } else if (attempt < 10) {
+        window.setTimeout(() => attemptScroll(attempt + 1), 250);
+      }
+    };
+    attemptScroll();
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightBookingId((prev) => (prev === targetBookingId ? null : prev));
+    }, 8000);
+  }, [searchParams, rows, selectedDateKey]);
 
   useEffect(() => {
     fetch("/api/staff/me")
@@ -2655,6 +2687,7 @@ export default function BookingsTable() {
                           !booking.waiver_on_file &&
                           !booking.waiver_signed_for_booking;
 
+                        const isHighlighted = highlightBookingId === resv.booking_id;
                         return (
                           <div
                             key={`${resv.booking_id}-${resv.resource_id}-${resv.start_ts}`}
@@ -2668,7 +2701,9 @@ export default function BookingsTable() {
                               backgroundColor: bgColor,
                               pointerEvents: "auto",
                               paddingTop: 26,
-                              zIndex: isHovered ? 999 : 50,
+                              zIndex: isHovered ? 999 : isHighlighted ? 950 : 50,
+                              outline: isHighlighted ? "3px solid #f59e0b" : undefined,
+                              boxShadow: isHighlighted ? "0 0 0 4px rgba(245,158,11,0.35)" : undefined,
                             }}
                             onMouseEnter={() => {
                               if (isCompact) setHoveredBookingId(resv.booking_id);
