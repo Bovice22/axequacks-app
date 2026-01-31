@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getStaffUserFromCookies } from "@/lib/staffAuth";
 import { sendBookingConfirmationEmail } from "@/lib/server/mailer";
+import type { ActivityUI } from "@/lib/server/bookingService";
 
 type RouteContext = { params: Promise<{ id: string }> | { id: string } };
 
@@ -39,12 +40,12 @@ function minutesFromIsoNY(iso: string | null) {
   return hour * 60 + minute;
 }
 
-function activityLabel(activity: string | null) {
+function activityLabel(activity: string | null): ActivityUI {
   const key = String(activity || "").toUpperCase();
   if (key === "AXE") return "Axe Throwing";
   if (key === "DUCKPIN") return "Duckpin Bowling";
   if (key === "COMBO") return "Combo Package";
-  return activity || "";
+  return "Axe Throwing";
 }
 
 export async function POST(req: Request, context: RouteContext) {
