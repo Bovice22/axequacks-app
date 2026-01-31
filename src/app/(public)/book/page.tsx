@@ -422,6 +422,8 @@ function BookPageContent() {
   } | null>(null);
   const [promoStatus, setPromoStatus] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
+  const [staffCustomAmountOpen, setStaffCustomAmountOpen] = useState(false);
+  const [staffCustomAmount, setStaffCustomAmount] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [confirmation, setConfirmation] = useState<{
     activity: Activity;
@@ -743,15 +745,22 @@ function BookPageContent() {
 
   const totalCents = pricing?.cents ?? 0;
   const discountedTotalCents = promoApplied?.totalCents ?? totalCents;
-  const cardFee = cardFeeCents(discountedTotalCents);
-  const cardTotalCents = discountedTotalCents + cardFee;
+  const staffOverrideCents = useMemo(() => {
+    if (!isStaffMode) return null;
+    const value = Number(staffCustomAmount);
+    if (!Number.isFinite(value)) return null;
+    return Math.max(0, Math.round(value * 100));
+  }, [isStaffMode, staffCustomAmount]);
+  const finalTotalCents = isStaffMode && staffOverrideCents != null ? staffOverrideCents : discountedTotalCents;
+  const cardFee = cardFeeCents(finalTotalCents);
+  const cardTotalCents = finalTotalCents + cardFee;
   const discountCents = promoApplied?.amountOffCents ?? 0;
   const cashProvidedCents = useMemo(() => {
     const value = Number(cashInput || "0");
     if (!Number.isFinite(value)) return 0;
     return Math.max(0, Math.round(value * 100));
   }, [cashInput]);
-  const changeDueCents = Math.max(0, cashProvidedCents - discountedTotalCents);
+  const changeDueCents = Math.max(0, cashProvidedCents - finalTotalCents);
 
   async function applyPromo(nextCode?: string) {
     const codeToApply = (nextCode ?? promoCode).trim();
@@ -1063,7 +1072,7 @@ function BookPageContent() {
           customerName: name.trim(),
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
-          totalCents: discountedTotalCents,
+        totalCents: finalTotalCents,
           comboOrder,
           resourceNames: [],
         });
@@ -1159,7 +1168,7 @@ function BookPageContent() {
     if (startMin == null || endMin == null) return;
     if (!pricing) return;
 
-    if (cashProvidedCents < discountedTotalCents) {
+    if (cashProvidedCents < finalTotalCents) {
       setCashError("Cash provided must cover the total.");
       return;
     }
@@ -1184,7 +1193,7 @@ function BookPageContent() {
           comboAxeMinutes: activity === "Combo Package" ? comboAxeDuration ?? undefined : undefined,
           comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
           comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
-          totalCentsOverride: discountedTotalCents,
+          totalCentsOverride: finalTotalCents,
           promoCode: promoApplied?.code || "",
         }),
       });
@@ -1204,7 +1213,7 @@ function BookPageContent() {
         customerName: name.trim(),
         customerEmail: email.trim(),
         customerPhone: phone.trim(),
-        totalCents: discountedTotalCents,
+        totalCents: finalTotalCents,
         comboOrder,
         resourceNames: [],
       });
@@ -1242,6 +1251,8 @@ function BookPageContent() {
     setPromoCode("");
     setPromoApplied(null);
     setPromoStatus("");
+    setStaffCustomAmount("");
+    setStaffCustomAmountOpen(false);
     setSubmitError("");
     setSubmitSuccess("");
     setBlockedStartMins([]);
@@ -1312,6 +1323,7 @@ function BookPageContent() {
           comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
           comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
           promoCode: promoApplied?.code || "",
+          totalCentsOverride: finalTotalCents,
         }),
       });
 
@@ -2094,6 +2106,55 @@ function BookPageContent() {
                   {pricing ? formatMoney(cardTotalCents) : "—"}
                 </div>
               </div>
+              {isStaffMode ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setStaffCustomAmountOpen((prev) => !prev)}
+                    className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {staffCustomAmountOpen ? "Hide Custom Amount" : "Edit Amount"}
+                  </button>
+                  {staffOverrideCents != null ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStaffCustomAmount("");
+                        setStaffCustomAmountOpen(false);
+                      }}
+                      className="rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Reset Amount
+                    </button>
+                  ) : null}
+                  {staffCustomAmountOpen ? (
+                    <div className="flex w-full gap-2">
+                      <input
+                        value={staffCustomAmount}
+                        onChange={(e) => setStaffCustomAmount(e.target.value)}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="h-9 w-full rounded-lg border border-zinc-200 px-2 text-xs text-zinc-900"
+                        placeholder="Custom amount"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const value = Number(staffCustomAmount);
+                          if (!Number.isFinite(value) || value < 0) return;
+                          setPromoApplied(null);
+                          setPromoCode("");
+                          setPromoStatus("");
+                        }}
+                        className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {promoApplied && discountCents > 0 ? (
                 <div className="mt-2 space-y-1 text-xs text-zinc-600">
@@ -2319,7 +2380,7 @@ function BookPageContent() {
                             comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
                             comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
                             promoCode: promoApplied?.code || "",
-                            totalCentsOverride: discountedTotalCents,
+                            totalCentsOverride: finalTotalCents,
                           }),
                         });
                         const json = await res.json().catch(() => ({}));
@@ -2376,7 +2437,7 @@ function BookPageContent() {
                             comboDuckpinMinutes: activity === "Combo Package" ? comboDuckpinDuration ?? undefined : undefined,
                             comboOrder: activity === "Combo Package" ? (comboFirst === "DUCKPIN" ? "DUCKPIN_FIRST" : "AXE_FIRST") : undefined,
                             promoCode: promoApplied?.code || "",
-                            totalCentsOverride: discountedTotalCents,
+                            totalCentsOverride: finalTotalCents,
                           }),
                         });
                         const json = await res.json().catch(() => ({}));
@@ -2486,7 +2547,7 @@ function BookPageContent() {
                   <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
                     <div className="text-xs font-semibold uppercase text-zinc-500">Total Due</div>
                     <div className="mt-2 text-3xl font-semibold text-zinc-900">
-                      ${(discountedTotalCents / 100).toFixed(2)}
+                      ${(finalTotalCents / 100).toFixed(2)}
                     </div>
 
                     <div className="mt-6">
@@ -2526,7 +2587,7 @@ function BookPageContent() {
                     <button
                       type="button"
                       onClick={submitCashPayment}
-                      disabled={cashLoading || cashProvidedCents < discountedTotalCents}
+                      disabled={cashLoading || cashProvidedCents < finalTotalCents}
                       className="mt-4 h-12 w-full rounded-xl border border-black bg-white text-base font-semibold text-black shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {cashLoading ? "Recording…" : "Confirm Cash Payment"}

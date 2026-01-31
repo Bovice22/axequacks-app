@@ -32,6 +32,7 @@ type TerminalIntentRequest = {
   partyAreas?: string[];
   partyAreaMinutes?: number;
   partyAreaTiming?: "BEFORE" | "DURING" | "AFTER";
+  totalCentsOverride?: number;
 };
 
 function validate(body: TerminalIntentRequest) {
@@ -100,8 +101,13 @@ export async function POST(req: Request) {
         ? Number(body.comboAxeMinutes || 0) + Number(body.comboDuckpinMinutes || 0)
         : body.durationMinutes;
 
+    const overrideCents = Number(body.totalCentsOverride);
+    if (Number.isFinite(overrideCents) && overrideCents >= 0) {
+      amount = overrideCents;
+    }
+
     const promoCode = body.promoCode ? normalizePromoCode(body.promoCode) : "";
-    if (promoCode) {
+    if (!Number.isFinite(overrideCents) && promoCode) {
       const sb = supabaseServer();
       const customerEmail = normalizeEmail(body.customerEmail || "");
       const { data, error } = await sb
@@ -188,6 +194,7 @@ export async function POST(req: Request) {
 
     const staff = await getStaffUserFromCookies().catch(() => null);
     const cardFee = cardFeeCents(amount);
+    const totalBeforeMeta = Number.isFinite(overrideCents) ? overrideCents : baseAmount;
     const amountWithFee = amount + cardFee;
     const intent = await stripe.paymentIntents.create({
       amount: amountWithFee,
@@ -217,7 +224,8 @@ export async function POST(req: Request) {
         discount_value: promoMeta ? String(promoMeta.discountValue) : "",
         gift_code: giftMeta?.code || "",
         gift_amount: giftMeta ? String(giftMeta.amountOff) : "",
-        total_before_discount: String(baseAmount),
+        total_before_discount: String(totalBeforeMeta),
+        amount_override_cents: Number.isFinite(overrideCents) ? String(overrideCents) : "",
         card_fee_cents: String(cardFee),
         total_with_fee: String(amountWithFee),
       },
