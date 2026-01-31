@@ -1628,6 +1628,16 @@ export default function BookingsTable() {
     return booking.party_size ?? "—";
   };
 
+  const listSummary = useMemo(() => {
+    const totalBookings = filtered.length;
+    const unpaidCount = filtered.filter((row) => row.paid !== true).length;
+    const totalCentsSum = filtered.reduce(
+      (sum, row) => sum + Number(row.total_cents || 0) + Number(row.tab_total_cents || 0),
+      0
+    );
+    return { totalBookings, unpaidCount, totalCentsSum };
+  }, [filtered]);
+
   if (loading) return <div className="text-sm text-zinc-600">Loading bookings…</div>;
 
   const openWindow = getOpenWindowForDateKey(selectedDateKey);
@@ -1654,16 +1664,6 @@ export default function BookingsTable() {
     const base = isLocalhost ? "https://dashboard.stripe.com/test" : "https://dashboard.stripe.com";
     return `${base}/payments/${paymentIntentId}`;
   };
-
-  const listSummary = useMemo(() => {
-    const totalBookings = filtered.length;
-    const unpaidCount = filtered.filter((row) => row.paid !== true).length;
-    const totalCentsSum = filtered.reduce(
-      (sum, row) => sum + Number(row.total_cents || 0) + Number(row.tab_total_cents || 0),
-      0
-    );
-    return { totalBookings, unpaidCount, totalCentsSum };
-  }, [filtered]);
 
   const modalContent = editingBookingId ? (
     <div
