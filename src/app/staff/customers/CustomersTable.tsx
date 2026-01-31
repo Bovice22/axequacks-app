@@ -20,10 +20,17 @@ type BookingRow = {
   id: string;
   activity: string;
   party_size: number;
+  duration_minutes?: number | null;
   start_ts: string;
   end_ts: string;
   status?: string | null;
   total_cents: number;
+  paid?: boolean | null;
+  combo_order?: string | null;
+  notes?: string | null;
+  payment_intent_id?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
 };
 
 function mapActivityUI(activity: string) {
@@ -715,24 +722,42 @@ export default function CustomersTable() {
                           <div className="text-sm text-zinc-900">No bookings yet.</div>
                         ) : (
                           <div className="overflow-auto">
-                            <table className="w-full text-sm">
+                            <table className="w-full text-xs">
                               <thead className="text-center text-zinc-900">
                                 <tr>
+                                  <th className="py-2 text-center">Booking ID</th>
                                   <th className="py-2 text-center">Date/Time</th>
                                   <th className="py-2 text-center">Activity</th>
+                                  <th className="py-2 text-center">Combo Order</th>
                                   <th className="py-2 text-center">Party</th>
+                                  <th className="py-2 text-center">Duration</th>
                                   <th className="py-2 text-center">Status</th>
+                                  <th className="py-2 text-center">Paid</th>
                                   <th className="py-2 text-center">Total</th>
+                                  <th className="py-2 text-center">Payment ID</th>
+                                  <th className="py-2 text-center">Notes</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {(bookingsByCustomer[r.id] || []).map((b) => (
                                   <tr key={b.id} className="border-t border-zinc-100 text-zinc-900">
+                                    <td className="py-2 px-2 text-center font-semibold text-zinc-800">{b.id}</td>
                                     <td className="py-2 text-center">{formatDateTimeRange(b.start_ts, b.end_ts)}</td>
                                     <td className="py-2 text-center">{b.activity}</td>
+                                    <td className="py-2 text-center">{b.combo_order || "—"}</td>
                                     <td className="py-2 text-center">{b.party_size}</td>
+                                    <td className="py-2 text-center">
+                                      {b.duration_minutes ? `${b.duration_minutes} mins` : "—"}
+                                    </td>
                                     <td className="py-2 text-center">{b.status ?? "CONFIRMED"}</td>
+                                    <td className="py-2 text-center">{b.paid ? "PAID" : "UNPAID"}</td>
                                     <td className="py-2 text-center">${(b.total_cents / 100).toFixed(2)}</td>
+                                    <td className="py-2 px-2 text-center text-[10px]">
+                                      {b.payment_intent_id || "—"}
+                                    </td>
+                                    <td className="py-2 px-2 text-center text-[10px] text-zinc-600">
+                                      {b.notes || "—"}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>

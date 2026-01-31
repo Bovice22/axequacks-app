@@ -57,7 +57,9 @@ export async function GET(req: Request, context: RouteContext) {
     if (customer?.id) {
       const { data: rows, error: bookingsErr } = await sb
         .from("bookings")
-        .select("id,activity,party_size,start_ts,end_ts,status,total_cents")
+        .select(
+          "id,activity,party_size,duration_minutes,start_ts,end_ts,status,total_cents,paid,combo_order,notes,payment_intent_id,customer_name,customer_email"
+        )
         .eq("customer_id", customer.id)
         .order("start_ts", { ascending: false })
         .limit(100);
@@ -72,7 +74,9 @@ export async function GET(req: Request, context: RouteContext) {
     if (rows.length === 0 && (customer?.email || emailParam)) {
       const { data: fallbackRows, error: fallbackErr } = await sb
         .from("bookings")
-        .select("id,activity,party_size,start_ts,end_ts,status,total_cents")
+        .select(
+          "id,activity,party_size,duration_minutes,start_ts,end_ts,status,total_cents,paid,combo_order,notes,payment_intent_id,customer_name,customer_email"
+        )
         .eq("customer_email", customer?.email || emailParam)
         .order("start_ts", { ascending: false })
         .limit(100);
