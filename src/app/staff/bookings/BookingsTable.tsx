@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
 import { totalCents, type Activity } from "@/lib/bookingLogic";
@@ -365,7 +364,6 @@ function MonthCalendar(props: {
 }
 
 export default function BookingsTable() {
-  const router = useRouter();
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [resources, setResources] = useState<ResourceRow[]>([]);
   const [reservations, setReservations] = useState<ReservationRow[]>([]);
@@ -881,7 +879,7 @@ export default function BookingsTable() {
         alert(json?.error || "Failed to open tab.");
         return;
       }
-      router.push(`/staff/pos?tab=${json.tab.id}`);
+      window.location.href = `/staff/pos?tab=${json.tab.id}`;
     } finally {
       setActionLoadingId(null);
     }
