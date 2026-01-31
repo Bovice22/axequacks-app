@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripeTerminal, type Terminal, type Reader } from "@stripe/terminal-js";
 import { totalCents, type Activity } from "@/lib/bookingLogic";
@@ -27,6 +28,8 @@ type BookingRow = {
   tab_status?: string | null;
   tab_id?: string | null;
   tab_total_cents?: number | null;
+  waiver_on_file?: boolean | null;
+  waiver_signed_for_booking?: boolean | null;
 };
 
 type ResourceRow = {
@@ -84,6 +87,11 @@ function comboOrderLabel(order: string | null | undefined) {
   return order;
 }
 
+function requiresWaiver(activity: string | null | undefined) {
+  const key = String(activity || "").toUpperCase();
+  return key.includes("AXE") || key.includes("COMBO");
+}
+
 function bookingPaymentLabel(status: string | null | undefined, paid: boolean | null | undefined) {
   if ((status ?? "CONFIRMED") === "CANCELLED") return "CANCELLED";
   return paid ? "BOOKING PAID" : "BOOKING UNPAID";
@@ -95,8 +103,8 @@ function bookingPaymentBadge(status: string | null | undefined, paid: boolean | 
     label === "BOOKING PAID"
       ? "bg-emerald-100 text-emerald-800 border-emerald-200"
       : label === "BOOKING UNPAID"
-      ? "bg-red-100 text-red-800 border-red-200"
-      : "bg-zinc-100 text-zinc-700 border-zinc-200";
+        ? "bg-red-100 text-red-800 border-red-200"
+        : "bg-zinc-100 text-zinc-700 border-zinc-200";
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style} ${className ?? ""}`}>
       {label}
@@ -339,13 +347,12 @@ function MonthCalendar(props: {
               type="button"
               disabled={disabled}
               onClick={() => !disabled && onSelectDateKey(dk)}
-              className={`h-9 rounded-xl border text-xs font-bold transition sm:h-10 sm:text-sm ${
-                selected
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : disabled
+              className={`h-9 rounded-xl border text-xs font-bold transition sm:h-10 sm:text-sm ${selected
+                ? "border-zinc-900 bg-zinc-900 text-white"
+                : disabled
                   ? "cursor-not-allowed border-zinc-100 bg-zinc-100 text-zinc-400 line-through"
                   : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50"
-              }`}
+                }`}
               title="Open"
             >
               {cell.date.getDate()}
@@ -358,6 +365,7 @@ function MonthCalendar(props: {
 }
 
 export default function BookingsTable() {
+  const router = useRouter();
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [resources, setResources] = useState<ResourceRow[]>([]);
   const [reservations, setReservations] = useState<ReservationRow[]>([]);
@@ -594,8 +602,8 @@ export default function BookingsTable() {
       payOverrideCents != null && Number.isFinite(payOverrideCents)
         ? payOverrideCents
         : payOverrideTotalCents != null && Number.isFinite(payOverrideTotalCents)
-        ? payOverrideTotalCents
-        : booking.total_cents;
+          ? payOverrideTotalCents
+          : booking.total_cents;
     setPayGiftLoading(true);
     setPayGiftStatus("");
     try {
@@ -719,14 +727,14 @@ export default function BookingsTable() {
           booking_total_cents_new: payOverrideTotalCents ?? undefined,
           booking_snapshot: bookingSnapshot
             ? {
-                total_cents: bookingSnapshot.total_cents,
-                activity: bookingSnapshot.activity,
-                party_size: bookingSnapshot.party_size,
-                duration_minutes: bookingSnapshot.duration_minutes,
-                start_ts: bookingSnapshot.start_ts,
-                customer_name: bookingSnapshot.customer_name,
-                customer_email: bookingSnapshot.customer_email,
-              }
+              total_cents: bookingSnapshot.total_cents,
+              activity: bookingSnapshot.activity,
+              party_size: bookingSnapshot.party_size,
+              duration_minutes: bookingSnapshot.duration_minutes,
+              start_ts: bookingSnapshot.start_ts,
+              customer_name: bookingSnapshot.customer_name,
+              customer_email: bookingSnapshot.customer_email,
+            }
             : null,
         }),
       });
@@ -873,7 +881,7 @@ export default function BookingsTable() {
         alert(json?.error || "Failed to open tab.");
         return;
       }
-      window.open(`/staff/pos?tab=${json.tab.id}`, "_blank", "noopener,noreferrer");
+      router.push(`/staff/pos?tab=${json.tab.id}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -985,7 +993,7 @@ export default function BookingsTable() {
   useEffect(() => {
     const interval = setInterval(() => {
       void loadBookings(order);
-    }, 30 * 1000);
+    }, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [order]);
 
@@ -1272,15 +1280,15 @@ export default function BookingsTable() {
         partySizeIncreased && recalculatedTotalCents && recalculatedTotalCents > previousTotalCents
           ? recalculatedTotalCents
           : editingRow?.paid === false && editTotal.trim()
-          ? Math.max(0, Math.round(Number(editTotal) * 100))
-          : undefined;
+            ? Math.max(0, Math.round(Number(editTotal) * 100))
+            : undefined;
       const timePayload = timeChanged
         ? {
-            dateKey: editDateKey,
-            startMin: editStartMin,
-            durationMinutes: editDuration,
-            reschedule: true,
-          }
+          dateKey: editDateKey,
+          startMin: editStartMin,
+          durationMinutes: editDuration,
+          reschedule: true,
+        }
         : {};
       const res = await fetch(`/api/staff/bookings/${editingBookingId}`, {
         method: "PATCH",
@@ -1420,7 +1428,7 @@ export default function BookingsTable() {
         if (!Array.isArray(json?.blockedStartMins)) return;
         setEditBlockedStartMins(json.blockedStartMins);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setEditAvailabilityLoading(false));
 
     return () => controller.abort();
@@ -1431,8 +1439,8 @@ export default function BookingsTable() {
       editActivity === "Combo Package"
         ? [120]
         : editActivity === "Axe Throwing"
-        ? [15, 30, 60, 120]
-        : [30, 60, 120];
+          ? [15, 30, 60, 120]
+          : [30, 60, 120];
     const set = new Set(base);
     if (editDuration && !set.has(editDuration)) set.add(editDuration);
     return Array.from(set).sort((a, b) => a - b);
@@ -1648,6 +1656,16 @@ export default function BookingsTable() {
     const base = isLocalhost ? "https://dashboard.stripe.com/test" : "https://dashboard.stripe.com";
     return `${base}/payments/${paymentIntentId}`;
   };
+
+  const listSummary = useMemo(() => {
+    const totalBookings = filtered.length;
+    const unpaidCount = filtered.filter((row) => row.paid !== true).length;
+    const totalCentsSum = filtered.reduce(
+      (sum, row) => sum + Number(row.total_cents || 0) + Number(row.tab_total_cents || 0),
+      0
+    );
+    return { totalBookings, unpaidCount, totalCentsSum };
+  }, [filtered]);
 
   const modalContent = editingBookingId ? (
     <div
@@ -1885,8 +1903,8 @@ export default function BookingsTable() {
                 editStartMin == null
                   ? []
                   : editDurationOptions
-                      .map((duration) => ({ duration, endMin: editStartMin + duration }))
-                      .filter((opt) => opt.endMin <= openWindow.closeMin);
+                    .map((duration) => ({ duration, endMin: editStartMin + duration }))
+                    .filter((opt) => opt.endMin <= openWindow.closeMin);
               const endValue = editStartMin == null ? "" : String(editStartMin + editDuration);
 
               return (
@@ -1898,52 +1916,52 @@ export default function BookingsTable() {
                     <div className="text-xs text-zinc-500">No start times available for this duration.</div>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-semibold text-zinc-600">
-                      Start Time
-                      <select
-                        value={editStartMin == null ? "" : String(editStartMin)}
-                        onChange={(e) => {
-                          const next = Number(e.target.value);
-                          setEditStartMin(Number.isFinite(next) ? next : null);
-                        }}
-                        className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
-                        disabled={editAvailabilityLoading}
-                      >
-                        <option value="">Select start</option>
-                        {slots.map((m) => {
-                          const blocked = blockedSet.has(m);
-                          const past = nowMin >= 0 && m < nowMin;
-                          const disabled = blocked || past || editAvailabilityLoading;
-                          return (
-                            <option key={m} value={m} disabled={disabled}>
-                              {minutesToLabel(m)}
+                      <label className="text-xs font-semibold text-zinc-600">
+                        Start Time
+                        <select
+                          value={editStartMin == null ? "" : String(editStartMin)}
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            setEditStartMin(Number.isFinite(next) ? next : null);
+                          }}
+                          className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+                          disabled={editAvailabilityLoading}
+                        >
+                          <option value="">Select start</option>
+                          {slots.map((m) => {
+                            const blocked = blockedSet.has(m);
+                            const past = nowMin >= 0 && m < nowMin;
+                            const disabled = blocked || past || editAvailabilityLoading;
+                            return (
+                              <option key={m} value={m} disabled={disabled}>
+                                {minutesToLabel(m)}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-zinc-600">
+                        End Time
+                        <select
+                          value={endValue}
+                          onChange={(e) => {
+                            if (editStartMin == null) return;
+                            const endMin = Number(e.target.value);
+                            if (!Number.isFinite(endMin)) return;
+                            const nextDuration = endMin - editStartMin;
+                            if (nextDuration > 0) setEditDuration(nextDuration);
+                          }}
+                          className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
+                          disabled={editStartMin == null || editAvailabilityLoading}
+                        >
+                          <option value="">Select end</option>
+                          {endOptions.map((opt) => (
+                            <option key={opt.endMin} value={opt.endMin}>
+                              {minutesToLabel(opt.endMin)}
                             </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    <label className="text-xs font-semibold text-zinc-600">
-                      End Time
-                      <select
-                        value={endValue}
-                        onChange={(e) => {
-                          if (editStartMin == null) return;
-                          const endMin = Number(e.target.value);
-                          if (!Number.isFinite(endMin)) return;
-                          const nextDuration = endMin - editStartMin;
-                          if (nextDuration > 0) setEditDuration(nextDuration);
-                        }}
-                        className="mt-1 h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm text-zinc-900"
-                        disabled={editStartMin == null || editAvailabilityLoading}
-                      >
-                        <option value="">Select end</option>
-                        {endOptions.map((opt) => (
-                          <option key={opt.endMin} value={opt.endMin}>
-                            {minutesToLabel(opt.endMin)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                   )}
                   <div className="mt-2 text-xs text-zinc-500">
@@ -2136,8 +2154,8 @@ export default function BookingsTable() {
     ? payOverrideCents != null
       ? payOverrideCents
       : payGiftApplied
-      ? payGiftApplied.remainingCents
-      : payModalBooking.total_cents
+        ? payGiftApplied.remainingCents
+        : payModalBooking.total_cents
     : 0;
   const payModalTotalCents = basePayCents + payModalTabTotalCents;
   const giftCoversTotal = payGiftApplied ? payGiftApplied.remainingCents <= 0 : false;
@@ -2338,10 +2356,10 @@ export default function BookingsTable() {
               {terminalPhase === "connecting"
                 ? "Connecting reader..."
                 : terminalPhase === "connected"
-                ? "Reader connected."
-                : terminalPhase === "collecting"
-                ? "Collecting payment..."
-                : "Processing payment..."}
+                  ? "Reader connected."
+                  : terminalPhase === "collecting"
+                    ? "Collecting payment..."
+                    : "Processing payment..."}
             </div>
           ) : null}
         </div>
@@ -2389,286 +2407,222 @@ export default function BookingsTable() {
       {payModal}
       <div className={`relative z-0 rounded-2xl border border-zinc-200 bg-white p-4 ${editingBookingId ? "pointer-events-none" : ""}`}>
         <div className="mb-6 grid gap-6 lg:grid-cols-1">
-        <div className="mx-auto w-full max-w-[640px]">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-zinc-700">Calendar</div>
-            <button
-              type="button"
-              onClick={() => setSelectedDateKey(todayKey)}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-1 text-xs hover:bg-zinc-50"
-            >
-              Today
-            </button>
+          <div className="mx-auto w-full max-w-[640px]">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-semibold text-zinc-700">Calendar</div>
+              <button
+                type="button"
+                onClick={() => setSelectedDateKey(todayKey)}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-1 text-xs hover:bg-zinc-50"
+              >
+                Today
+              </button>
+            </div>
+            <div className="mb-2 flex justify-center">
+              <a
+                href="https://book.axequacks.com/book?mode=staff"
+                target="_blank"
+                rel="noreferrer"
+                style={{ width: "auto" }}
+                className="inline-flex rounded-xl border border-zinc-900 bg-zinc-900 px-5 py-2 text-[12px] font-semibold text-white shadow-sm hover:bg-zinc-800"
+              >
+                Add Booking +
+              </a>
+            </div>
+            <div className="flex justify-center">
+              <MonthCalendar
+                selectedDateKey={selectedDateKey}
+                onSelectDateKey={setSelectedDateKey}
+                allowPast={staffRole === "admin"}
+              />
+            </div>
           </div>
-          <div className="mb-2 flex justify-center">
-            <a
-              href="https://book.axequacks.com/book?mode=staff"
-              target="_blank"
-              rel="noreferrer"
-              style={{ width: "auto" }}
-              className="inline-flex rounded-xl border border-zinc-900 bg-zinc-900 px-5 py-2 text-[12px] font-semibold text-white shadow-sm hover:bg-zinc-800"
-            >
-              Add Booking +
-            </a>
-          </div>
-          <div className="flex justify-center">
-            <MonthCalendar
-              selectedDateKey={selectedDateKey}
-              onSelectDateKey={setSelectedDateKey}
-              allowPast={staffRole === "admin"}
-            />
-          </div>
-        </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-semibold text-zinc-700">Day Schedule</div>
-            <div className="flex items-center gap-3 text-xs text-zinc-500">
-              <button
-                type="button"
-                onClick={() => setShowSchedule((prev) => !prev)}
-                className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 sm:hidden"
-              >
-                {showSchedule ? "Hide schedule" : "Show schedule"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompactMode((prev) => !prev)}
-                className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
-              >
-                {compactMode ? "Comfort view" : "Compact view"}
-              </button>
-              <span>{prettyDate(selectedDateKey)}</span>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-semibold text-zinc-700">Day Schedule</div>
+              <div className="flex items-center gap-3 text-xs text-zinc-500">
+                <button
+                  type="button"
+                  onClick={() => setShowSchedule((prev) => !prev)}
+                  className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 sm:hidden"
+                >
+                  {showSchedule ? "Hide schedule" : "Show schedule"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompactMode((prev) => !prev)}
+                  className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                >
+                  {compactMode ? "Comfort view" : "Compact view"}
+                </button>
+                <span>{prettyDate(selectedDateKey)}</span>
+              </div>
             </div>
-          </div>
-          {!showSchedule ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 sm:hidden">
-              Schedule hidden. Tap "Show schedule" to view.
-            </div>
-          ) : !openWindow ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">Closed today.</div>
-          ) : (
-            <div
-              ref={scheduleWrapRef}
-              className="w-full overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3"
-              style={{ pointerEvents: "auto" }}
-            >
-              {resourceColumns.length === 0 ? (
-                <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-600">
-                  No active resources found. Add Axe bays, Duckpin lanes, and party areas in the resources table.
-                </div>
-              ) : (
-                <>
-                  <div
-                    className="sticky top-0 z-10 border-b border-zinc-100 bg-white"
-                    style={{
-                      minWidth: timeGutter + resourceColumns.length * resourceColWidth,
-                      height: headerHeight,
-                    }}
-                  >
-                    <div className="flex h-full items-center text-xs font-semibold text-zinc-600">
-                      <div style={{ width: timeGutter }} />
-                      {resourceColumns.map((r) => (
-                        <div
-                          key={r.id}
-                          className="truncate text-center"
-                          style={{ width: resourceColWidth, paddingLeft: 6, paddingRight: 6 }}
-                        >
-                          {r.label || r.name || r.id}
-                        </div>
-                      ))}
-                    </div>
+            {!showSchedule ? (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 sm:hidden">
+                Schedule hidden. Tap "Show schedule" to view.
+              </div>
+            ) : !openWindow ? (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">Closed today.</div>
+            ) : (
+              <div
+                ref={scheduleWrapRef}
+                className="w-full overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-3"
+                style={{ pointerEvents: "auto" }}
+              >
+                {resourceColumns.length === 0 ? (
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-600">
+                    No active resources found. Add Axe bays, Duckpin lanes, and party areas in the resources table.
                   </div>
-
-                  <div
-                    className="relative"
-                    style={{
-                      height: scheduleHeight,
-                      minWidth: timeGutter + resourceColumns.length * resourceColWidth,
-                      position: "relative",
-                      pointerEvents: "auto",
-                      backgroundImage:
-                        "repeating-linear-gradient(to bottom, rgba(24,24,27,0.08) 0, rgba(24,24,27,0.08) 1px, transparent 1px, transparent " +
-                        HOUR_ROW_PX +
-                        "px), repeating-linear-gradient(to bottom, transparent 0, transparent " +
-                        Math.floor(HOUR_ROW_PX / 2) +
-                        "px, rgba(24,24,27,0.04) " +
-                        Math.floor(HOUR_ROW_PX / 2) +
-                        "px, rgba(24,24,27,0.04) " +
-                        (Math.floor(HOUR_ROW_PX / 2) + 1) +
-                        "px, transparent " +
-                        (Math.floor(HOUR_ROW_PX / 2) + 1) +
-                        "px, transparent " +
-                        HOUR_ROW_PX +
-                        "px)",
-                      backgroundPosition: "0 0, 0 0",
-                      backgroundSize: `100% ${HOUR_ROW_PX}px, 100% ${HOUR_ROW_PX}px`,
-                    }}
-                    data-schedule-root
-                  >
+                ) : (
+                  <>
                     <div
-                      className="absolute left-0"
+                      className="sticky top-0 z-10 border-b border-zinc-100 bg-white"
                       style={{
-                        top: 0,
-                        width: timeGutter,
-                        height: scheduleMinutes * PX_PER_MIN,
-                        pointerEvents: "none",
+                        minWidth: timeGutter + resourceColumns.length * resourceColWidth,
+                        height: headerHeight,
                       }}
                     >
-                      {Array.from(
-                        { length: Math.max(1, Math.ceil(scheduleMinutes / 60)) },
-                        (_, i) => Math.floor(openStartMin / 60) + i
-                      ).map((h, idx) => (
-                        <div key={`${h}-${idx}`} className="relative" style={{ height: HOUR_ROW_PX }}>
-                          <div className="absolute left-0 top-0 text-sm text-zinc-500" style={{ paddingLeft: 6 }}>
-                            {hourLabel(h)}
+                      <div className="flex h-full items-center text-xs font-semibold text-zinc-600">
+                        <div style={{ width: timeGutter }} />
+                        {resourceColumns.map((r) => (
+                          <div
+                            key={r.id}
+                            className="truncate text-center"
+                            style={{ width: resourceColWidth, paddingLeft: 6, paddingRight: 6 }}
+                          >
+                            {r.label || r.name || r.id}
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
 
-                    {resourceColumns.map((r, idx) => (
+                    <div
+                      className="relative"
+                      style={{
+                        height: scheduleHeight,
+                        minWidth: timeGutter + resourceColumns.length * resourceColWidth,
+                        position: "relative",
+                        pointerEvents: "auto",
+                        backgroundImage:
+                          "repeating-linear-gradient(to bottom, rgba(24,24,27,0.08) 0, rgba(24,24,27,0.08) 1px, transparent 1px, transparent " +
+                          HOUR_ROW_PX +
+                          "px), repeating-linear-gradient(to bottom, transparent 0, transparent " +
+                          Math.floor(HOUR_ROW_PX / 2) +
+                          "px, rgba(24,24,27,0.04) " +
+                          Math.floor(HOUR_ROW_PX / 2) +
+                          "px, rgba(24,24,27,0.04) " +
+                          (Math.floor(HOUR_ROW_PX / 2) + 1) +
+                          "px, transparent " +
+                          (Math.floor(HOUR_ROW_PX / 2) + 1) +
+                          "px, transparent " +
+                          HOUR_ROW_PX +
+                          "px)",
+                        backgroundPosition: "0 0, 0 0",
+                        backgroundSize: `100% ${HOUR_ROW_PX}px, 100% ${HOUR_ROW_PX}px`,
+                      }}
+                      data-schedule-root
+                    >
                       <div
-                        key={r.id}
-                        className="absolute top-0 bottom-0 border-l border-zinc-100"
-                        style={{ left: timeGutter + idx * resourceColWidth, top: headerHeight, pointerEvents: "none" }}
-                      />
-                    ))}
+                        className="absolute left-0"
+                        style={{
+                          top: 0,
+                          width: timeGutter,
+                          height: scheduleMinutes * PX_PER_MIN,
+                          pointerEvents: "none",
+                        }}
+                      >
+                        {Array.from(
+                          { length: Math.max(1, Math.ceil(scheduleMinutes / 60)) },
+                          (_, i) => Math.floor(openStartMin / 60) + i
+                        ).map((h, idx) => (
+                          <div key={`${h}-${idx}`} className="relative" style={{ height: HOUR_ROW_PX }}>
+                            <div className="absolute left-0 top-0 text-sm text-zinc-500" style={{ paddingLeft: 6 }}>
+                              {hourLabel(h)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-                    {(isClient ? reservationsForDay : []).map((resv) => {
-                      const colIndex = resourceIndexById.get(resv.resource_id);
-                      if (colIndex == null) return null;
-                      const startLabel = fmtNY(resv.start_ts);
-                      const endLabel = fmtNY(resv.end_ts);
-                      const startMin = minutesFromLabel(startLabel);
-                      const endMin = minutesFromLabel(endLabel);
-                      if (startMin == null || endMin == null) return null;
-                      const top = offsetFromOpen(startMin - openStartMin);
-                      const height = Math.max(28, (endMin - startMin) * PX_PER_MIN);
-                      if (top + height < 0 || top > scheduleMinutes * PX_PER_MIN) return null;
-                      const durationMinutes = endMin - startMin;
-                      const isCompact = durationMinutes <= 30;
-
-                      const booking = bookingById.get(resv.booking_id);
-                      const left = timeGutter + colIndex * resourceColWidth + 4;
-                      const width = resourceColWidth - 8;
-                      const resourceLabel =
-                        resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
-                      const isPartyArea = resourceColumns[colIndex]?.type === "PARTY";
-                      const displayActivity = isPartyArea
-                        ? "Private Party Area"
-                        : activityLabel(booking?.activity) || "Booking";
-                      const isHovered =
-                        hoveredBookingId === resv.booking_id || hoveredNoteId === resv.booking_id;
-                      const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
-                      const actionBarColor = ACTION_BAR_COLOR;
-                      const actionTextColor = "#111";
-                      const showPayNow =
-                        booking && (booking.status ?? "CONFIRMED") !== "CANCELLED" && !booking.paid;
-
-                      return (
+                      {resourceColumns.map((r, idx) => (
                         <div
-                          key={`${resv.booking_id}-${resv.resource_id}-${resv.start_ts}`}
-                          className="absolute cursor-pointer rounded-xl p-3 text-xs text-white shadow-sm"
-                          style={{
-                            top,
-                            height,
-                            left,
-                            width,
-                            position: "absolute",
-                            backgroundColor: bgColor,
-                            pointerEvents: "auto",
-                            paddingTop: 26,
-                            zIndex: isHovered ? 999 : 50,
-                          }}
-                          onMouseEnter={() => {
-                            if (isCompact) setHoveredBookingId(resv.booking_id);
-                            const note = (booking?.notes || "").trim();
-                            if (note && !note.startsWith("Event Request:")) {
-                              setHoveredNoteId(resv.booking_id);
-                            }
-                          }}
-                          onMouseLeave={() => {
-                            if (hoveredBookingId === resv.booking_id) setHoveredBookingId(null);
-                            if (hoveredNoteId === resv.booking_id) setHoveredNoteId(null);
-                          }}
-                          data-booking-id={resv.booking_id}
-                          role="group"
-                        >
+                          key={r.id}
+                          className="absolute top-0 bottom-0 border-l border-zinc-100"
+                          style={{ left: timeGutter + idx * resourceColWidth, top: headerHeight, pointerEvents: "none" }}
+                        />
+                      ))}
+
+                      {(isClient ? reservationsForDay : []).map((resv) => {
+                        const colIndex = resourceIndexById.get(resv.resource_id);
+                        if (colIndex == null) return null;
+                        const startLabel = fmtNY(resv.start_ts);
+                        const endLabel = fmtNY(resv.end_ts);
+                        const startMin = minutesFromLabel(startLabel);
+                        const endMin = minutesFromLabel(endLabel);
+                        if (startMin == null || endMin == null) return null;
+                        const top = offsetFromOpen(startMin - openStartMin);
+                        const height = Math.max(28, (endMin - startMin) * PX_PER_MIN);
+                        if (top + height < 0 || top > scheduleMinutes * PX_PER_MIN) return null;
+                        const durationMinutes = endMin - startMin;
+                        const isCompact = durationMinutes <= 30;
+
+                        const booking = bookingById.get(resv.booking_id);
+                        const left = timeGutter + colIndex * resourceColWidth + 4;
+                        const width = resourceColWidth - 8;
+                        const resourceLabel =
+                          resourceColumns[colIndex]?.label || resourceColumns[colIndex]?.name || "Resource";
+                        const isPartyArea = resourceColumns[colIndex]?.type === "PARTY";
+                        const displayActivity = isPartyArea
+                          ? "Private Party Area"
+                          : activityLabel(booking?.activity) || "Booking";
+                        const isHovered =
+                          hoveredBookingId === resv.booking_id || hoveredNoteId === resv.booking_id;
+                        const bgColor = bookingColorById.get(resv.booking_id) || "#0f0f10";
+                        const actionBarColor = ACTION_BAR_COLOR;
+                        const actionTextColor = "#111";
+                        const showPayNow =
+                          booking && (booking.status ?? "CONFIRMED") !== "CANCELLED" && !booking.paid;
+                        const waiverMissing =
+                          !isPartyArea &&
+                          booking &&
+                          requiresWaiver(booking.activity) &&
+                          !booking.waiver_on_file &&
+                          !booking.waiver_signed_for_booking;
+
+                        return (
                           <div
-                            className="absolute left-0 right-0 top-0 z-20 flex h-[22px] items-center justify-end gap-2 rounded-t-xl px-2"
-                            style={{ backgroundColor: actionBarColor, color: actionTextColor }}
-                            data-action-button="true"
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                            key={`${resv.booking_id}-${resv.resource_id}-${resv.start_ts}`}
+                            className="absolute cursor-pointer rounded-xl p-3 text-xs text-white shadow-sm"
+                            style={{
+                              top,
+                              height,
+                              left,
+                              width,
+                              position: "absolute",
+                              backgroundColor: bgColor,
+                              pointerEvents: "auto",
+                              paddingTop: 26,
+                              zIndex: isHovered ? 999 : 50,
                             }}
-                            onPointerDown={(e) => {
-                              e.stopPropagation();
-                              (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                            onMouseEnter={() => {
+                              if (isCompact) setHoveredBookingId(resv.booking_id);
+                              const note = (booking?.notes || "").trim();
+                              if (note && !note.startsWith("Event Request:")) {
+                                setHoveredNoteId(resv.booking_id);
+                              }
                             }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                            onMouseLeave={() => {
+                              if (hoveredBookingId === resv.booking_id) setHoveredBookingId(null);
+                              if (hoveredNoteId === resv.booking_id) setHoveredNoteId(null);
                             }}
-                            onPointerDownCapture={(e) => {
-                              e.stopPropagation();
-                              (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                              actionBarClickRef.current = true;
-                              window.setTimeout(() => {
-                                actionBarClickRef.current = false;
-                              }, 0);
-                            }}
+                            data-booking-id={resv.booking_id}
+                            role="group"
                           >
-                            {!isPartyArea ? (
-                              <button
-                                type="button"
-                                aria-label="Open tab"
-                                className="rounded-full px-3 py-1 text-[10px] font-bold"
-                                style={{
-                                  border: "1px solid rgba(0,0,0,0.35)",
-                                  color: "#111",
-                                  backgroundColor: "#fff",
-                                }}
-                                data-booking-id={resv.booking_id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                  openTabForBooking(resv.booking_id);
-                                }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                }}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                }}
-                                data-action-button="true"
-                              >
-                                Tab
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              aria-label="Edit booking"
-                              className="rounded-full px-3 py-1 text-[10px] font-bold"
-                              style={{
-                                border: "1px solid rgba(0,0,0,0.35)",
-                                color: "#111",
-                                backgroundColor: "#fff",
-                              }}
-                              data-booking-id={resv.booking_id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                if (isPartyArea) {
-                                  openPartyEdit(resv);
-                                } else {
-                                  editIntentRef.current = true;
-                                  openEditForBooking(resv.booking_id);
-                                }
-                              }}
+                            <div
+                              className="absolute left-0 right-0 top-0 z-20 flex h-[22px] items-center justify-end gap-2 rounded-t-xl px-2"
+                              style={{ backgroundColor: actionBarColor, color: actionTextColor }}
+                              data-action-button="true"
                               onMouseDown={(e) => {
                                 e.stopPropagation();
                                 (e.nativeEvent as any)?.stopImmediatePropagation?.();
@@ -2677,308 +2631,435 @@ export default function BookingsTable() {
                                 e.stopPropagation();
                                 (e.nativeEvent as any)?.stopImmediatePropagation?.();
                               }}
-                              data-action-button="true"
-                            >
-                              {isPartyArea ? "Edit Party" : "Edit"}
-                            </button>
-                            {!isPartyArea ? (
-                              <button
-                                type="button"
-                                aria-label="Assign staff"
-                                className="rounded-full px-3 py-1 text-[10px] font-bold"
-                                style={{
-                                  border: "1px solid rgba(0,0,0,0.35)",
-                                  color: "#111",
-                                  backgroundColor: "#fff",
-                                }}
-                                data-booking-id={resv.booking_id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                  editIntentRef.current = true;
-                                  openEditForBooking(resv.booking_id);
-                                }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                }}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                }}
-                                data-action-button="true"
-                              >
-                                Assign Staff
-                              </button>
-                            ) : null}
-                            {showPayNow && !isPartyArea ? (
-                              <button
-                                type="button"
-                                aria-label="Pay now"
-                                className="rounded-full px-3 py-1 text-[10px] font-bold"
-                                style={{
-                                  border: "1px solid rgba(0,0,0,0.35)",
-                                  color: "#111",
-                                  backgroundColor: "#fff",
-                                }}
-                                data-booking-id={resv.booking_id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                  openPayModal(resv.booking_id);
-                                }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                }}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
-                                }}
-                                data-action-button="true"
-                              >
-                                Pay Now
-                              </button>
-                            ) : null}
-                          </div>
-                          {hoveredNoteId === resv.booking_id &&
-                          (booking?.notes || "").trim() &&
-                          !(booking?.notes || "").trim().startsWith("Event Request:") ? (
-                            <div
-                              className="absolute right-2 top-7 z-30 max-w-[220px] whitespace-pre-wrap rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px] shadow-lg"
-                              style={{ color: "#000" }}
-                            >
-                              {booking?.notes?.trim()}
-                            </div>
-                          ) : null}
-                          {isCompact && hoveredBookingId === resv.booking_id ? (
-                            <div
-                              className="absolute left-2 right-2 z-30 rounded-lg border border-black/10 bg-white px-2 py-2 text-[11px] shadow-lg"
-                              style={{
-                                top: -8,
-                                transform: "translateY(-100%)",
-                                color: "#111",
-                                pointerEvents: "none",
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                              }}
+                              onPointerDownCapture={(e) => {
+                                e.stopPropagation();
+                                (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                actionBarClickRef.current = true;
+                                window.setTimeout(() => {
+                                  actionBarClickRef.current = false;
+                                }, 0);
                               }}
                             >
-                              <div className="font-semibold">
-                                {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
-                              </div>
-                              <div>{displayActivity}</div>
-                              <div className="text-[10px] text-zinc-600">{resourceLabel}</div>
-                              <div className="text-[10px] text-zinc-600">
-                                {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
-                              </div>
-                              {booking?.assigned_staff_id ? (
-                                <div className="text-[10px] text-zinc-600">
-                                  Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
-                                </div>
+                              {!isPartyArea ? (
+                                <button
+                                  type="button"
+                                  aria-label="Open tab"
+                                  className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                  style={{
+                                    border: "1px solid rgba(0,0,0,0.35)",
+                                    color: "#111",
+                                    backgroundColor: "#fff",
+                                  }}
+                                  data-booking-id={resv.booking_id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    openTabForBooking(resv.booking_id);
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  }}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  }}
+                                  data-action-button="true"
+                                >
+                                  Tab
+                                </button>
                               ) : null}
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
-                                {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
-                              </div>
+                              <button
+                                type="button"
+                                aria-label="Edit booking"
+                                className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                style={{
+                                  border: "1px solid rgba(0,0,0,0.35)",
+                                  color: "#111",
+                                  backgroundColor: "#fff",
+                                }}
+                                data-booking-id={resv.booking_id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  if (isPartyArea) {
+                                    openPartyEdit(resv);
+                                  } else {
+                                    editIntentRef.current = true;
+                                    openEditForBooking(resv.booking_id);
+                                  }
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                }}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                  (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                }}
+                                data-action-button="true"
+                              >
+                                {isPartyArea ? "Edit Party" : "Edit"}
+                              </button>
+                              {!isPartyArea ? (
+                                <button
+                                  type="button"
+                                  aria-label="Assign staff"
+                                  className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                  style={{
+                                    border: "1px solid rgba(0,0,0,0.35)",
+                                    color: "#111",
+                                    backgroundColor: "#fff",
+                                  }}
+                                  data-booking-id={resv.booking_id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    editIntentRef.current = true;
+                                    openEditForBooking(resv.booking_id);
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  }}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  }}
+                                  data-action-button="true"
+                                >
+                                  Assign Staff
+                                </button>
+                              ) : null}
+                              {showPayNow && !isPartyArea ? (
+                                <button
+                                  type="button"
+                                  aria-label="Pay now"
+                                  className="rounded-full px-3 py-1 text-[10px] font-bold"
+                                  style={{
+                                    border: "1px solid rgba(0,0,0,0.35)",
+                                    color: "#111",
+                                    backgroundColor: "#fff",
+                                  }}
+                                  data-booking-id={resv.booking_id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    openPayModal(resv.booking_id);
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  }}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                  }}
+                                  data-action-button="true"
+                                >
+                                  Pay Now
+                                </button>
+                              ) : null}
                             </div>
-                          ) : null}
-                          {isCompact ? (
-                            <>
-                              <div className="text-[11px] font-semibold">
-                                {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                            {hoveredNoteId === resv.booking_id &&
+                              (booking?.notes || "").trim() &&
+                              !(booking?.notes || "").trim().startsWith("Event Request:") ? (
+                              <div
+                                className="absolute right-2 top-7 z-30 max-w-[220px] whitespace-pre-wrap rounded-lg border border-black/10 bg-white px-2 py-1 text-[11px] shadow-lg"
+                                style={{ color: "#000" }}
+                              >
+                                {booking?.notes?.trim()}
                               </div>
-                              <div className="text-[11px]">{displayActivity}</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="font-semibold">
-                                {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
-                              </div>
-                              <div>{displayActivity}</div>
-                              <div className="text-[10px] text-zinc-300">{resourceLabel}</div>
-                              <div className="text-[10px] text-zinc-200">
-                                {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
-                              </div>
-                              {booking?.assigned_staff_id ? (
-                                <div className="text-[10px] text-zinc-200">
-                                  Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
+                            ) : null}
+                            {isCompact && hoveredBookingId === resv.booking_id ? (
+                              <div
+                                className="absolute left-2 right-2 z-30 rounded-lg border border-black/10 bg-white px-2 py-2 text-[11px] shadow-lg"
+                                style={{
+                                  top: -8,
+                                  transform: "translateY(-100%)",
+                                  color: "#111",
+                                  pointerEvents: "none",
+                                }}
+                              >
+                                <div className="font-semibold">
+                                  {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
                                 </div>
-                              ) : null}
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
-                                {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
+                                <div>{displayActivity}</div>
+                                <div className="text-[10px] text-zinc-600">{resourceLabel}</div>
+                                <div className="text-[10px] text-zinc-600">
+                                  {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
+                                </div>
+                                {booking?.assigned_staff_id ? (
+                                  <div className="text-[10px] text-zinc-600">
+                                    Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
+                                  </div>
+                                ) : null}
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                                  {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
+                                </div>
+                                {waiverMissing ? (
+                                  <button
+                                    type="button"
+                                    className="mt-1 inline-flex items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm animate-pulse"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                    onPointerDown={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                  >
+                                    WAIVER NEEDS SIGNED
+                                  </button>
+                                ) : null}
                               </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-2 text-sm font-semibold text-zinc-700">
-        {prettyDate(selectedDateKey)} — {filtered.length} booking{filtered.length === 1 ? "" : "s"}
-      </div>
-
-      <div className="mx-auto" style={{ width: "90vw", maxWidth: "1400px" }}>
-        {resendStatus ? (
-          <div className="mb-2 text-xs font-semibold text-emerald-700">{resendStatus}</div>
-        ) : null}
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, email, activity, id…"
-            className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
-          />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setOrder("upcoming")}
-              className={`rounded-xl border px-3 py-2 text-sm ${
-                order === "upcoming" ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white"
-              }`}
-            >
-              Upcoming
-            </button>
-            <button
-              onClick={() => setOrder("newest")}
-              className={`rounded-xl border px-3 py-2 text-sm ${
-                order === "newest" ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white"
-              }`}
-            >
-              Newest
-            </button>
-            <button
-              onClick={() => loadBookings(order)}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
-            >
-              Refresh
-            </button>
+                            ) : null}
+                            {isCompact ? (
+                              <>
+                                <div className="text-[11px] font-semibold">
+                                  {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                                </div>
+                                <div className="text-[11px]">{displayActivity}</div>
+                                {waiverMissing ? (
+                                  <div className="mt-1 text-[9px] font-bold text-red-600 animate-pulse">
+                                    WAIVER NEEDS SIGNED
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <div className="font-semibold">
+                                  {fmtNY(resv.start_ts)} – {fmtNY(resv.end_ts)}
+                                </div>
+                                <div>{displayActivity}</div>
+                                <div className="text-[10px] text-zinc-300">{resourceLabel}</div>
+                                <div className="text-[10px] text-zinc-200">
+                                  {booking?.customer_name || "Walk-in"} · {displayPartySize(booking)} ppl
+                                </div>
+                                {booking?.assigned_staff_id ? (
+                                  <div className="text-[10px] text-zinc-200">
+                                    Staff: {staffNameById.get(booking.assigned_staff_id) || booking.assigned_staff_id}
+                                  </div>
+                                ) : null}
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {bookingPaymentBadge(booking?.status, booking?.paid, "text-[10px]")}
+                                  {tabPaymentBadge(booking?.tab_status, "text-[10px]")}
+                                </div>
+                                {waiverMissing ? (
+                                  <button
+                                    type="button"
+                                    className="mt-1 inline-flex items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm animate-pulse"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                    onPointerDown={(e) => {
+                                      e.stopPropagation();
+                                      (e.nativeEvent as any)?.stopImmediatePropagation?.();
+                                    }}
+                                  >
+                                    WAIVER NEEDS SIGNED
+                                  </button>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-zinc-900">
-              <tr>
-                <th className="py-2">Customer</th>
-                <th className="py-2">Start Time</th>
-                <th className="py-2">End Time</th>
-                <th className="py-2">Activity</th>
-                <th className="py-2">Combo Order</th>
-                <th className="py-2">Group Size</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Total</th>
-                <th className="py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} className="border-t border-zinc-100">
-                  <td className="py-2 text-center">
-                    <div className="font-medium">
-                      {r.customer_id ? (
-                        <Link href={`/staff/customers/${r.customer_id}`} className="hover:underline">
-                          {r.customer_name || "—"}
-                        </Link>
-                      ) : (
-                        r.customer_name || "—"
-                      )}
-                    </div>
-                    <div className="text-xs text-zinc-600">{r.customer_email || "—"}</div>
-                    {r.notes ? <div className="text-[11px] text-zinc-500">Note: {r.notes}</div> : null}
-                  </td>
-                  <td className="py-2 text-center text-zinc-900">{fmtNY(r.start_ts)}</td>
-                  <td className="py-2 text-center text-zinc-900">{fmtNY(r.end_ts)}</td>
-                  <td className="py-2 text-center text-zinc-900">{activityLabel(r.activity)}</td>
-                  <td className="py-2 text-center text-zinc-900">{comboOrderLabel(r.combo_order)}</td>
-                  <td className="py-2 text-center text-zinc-900">{displayPartySize(r)}</td>
-                  <td className="py-2 text-center text-zinc-900">
-                    <div className="flex flex-wrap justify-center gap-1">
-                      {bookingPaymentBadge(r.status, r.paid, "text-[10px]")}
-                      {tabPaymentBadge(r.tab_status, "text-[10px]")}
-                    </div>
-                  </td>
-                  <td className="py-2 text-center text-zinc-900">
-                    ${((r.total_cents + (r.tab_total_cents || 0)) / 100).toFixed(2)}
-                  </td>
-                  <td className="py-2 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => resendConfirmationEmail(r.id)}
-                        disabled={resendLoadingId === r.id || !r.customer_email}
-                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
-                      >
-                        {resendLoadingId === r.id ? "Sending..." : "Resend Email"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openTabForBooking(r.id)}
-                        disabled={actionLoadingId === r.id}
-                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
-                      >
-                        Tab
-                      </button>
-                      {r.paid ? (
+        <div className="mb-2 text-sm font-semibold text-zinc-700">
+          {prettyDate(selectedDateKey)} — {filtered.length} booking{filtered.length === 1 ? "" : "s"}
+        </div>
+
+        <div className="mx-auto" style={{ width: "90vw", maxWidth: "1400px" }}>
+          {resendStatus ? (
+            <div className="mb-2 text-xs font-semibold text-emerald-700">{resendStatus}</div>
+          ) : null}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name, email, activity, id…"
+              className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setOrder("upcoming")}
+                className={`rounded-xl border px-3 py-2 text-sm ${order === "upcoming" ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white"
+                  }`}
+              >
+                Upcoming
+              </button>
+              <button
+                onClick={() => setOrder("newest")}
+                className={`rounded-xl border px-3 py-2 text-sm ${order === "newest" ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white"
+                  }`}
+              >
+                Newest
+              </button>
+              <button
+                onClick={() => loadBookings(order)}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-zinc-900">
+                <tr>
+                  <th className="py-2">Customer</th>
+                  <th className="py-2">Start Time</th>
+                  <th className="py-2">End Time</th>
+                  <th className="py-2">Activity</th>
+                  <th className="py-2">Combo Order</th>
+                  <th className="py-2">Group Size</th>
+                  <th className="py-2">Status</th>
+                  <th className="py-2">Total</th>
+                  <th className="py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id} className="border-t border-zinc-100">
+                    <td className="py-2 text-center">
+                      <div className="font-medium">
+                        {r.customer_id ? (
+                          <Link href={`/staff/customers/${r.customer_id}`} className="hover:underline">
+                            {r.customer_name || "—"}
+                          </Link>
+                        ) : (
+                          r.customer_name || "—"
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-600">{r.customer_email || "—"}</div>
+                      {r.notes ? <div className="text-[11px] text-zinc-500">Note: {r.notes}</div> : null}
+                    </td>
+                    <td className="py-2 text-center text-zinc-900">{fmtNY(r.start_ts)}</td>
+                    <td className="py-2 text-center text-zinc-900">{fmtNY(r.end_ts)}</td>
+                    <td className="py-2 text-center text-zinc-900">{activityLabel(r.activity)}</td>
+                    <td className="py-2 text-center text-zinc-900">{comboOrderLabel(r.combo_order)}</td>
+                    <td className="py-2 text-center text-zinc-900">{displayPartySize(r)}</td>
+                    <td className="py-2 text-center text-zinc-900">
+                      <div className="flex flex-wrap justify-center gap-1">
+                        {bookingPaymentBadge(r.status, r.paid, "text-[10px]")}
+                        {tabPaymentBadge(r.tab_status, "text-[10px]")}
+                      </div>
+                    </td>
+                    <td className="py-2 text-center text-zinc-900">
+                      ${((r.total_cents + (r.tab_total_cents || 0)) / 100).toFixed(2)}
+                    </td>
+                    <td className="py-2 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           type="button"
-                          onClick={() => openRefund(r)}
-                          disabled={actionLoadingId === r.id}
-                          className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                          onClick={() => resendConfirmationEmail(r.id)}
+                          disabled={resendLoadingId === r.id || !r.customer_email}
+                          className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
                         >
-                          Refund
+                          {resendLoadingId === r.id ? "Sending..." : "Resend Email"}
                         </button>
-                      ) : (
                         <button
                           type="button"
-                          onClick={() => openPayModal(r.id)}
+                          onClick={() => openTabForBooking(r.id)}
                           disabled={actionLoadingId === r.id}
                           className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
                         >
-                          Pay Now
+                          Tab
                         </button>
-                      )}
-                      {!reservationsByBookingId.has(r.id) ? (
+                        {r.paid ? (
+                          <button
+                            type="button"
+                            onClick={() => openRefund(r)}
+                            disabled={actionLoadingId === r.id}
+                            className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                          >
+                            Refund
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openPayModal(r.id)}
+                            disabled={actionLoadingId === r.id}
+                            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                          >
+                            Pay Now
+                          </button>
+                        )}
+                        {!reservationsByBookingId.has(r.id) ? (
+                          <button
+                            type="button"
+                            onClick={() => repairBookingBlock(r.id)}
+                            disabled={actionLoadingId === r.id}
+                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                          >
+                            Repair Block
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => repairBookingBlock(r.id)}
+                          onClick={() => deleteBooking(r.id)}
                           disabled={actionLoadingId === r.id}
-                          className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+                          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
                         >
-                          Repair Block
+                          Cancel
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => deleteBooking(r.id)}
-                        disabled={actionLoadingId === r.id}
-                        className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          editIntentRef.current = true;
-                          openEditForBooking(r.id);
-                        }}
-                        disabled={actionLoadingId === r.id}
-                        className="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                        style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
-                      >
-                        Edit
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            editIntentRef.current = true;
+                            openEditForBooking(r.id);
+                          }}
+                          disabled={actionLoadingId === r.id}
+                          className="inline-flex items-center justify-center rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                          style={{ backgroundColor: "#2563eb", color: "#ffffff" }}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-800">
+                  <td className="py-3 text-center" colSpan={2}>
+                    Totals for {prettyDate(selectedDateKey)}
+                  </td>
+                  <td className="py-3 text-center" colSpan={2}>
+                    Bookings: {listSummary.totalBookings}
+                  </td>
+                  <td className="py-3 text-center" colSpan={2}>
+                    Unpaid: {listSummary.unpaidCount}
+                  </td>
+                  <td className="py-3 text-center" colSpan={3}>
+                    Total: ${(listSummary.totalCentsSum / 100).toFixed(2)}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </>
