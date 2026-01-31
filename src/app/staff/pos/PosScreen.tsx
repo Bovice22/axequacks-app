@@ -872,7 +872,7 @@ export default function PosScreen() {
                 </div>
 
                 <div className="mt-6">
-                  <label className="text-xs font-semibold uppercase text-zinc-500">Cash Given</label>
+                  <label className="text-xs font-semibold uppercase text-zinc-900">Cash Given</label>
                   <input
                     ref={cashInputRef}
                     value={cashInput}

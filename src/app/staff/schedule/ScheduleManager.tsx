@@ -90,7 +90,7 @@ function MonthCalendar(props: { selectedDateKey: string; onSelectDateKey: (dateK
       <div className="mb-3 flex items-center justify-between gap-2">
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
+          className="rounded-xl border-2 border-black px-2 py-2 text-base font-black text-black hover:bg-zinc-50 sm:px-3"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
         >
           ←
@@ -100,7 +100,7 @@ function MonthCalendar(props: { selectedDateKey: string; onSelectDateKey: (dateK
 
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
+          className="rounded-xl border-2 border-black px-2 py-2 text-base font-black text-black hover:bg-zinc-50 sm:px-3"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
         >
           →

@@ -301,7 +301,7 @@ function MonthCalendar(props: {
       <div className="mb-3 flex items-center justify-between gap-2">
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
+          className="rounded-xl border-2 border-black px-2 py-2 text-base font-black text-black hover:bg-zinc-50 sm:px-3"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
         >
           ←
@@ -311,7 +311,7 @@ function MonthCalendar(props: {
 
         <button
           type="button"
-          className="rounded-xl border border-zinc-200 px-2 py-2 text-sm font-semibold hover:bg-zinc-50 sm:px-3"
+          className="rounded-xl border-2 border-black px-2 py-2 text-base font-black text-black hover:bg-zinc-50 sm:px-3"
           onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
         >
           →
@@ -421,8 +421,10 @@ export default function BookingsTable() {
   const [refundManagerPin, setRefundManagerPin] = useState("");
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState("");
+  const [resendLoadingId, setResendLoadingId] = useState<string | null>(null);
+  const [resendStatus, setResendStatus] = useState("");
   const [payModalBookingId, setPayModalBookingId] = useState<string | null>(null);
-  const [payLoading, setPayLoading] = useState<"cash" | "card" | null>(null);
+  const [payLoading, setPayLoading] = useState<"cash" | "card" | "gift" | null>(null);
   const [payError, setPayError] = useState("");
   const [payGiftCode, setPayGiftCode] = useState("");
   const [payGiftApplied, setPayGiftApplied] = useState<{
@@ -588,6 +590,12 @@ export default function BookingsTable() {
       setPayGiftStatus("");
       return;
     }
+    const amountBase =
+      payOverrideCents != null && Number.isFinite(payOverrideCents)
+        ? payOverrideCents
+        : payOverrideTotalCents != null && Number.isFinite(payOverrideTotalCents)
+        ? payOverrideTotalCents
+        : booking.total_cents;
     setPayGiftLoading(true);
     setPayGiftStatus("");
     try {
@@ -596,7 +604,7 @@ export default function BookingsTable() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code,
-          amount_cents: booking.total_cents,
+          amount_cents: amountBase,
           customer_email: booking.customer_email || "",
           allow_gift: true,
         }),
@@ -644,6 +652,33 @@ export default function BookingsTable() {
       closePayModal();
     } catch (err: any) {
       setPayError(err?.message || "Failed to mark booking paid.");
+    } finally {
+      setPayLoading(null);
+    }
+  }
+
+  async function payWithGift(bookingId: string) {
+    setPayLoading("gift");
+    setPayError("");
+    try {
+      const res = await fetch(`/api/staff/bookings/${bookingId}/gift-pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gift_code: payGiftApplied?.code || "",
+          amount_override_cents: payOverrideCents ?? undefined,
+          booking_total_cents_new: payOverrideTotalCents ?? undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayError(json?.error || "Failed to apply gift certificate.");
+        return;
+      }
+      await loadBookings(order);
+      closePayModal();
+    } catch (err: any) {
+      setPayError(err?.message || "Failed to apply gift certificate.");
     } finally {
       setPayLoading(null);
     }
@@ -878,6 +913,24 @@ export default function BookingsTable() {
     }
   }
 
+  async function resendConfirmationEmail(bookingId: string) {
+    setResendLoadingId(bookingId);
+    setResendStatus("");
+    try {
+      const res = await fetch(`/api/staff/bookings/${bookingId}/resend`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResendStatus(json?.error || "Failed to resend confirmation email.");
+        return;
+      }
+      setResendStatus("Confirmation email sent.");
+    } catch (err: any) {
+      setResendStatus(err?.message || "Failed to resend confirmation email.");
+    } finally {
+      setResendLoadingId(null);
+    }
+  }
+
   function openPartyEdit(resv: ReservationRow) {
     if (!resv.id || String(resv.id).startsWith("synthetic-")) {
       alert("This party block cannot be edited yet. Please repair the booking block first.");
@@ -932,7 +985,7 @@ export default function BookingsTable() {
   useEffect(() => {
     const interval = setInterval(() => {
       void loadBookings(order);
-    }, 5 * 60 * 1000);
+    }, 30 * 1000);
     return () => clearInterval(interval);
   }, [order]);
 
@@ -2087,6 +2140,7 @@ export default function BookingsTable() {
       : payModalBooking.total_cents
     : 0;
   const payModalTotalCents = basePayCents + payModalTabTotalCents;
+  const giftCoversTotal = payGiftApplied ? payGiftApplied.remainingCents <= 0 : false;
   const payModal = payModalBooking ? (
     <div
       style={{
@@ -2212,11 +2266,23 @@ export default function BookingsTable() {
           </label>
           {payGiftStatus ? <div className="mt-1 text-[11px] font-semibold text-zinc-600">{payGiftStatus}</div> : null}
         </div>
+        {giftCoversTotal ? (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => payWithGift(payModalBooking.id)}
+              disabled={payLoading !== null}
+              className="h-10 w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              {payLoading === "gift" ? "Applying..." : "Apply Gift Certificate & Mark Paid"}
+            </button>
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => payWithCash(payModalBooking.id)}
-            disabled={payLoading !== null}
+            disabled={payLoading !== null || giftCoversTotal}
             className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
           >
             {payLoading === "cash" ? "Processing..." : "Pay With Cash"}
@@ -2230,7 +2296,7 @@ export default function BookingsTable() {
               !selectedReaderId ||
               !terminalReaders.length ||
               connectedReaderId !== selectedReaderId ||
-              (payGiftApplied ? payGiftApplied.remainingCents <= 0 : false)
+              giftCoversTotal
             }
             className="rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
@@ -2758,6 +2824,9 @@ export default function BookingsTable() {
       </div>
 
       <div className="mx-auto" style={{ width: "90vw", maxWidth: "1400px" }}>
+        {resendStatus ? (
+          <div className="mb-2 text-xs font-semibold text-emerald-700">{resendStatus}</div>
+        ) : null}
         <div className="mb-3 flex items-center justify-between gap-3">
           <input
             value={q}
@@ -2838,6 +2907,14 @@ export default function BookingsTable() {
                   </td>
                   <td className="py-2 text-center">
                     <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => resendConfirmationEmail(r.id)}
+                        disabled={resendLoadingId === r.id || !r.customer_email}
+                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                      >
+                        {resendLoadingId === r.id ? "Sending..." : "Resend Email"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => openTabForBooking(r.id)}

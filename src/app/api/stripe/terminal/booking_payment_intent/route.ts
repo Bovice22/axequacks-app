@@ -186,7 +186,7 @@ export async function POST(req: Request) {
     const combinedAmount = bookingAmount + tabTotalCents;
 
     if (giftMeta && combinedAmount <= 0) {
-      return NextResponse.json({ error: "Gift certificate covers total. Use cash to record payment." }, { status: 400 });
+      return NextResponse.json({ error: "Gift certificate covers total. Use Apply Gift Certificate to mark paid." }, { status: 400 });
     }
     if (giftMeta && combinedAmount > 0 && combinedAmount < 50) {
       return NextResponse.json({ error: "Remaining balance must be at least $0.50 to pay by card." }, { status: 400 });

@@ -26,6 +26,7 @@ const ADMIN_ITEMS: NavItem[] = [
 export default function StaffNav() {
   const [role, setRole] = useState<"staff" | "admin" | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [pendingEventCount, setPendingEventCount] = useState(0);
   const adminMenuRef = useRef<HTMLLIElement | null>(null);
 
   useEffect(() => {
@@ -44,6 +45,28 @@ export default function StaffNav() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (role !== "admin") return;
+    let active = true;
+    const loadCount = async () => {
+      try {
+        const res = await fetch("/api/staff/event-requests/count", { cache: "no-store" });
+        const json = await res.json().catch(() => ({}));
+        if (!active) return;
+        setPendingEventCount(Number(json?.pending || 0));
+      } catch {
+        if (!active) return;
+        setPendingEventCount(0);
+      }
+    };
+    loadCount();
+    const interval = setInterval(loadCount, 30 * 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [role]);
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -92,6 +115,11 @@ export default function StaffNav() {
             >
               Admin
               <span className="text-xs">▾</span>
+              {pendingEventCount > 0 ? (
+                <span className="ml-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {pendingEventCount}
+                </span>
+              ) : null}
             </button>
             <ul
               className={`absolute z-20 mt-0 w-56 rounded-xl border border-zinc-200 bg-white py-2 text-sm shadow-lg ${
@@ -99,17 +127,40 @@ export default function StaffNav() {
               }`}
               style={{ top: "100%", left: 0 }}
             >
-              {ADMIN_ITEMS.map((item) => (
-                <li key={item.href}>
-                  <a
-                    href={item.href}
-                    className="block px-4 py-2 text-black hover:bg-zinc-50"
-                    onClick={() => setAdminOpen(false)}
-                  >
-                    {item.label}
-                  </a>
-                </li>
-              ))}
+              {ADMIN_ITEMS.map((item) => {
+                if (item.href === "/staff/events" && pendingEventCount > 0) {
+                  return (
+                    <React.Fragment key={item.href}>
+                      <li className="px-4 py-1 text-[10px] font-semibold text-red-600">
+                        Pending requests: {pendingEventCount}
+                      </li>
+                      <li>
+                        <a
+                          href={item.href}
+                          className="flex items-center justify-between px-4 py-2 text-black hover:bg-zinc-50"
+                          onClick={() => setAdminOpen(false)}
+                        >
+                          <span>{item.label}</span>
+                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                            {pendingEventCount}
+                          </span>
+                        </a>
+                      </li>
+                    </React.Fragment>
+                  );
+                }
+                return (
+                  <li key={item.href}>
+                    <a
+                      href={item.href}
+                      className="block px-4 py-2 text-black hover:bg-zinc-50"
+                      onClick={() => setAdminOpen(false)}
+                    >
+                      {item.label}
+                    </a>
+                  </li>
+                );
+              })}
             </ul>
           </li>
         ) : null}
